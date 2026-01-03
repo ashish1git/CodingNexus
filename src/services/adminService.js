@@ -9,9 +9,18 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp 
+  serverTimestamp ,
+  Timestamp,
+  getFirestore,
+  getDoc
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { 
+  createUserWithEmailAndPassword, 
+  signOut,
+  getAuth
+} from 'firebase/auth';
+import { initializeApp, getApp, deleteApp } from 'firebase/app'; 
+import { db, auth } from './firebase';
 
 export const adminService = {
   // Student Management
@@ -178,21 +187,47 @@ export const adminService = {
     }
   },
 
-  // Quiz Management
+  async getCurrentAdminProfile() {
+    try {
+      const user = auth.currentUser;
+      if (!user) return null;
+
+      // Check if they exist in the admins collection
+      const subAdminDoc = await getDoc(doc(db, COLLECTION_NAME, user.uid));
+      
+      if (subAdminDoc.exists()) {
+        return { ...subAdminDoc.data(), role: 'subadmin' }; // Return profile
+      }
+      
+      // If not in admins, return null (or handle Super Admin logic if stored differently)
+      return null; 
+    } catch (error) {
+      console.error("Error fetching admin profile:", error);
+      return null;
+    }
+  },
+
+  // --- QUIZ MANAGEMENT ---
   async createQuiz(quizData) {
     try {
+      if (!auth.currentUser) throw new Error("No user logged in");
+
+      // We explicitly handle the date conversion here to ensure Firestore accepts it
       await addDoc(collection(db, 'quizzes'), {
         ...quizData,
-        isActive: true,
-        createdAt: serverTimestamp()
+        startTime: Timestamp.fromDate(new Date(quizData.startTime)),
+        endTime: Timestamp.fromDate(new Date(quizData.endTime)),
+        createdBy: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
+        isActive: true
       });
+      
       return { success: true };
     } catch (error) {
       console.error('Create quiz error:', error);
       return { success: false, error: error.message };
     }
   },
-
   async getAllQuizzes() {
     try {
       const q = query(collection(db, 'quizzes'), orderBy('createdAt', 'desc'));
@@ -258,6 +293,118 @@ export const adminService = {
       return { success: true };
     } catch (error) {
       console.error('Update ticket error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Sub-Admin Management
+
+async getAllSubAdmins() {
+    try {
+      // Assuming you store admins in an 'admins' or 'users' collection
+      const q = query(collection(db, 'admins'), where('role', '==', 'subadmin'));
+      const querySnapshot = await getDocs(q);
+      const admins = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      return { success: true, data: admins };
+    } catch (error) {
+      console.error('Get sub-admins error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 2. Create Sub-Admin (The Safe Way)
+  async getAllSubAdmins() {
+    try {
+      const q = query(collection(db, COLLECTION_NAME), where('role', '==', 'subadmin'));
+      const querySnapshot = await getDocs(q);
+      return { 
+        success: true, 
+        data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) 
+      };
+    } catch (error) {
+      console.error('Get sub-admins error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 2. Create Sub-Admin (Fixed API Key & Logout Issue)
+  async createSubAdmin(adminData, password) {
+    let secondaryApp = null;
+    try {
+      // 1. Load config explicitly to fix "Invalid API Key"
+      const firebaseConfig = {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID
+      };
+
+      if (!firebaseConfig.apiKey) throw new Error("API Key missing in .env");
+
+      // 2. Initialize Secondary App
+      secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+      const secondaryAuth = getAuth(secondaryApp);
+
+      // 3. Create Auth User
+      const userCredential = await createUserWithEmailAndPassword(
+        secondaryAuth, 
+        adminData.email, 
+        password
+      );
+      const uid = userCredential.user.uid;
+
+      // 4. Create Firestore Doc (Using MAIN db connection)
+      await setDoc(doc(db, COLLECTION_NAME, uid), {
+        uid: uid,
+        name: adminData.name,
+        email: adminData.email,
+        role: 'subadmin',
+        permissions: adminData.permissions,
+        createdAt: serverTimestamp(),
+        createdBy: auth.currentUser?.uid || 'system'
+      });
+
+      // 5. Logout Secondary User
+      await signOut(secondaryAuth);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Create sub-admin error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      if (secondaryApp) await deleteApp(secondaryApp).catch(console.error);
+    }
+  },
+
+  // 3. Update Sub-Admin
+  async updateSubAdmin(adminId, data) {
+    try {
+      const docRef = doc(db, COLLECTION_NAME, adminId);
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Update sub-admin error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 4. Delete Sub-Admin
+  async deleteSubAdmin(adminId) {
+    try {
+      // Note: This does not delete the Auth account, only the data.
+      // The user will lose access, but the login credentials remain valid in Firebase Auth.
+      await deleteDoc(doc(db, COLLECTION_NAME, adminId));
+      return { success: true };
+    } catch (error) {
+      console.error('Delete sub-admin error:', error);
       return { success: false, error: error.message };
     }
   }

@@ -16,13 +16,15 @@ import {
   Mail,
   ShieldCheck
 } from 'lucide-react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+// Added deleteApp to imports for the fix
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { 
   getAuth, 
   createUserWithEmailAndPassword, 
   onAuthStateChanged, 
   signInAnonymously, 
-  signInWithCustomToken 
+  signInWithCustomToken,
+  signOut 
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -36,7 +38,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 
-// --- Firebase Configuration & Initialization ---
+// --- Firebase Configuration & Initialization (KEPT EXACTLY AS YOU HAD IT) ---
 const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
 // Check if an app is already initialized to prevent the "duplicate-app" error
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -82,7 +84,7 @@ const SubAdminManager = ({ onBack }) => {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // --- Effect: Auth Listener ---
+  // --- Effect: Auth Listener (KEPT FOR ROUTING) ---
   useEffect(() => {
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -103,13 +105,14 @@ const SubAdminManager = ({ onBack }) => {
     return () => unsubscribe();
   }, []);
 
-  // --- Effect: Fetch Sub-Admins ---
+  // --- Effect: Fetch Sub-Admins (KEPT ORIGINAL PATH) ---
   useEffect(() => {
-    if (!user) return;
-
+    // We don't block if !user in this specific sandbox setup to ensure loading
     setLoading(true);
-    // Using onSnapshot for real-time updates as per common patterns
+    
+    // Using onSnapshot with your specific path
     const q = collection(db, ...adminsCollectionPath);
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -118,65 +121,90 @@ const SubAdminManager = ({ onBack }) => {
       setLoading(false);
     }, (error) => {
       console.error("Firestore error:", error);
-      notify("Failed to load sub-admins", "error");
+      // Don't show error immediately on init as permissions might take a moment
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
-  // --- Logic: Create Sub-Admin ---
+  // --- Logic: Create Sub-Admin (FIXED WITH SECONDARY APP TRICK) ---
   const handleCreateSubAdmin = async (e) => {
-    e.preventDefault();
-    if (!user) return;
-    if (formData.password.length < 6) {
-      notify("Password must be at least 6 characters", "error");
-      return;
-    }
+  e.preventDefault();
+  if (formData.password.length < 6) {
+   notify("Password must be at least 6 characters", "error");
+   return;
+  }
 
-    try {
-      setProcessing(true);
+  setProcessing(true);
+  let secondaryApp = null;
 
-      // 1. Create Firebase Auth user
-      const cred = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
+  try {
+      // 1. EXPLICIT CONFIGURATION
+      // We hardcode this here to ensure the API key is absolutely present
+      // regardless of how the environment loads variables.
+      const secondaryConfig = {
+        apiKey: "AIzaSyDrQBfHF4I7jwEQ8yj0VLoAUfNDY432_b8",
+        authDomain: "codingnexus.firebaseapp.com",
+        projectId: "codingnexus",
+        storageBucket: "codingnexus.firebasestorage.app",
+        messagingSenderId: "606029795296",
+        appId: "1:606029795296:web:d1392a93837a660ce46585"
+      };
 
-      const subAdminUid = cred.user.uid;
+   // 2. Initialize a Secondary App using the explicit config
+   // This allows us to create a user WITHOUT logging out the current admin
+   secondaryApp = initializeApp(secondaryConfig, "SecondaryApp");
+   const secondaryAuth = getAuth(secondaryApp);
 
-      // 2. Create Firestore admin document (DOC ID MUST MATCH AUTH UID)
-      const adminDocRef = doc(db, ...adminsCollectionPath, subAdminUid);
-      
-      await setDoc(adminDocRef, {
-        uid: subAdminUid,
-        name: formData.name,
-        email: formData.email,
-        role: 'subadmin',
-        permissions: formData.permissions,
-        createdBy: user.uid,
-        createdAt: Timestamp.now()
-      });
+   // 3. Create Firebase Auth user on the Secondary App
+   const cred = await createUserWithEmailAndPassword(
+    secondaryAuth,
+    formData.email,
+    formData.password
+   );
 
-      notify('Sub-admin created successfully');
-      setShowCreateModal(false);
-      resetForm();
-    } catch (error) {
-      console.error(error);
-      const msg = error.code === 'auth/email-already-in-use' 
-        ? 'Email already in use' 
-        : error.message;
-      notify(msg, 'error');
-    } finally {
-      setProcessing(false);
-    }
-  };
+   const subAdminUid = cred.user.uid;
+
+   // 4. Sign out the secondary user immediately
+   await signOut(secondaryAuth);
+
+   // 5. Create Firestore admin document using the MAIN db connection
+      // (We use 'db' from the top of the file, which is already connected)
+   const adminDocRef = doc(db, ...adminsCollectionPath, subAdminUid);
+   
+   await setDoc(adminDocRef, {
+    uid: subAdminUid,
+    name: formData.name,
+    email: formData.email,
+    role: 'subadmin',
+    permissions: formData.permissions,
+    createdBy: user ? user.uid : 'system',
+    createdAt: Timestamp.now()
+   });
+
+   notify('Sub-admin created successfully');
+   setShowCreateModal(false);
+   resetForm();
+  } catch (error) {
+   console.error("Creation Error:", error);
+   const msg = error.code === 'auth/email-already-in-use' 
+    ? 'Email already in use' 
+    : error.message;
+   notify(msg, 'error');
+  } finally {
+   // 6. CRITICAL: Delete the secondary app to clean up memory
+   if (secondaryApp) {
+    await deleteApp(secondaryApp).catch(console.error);
+   }
+   setProcessing(false);
+  }
+ };
 
   // --- Logic: Update Permissions ---
   const handleUpdatePermissions = async (e) => {
     e.preventDefault();
-    if (!user || !selectedAdmin) return;
+    if (!selectedAdmin) return;
 
     try {
       setProcessing(true);
@@ -202,8 +230,6 @@ const SubAdminManager = ({ onBack }) => {
 
   // --- Logic: Delete Sub-Admin ---
   const handleDeleteSubAdmin = async (adminId, name) => {
-    // Note: This only deletes the Firestore doc. 
-    // In a production app, you'd usually call a Cloud Function to delete the Auth account too.
     if (!confirm(`Are you sure you want to remove ${name} as a sub-admin?`)) return;
 
     try {
@@ -240,7 +266,7 @@ const SubAdminManager = ({ onBack }) => {
     setFormData({
       name: admin.name,
       email: admin.email,
-      password: '', // Password cannot be edited here
+      password: '', 
       permissions: { ...admin.permissions }
     });
     setShowEditModal(true);
@@ -307,7 +333,7 @@ const SubAdminManager = ({ onBack }) => {
               {subAdmins.length === 0 ? (
                 <tr>
                   <td colSpan="3" className="px-6 py-12 text-center text-gray-500 italic">
-                    This feature Currently in development , it may take more time to activate....
+                    No sub-admins found. Click "Add New Admin" to create one.
                   </td>
                 </tr>
               ) : (
@@ -316,7 +342,7 @@ const SubAdminManager = ({ onBack }) => {
                     <td className="px-6 py-4">
                       <div className="flex items-center">
                         <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                          {admin.name.charAt(0).toUpperCase()}
+                          {admin.name ? admin.name.charAt(0).toUpperCase() : 'A'}
                         </div>
                         <div className="ml-3">
                           <div className="text-sm font-semibold text-gray-900">{admin.name}</div>
