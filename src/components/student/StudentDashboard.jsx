@@ -113,7 +113,6 @@ const StudentDashboard = () => {
       }
 
       // Fetch student's quiz attempts
-      let quizzesAttemptedCount = 0;
       let attemptedQuizIds = [];
       try {
         const attemptsQuery = query(
@@ -122,82 +121,127 @@ const StudentDashboard = () => {
         );
         const attemptsSnapshot = await getDocs(attemptsQuery);
         attemptedQuizIds = attemptsSnapshot.docs.map(doc => doc.data().quizId);
-        quizzesAttemptedCount = new Set(attemptedQuizIds).size; // Count unique quizzes attempted
+        console.log('All attempted quiz IDs:', attemptedQuizIds);
       } catch (attemptsError) {
         console.error('Error fetching quiz attempts:', attemptsError);
       }
 
       // Fetch announcements
-      const announcementsQuery = query(
-        collection(db, 'announcements'),
-        where('batch', 'in', [userDetails.batch, 'All']),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-      const announcementsSnapshot = await getDocs(announcementsQuery);
+      try {
+        const announcementsQuery = query(
+          collection(db, 'announcements'),
+          where('batch', 'in', [userDetails.batch, 'All']),
+          orderBy('createdAt', 'desc'),
+          limit(5)
+        );
+        const announcementsSnapshot = await getDocs(announcementsQuery);
+        
+        setRecentAnnouncements(
+          announcementsSnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date()
+          }))
+        );
+      } catch (announcementsError) {
+        console.error('Error fetching announcements:', announcementsError);
+      }
 
-      // Fetch ALL quizzes for this batch (active and expired)
-      const allQuizzesQuery = query(
-        collection(db, 'quizzes'),
-        where('batch', '==', userDetails.batch)
-      );
-      const allQuizzesSnapshot = await getDocs(allQuizzesQuery);
-      const totalQuizzesForBatch = allQuizzesSnapshot.size;
+      // FIXED: Fetch ALL quizzes for this batch (including "All" batch)
+      try {
+        // Fetch quizzes specific to student's batch
+        const batchQuizzesQuery = query(
+          collection(db, 'quizzes'),
+          where('batch', '==', userDetails.batch)
+        );
+        const batchQuizzesSnapshot = await getDocs(batchQuizzesQuery);
 
-      // Now filter: get upcoming quizzes (not ended AND not attempted)
-      const now = new Date();
-      const upcomingQuizzesList = allQuizzesSnapshot.docs
-        .map(doc => {
-          const quizData = doc.data();
-          const endTime = quizData.endTime?.toDate ? quizData.endTime.toDate() : null;
-          const startTime = quizData.startTime?.toDate ? quizData.startTime.toDate() : null;
-          
-          return {
-            id: doc.id,
-            ...quizData,
-            endTime: endTime,
-            startTime: startTime,
-            duration: quizData.duration || 60,
-            isEnded: endTime ? endTime < now : false,
-            isStarted: startTime ? startTime <= now : false
-          };
-        })
-        .filter(quiz => {
-          // Show quiz if:
-          // 1. It hasn't ended yet (or end time is in future)
-          // 2. Student hasn't attempted it yet
-          // 3. Quiz has started (optional - if you want to show only started quizzes)
-          const isActive = quiz.endTime && quiz.endTime > now;
-          const isNotAttempted = !attemptedQuizIds.includes(quiz.id);
-          return isActive && isNotAttempted;
-        })
-        .sort((a, b) => {
-          // Sort by end time (earliest first)
-          if (a.endTime && b.endTime) {
-            return a.endTime - b.endTime;
-          }
-          return 0;
+        // Fetch quizzes marked as "All" batch
+        const allBatchQuizzesQuery = query(
+          collection(db, 'quizzes'),
+          where('batch', '==', 'All')
+        );
+        const allBatchQuizzesSnapshot = await getDocs(allBatchQuizzesQuery);
+
+        // Combine both query results
+        const combinedQuizDocs = [...batchQuizzesSnapshot.docs, ...allBatchQuizzesSnapshot.docs];
+        
+        console.log('Total quizzes found:', combinedQuizDocs.length);
+        console.log('Batch-specific quizzes:', batchQuizzesSnapshot.docs.length);
+        console.log('All-batch quizzes:', allBatchQuizzesSnapshot.docs.length);
+
+        // FIXED: Calculate attempted quizzes count for this batch only
+        const attemptedQuizIdsSet = new Set(attemptedQuizIds);
+        const quizzesInBatch = combinedQuizDocs.map(doc => doc.id);
+        const quizzesAttemptedCount = quizzesInBatch.filter(quizId => 
+          attemptedQuizIdsSet.has(quizId)
+        ).length;
+        
+        console.log('Quizzes in batch:', quizzesInBatch.length);
+        console.log('Attempted quizzes in batch:', quizzesAttemptedCount);
+
+        // Now filter: get upcoming quizzes (not ended AND not attempted)
+        const now = new Date();
+        const upcomingQuizzesList = combinedQuizDocs
+          .map(doc => {
+            const quizData = doc.data();
+            const endTime = quizData.endTime?.toDate ? quizData.endTime.toDate() : null;
+            const startTime = quizData.startTime?.toDate ? quizData.startTime.toDate() : null;
+            
+            return {
+              id: doc.id,
+              ...quizData,
+              endTime: endTime,
+              startTime: startTime,
+              duration: quizData.duration || 60,
+              isEnded: endTime ? endTime < now : false,
+              isStarted: startTime ? startTime <= now : false
+            };
+          })
+          .filter(quiz => {
+            // Show quiz if:
+            // 1. It hasn't ended yet (end time is in future)
+            // 2. Student hasn't attempted it yet
+            const isActive = quiz.endTime && quiz.endTime > now;
+            const isNotAttempted = !attemptedQuizIds.includes(quiz.id);
+            return isActive && isNotAttempted;
+          })
+          .sort((a, b) => {
+            // Sort by end time (earliest first)
+            if (a.endTime && b.endTime) {
+              return a.endTime - b.endTime;
+            }
+            return 0;
+          })
+          .slice(0, 5); // Show only top 5 upcoming quizzes
+
+        console.log('Upcoming quizzes after filtering:', upcomingQuizzesList.length);
+        
+        setUpcomingQuizzes(upcomingQuizzesList);
+
+        setStats({
+          totalNotes: totalNotesCount,
+          attendance: totalClasses,
+          attendancePercentage: attendancePercentage,
+          quizzesAttempted: quizzesAttemptedCount, // FIXED: Now correctly counts only batch quizzes
+          pendingQuizzes: upcomingQuizzesList.length
         });
+      } catch (quizError) {
+        console.error('Error fetching quizzes:', quizError);
+        
+        // Set stats without quiz data
+        setStats({
+          totalNotes: totalNotesCount,
+          attendance: totalClasses,
+          attendancePercentage: attendancePercentage,
+          quizzesAttempted: 0,
+          pendingQuizzes: 0
+        });
+      }
 
-      setStats({
-        totalNotes: totalNotesCount,
-        attendance: totalClasses,
-        attendancePercentage: attendancePercentage,
-        quizzesAttempted: quizzesAttemptedCount,
-        pendingQuizzes: upcomingQuizzesList.length
-      });
-
-      setRecentAnnouncements(
-        announcementsSnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date()
-        }))
-      );
-
-      setUpcomingQuizzes(upcomingQuizzesList);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
     }
   };
 
