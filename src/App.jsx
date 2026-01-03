@@ -19,6 +19,8 @@ import StudentProfile from './components/student/StudentProfile';
 import NotesViewer from './components/student/NotesViewer';
 import AttendanceView from './components/student/AttendanceView';
 import QuizAttempt from './components/student/QuizAttempt';
+import QuizList from './components/student/QuizzesList'; // Add this import
+import QuizResults from './components/student/QuizResults'; // Add this import
 import CodeEditor from './components/student/CodeEditor';
 import SupportTicket from './components/student/SupportTicket';
 
@@ -39,22 +41,22 @@ function App() {
         <Router>
           <div className="min-h-screen bg-gray-50">
             <Toaster 
-  position="top-right"
-  toastOptions={{
-    duration: 4000,
-    style: {
-      background: '#fff',
-      color: '#363636',
-    },
-    success: {
-      duration: 5000,
-      iconTheme: {
-        primary: '#10b981',
-        secondary: '#fff',
-      },
-    },
-  }}
-/>
+              position="top-right"
+              toastOptions={{
+                duration: 2000,
+                style: {
+                  background: '#fff',
+                  color: '#363636',
+                },
+                success: {
+                  duration: 1500,
+                  iconTheme: {
+                    primary: '#10b981',
+                    secondary: '#fff',
+                  },
+                },
+              }}
+            />
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
@@ -95,11 +97,28 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              {/* Quiz Routes - Add these */}
+              <Route 
+                path="/student/quiz/list" 
+                element={
+                  <ProtectedRoute>
+                    <QuizList />
+                  </ProtectedRoute>
+                } 
+              />
               <Route 
                 path="/student/quiz/:quizId" 
                 element={
                   <ProtectedRoute>
                     <QuizAttempt />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/quiz/results/:quizId" 
+                element={
+                  <ProtectedRoute>
+                    <QuizResults />
                   </ProtectedRoute>
                 } 
               />
@@ -193,7 +212,6 @@ function App() {
         </Router>
       </AuthProvider>
     </ThemeProvider>
-    
   );
 }
 

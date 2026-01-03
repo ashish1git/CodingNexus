@@ -1,8 +1,7 @@
-// src/components/student/StudentDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  BookOpen, Bell, Calendar, Award, Code, HelpCircle, 
+import {
+  BookOpen, Bell, Calendar, Award, Code, HelpCircle,
   LogOut, Menu, X, User, Clock, TrendingUp, FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -11,33 +10,123 @@ import { db } from '../../services/firebase';
 import toast from 'react-hot-toast';
 
 const StudentDashboard = () => {
-  const { userDetails, logout } = useAuth();
+  const { userDetails, logout, currentUser } = useAuth();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [stats, setStats] = useState({
     totalNotes: 0,
     attendance: 0,
+    attendancePercentage: 0,
     quizzesAttempted: 0,
     pendingQuizzes: 0
   });
   const [recentAnnouncements, setRecentAnnouncements] = useState([]);
   const [upcomingQuizzes, setUpcomingQuizzes] = useState([]);
 
+  // Helper function to format quiz duration
+  const formatQuizDuration = (minutes) => {
+    if (!minutes) return "N/A";
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${mins > 0 ? `${mins}m` : ''}`.trim();
+    }
+    return `${mins}m`;
+  };
+
+  // Helper function to format date with time
+  const formatDateTime = (date) => {
+    if (!date) return 'N/A';
+    try {
+      if (typeof date.toDate === 'function') {
+        date = date.toDate();
+      }
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
-  }, [userDetails]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userDetails, currentUser]);
 
   const fetchDashboardData = async () => {
-    if (!userDetails) return;
-
+    if (!userDetails || !currentUser) return;
+    
     try {
-      // Fetch notes count
-      const notesQuery = query(
-        collection(db, 'notes'),
-        where('batch', '==', userDetails.batch)
-      );
-      const notesSnapshot = await getDocs(notesQuery);
+      // Fetch notes - Include "All" notes as well as batch-specific notes
+      let totalNotesCount = 0;
+      try {
+        const notesQuery = query(
+          collection(db, 'notes'),
+          where('batch', 'in', [userDetails.batch, 'All'])
+        );
+        const notesSnapshot = await getDocs(notesQuery);
+        totalNotesCount = notesSnapshot.size;
+      } catch (notesError) {
+        console.error('Error fetching notes:', notesError);
+        if (notesError.code === 'failed-precondition') {
+          console.log('Firestore index required for notes query');
+        }
+      }
+
+      // Fetch attendance records
+      let attendancePercentage = 0;
+      let totalClasses = 0;
+      let presentClasses = 0;
       
+      if (userDetails.batch) {
+        try {
+          const attendanceQuery = query(
+            collection(db, 'attendance'),
+            where('batch', '==', userDetails.batch)
+          );
+          const attendanceSnapshot = await getDocs(attendanceQuery);
+          
+          totalClasses = attendanceSnapshot.size;
+          
+          attendanceSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const isPresent = 
+              data.presentStudents?.includes(currentUser.uid) || 
+              data.presentMoodleIds?.includes(userDetails.moodleId) ||
+              data.presentRollNos?.includes(userDetails.rollNo);
+            
+            if (isPresent) {
+              presentClasses++;
+            }
+          });
+          
+          attendancePercentage = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 0;
+        } catch (attendanceError) {
+          console.error('Error fetching attendance:', attendanceError);
+        }
+      }
+
+      // Fetch student's quiz attempts
+      let quizzesAttemptedCount = 0;
+      let attemptedQuizIds = [];
+      try {
+        const attemptsQuery = query(
+          collection(db, 'quiz_attempts'),
+          where('studentId', '==', currentUser.uid)
+        );
+        const attemptsSnapshot = await getDocs(attemptsQuery);
+        attemptedQuizIds = attemptsSnapshot.docs.map(doc => doc.data().quizId);
+        quizzesAttemptedCount = new Set(attemptedQuizIds).size; // Count unique quizzes attempted
+      } catch (attemptsError) {
+        console.error('Error fetching quiz attempts:', attemptsError);
+      }
+
       // Fetch announcements
       const announcementsQuery = query(
         collection(db, 'announcements'),
@@ -46,29 +135,67 @@ const StudentDashboard = () => {
         limit(5)
       );
       const announcementsSnapshot = await getDocs(announcementsQuery);
-      
-      // Fetch upcoming quizzes
-      const quizzesQuery = query(
+
+      // Fetch ALL quizzes for this batch (active and expired)
+      const allQuizzesQuery = query(
         collection(db, 'quizzes'),
-        where('batch', '==', userDetails.batch),
-        where('endTime', '>', new Date())
+        where('batch', '==', userDetails.batch)
       );
-      const quizzesSnapshot = await getDocs(quizzesQuery);
+      const allQuizzesSnapshot = await getDocs(allQuizzesQuery);
+      const totalQuizzesForBatch = allQuizzesSnapshot.size;
+
+      // Now filter: get upcoming quizzes (not ended AND not attempted)
+      const now = new Date();
+      const upcomingQuizzesList = allQuizzesSnapshot.docs
+        .map(doc => {
+          const quizData = doc.data();
+          const endTime = quizData.endTime?.toDate ? quizData.endTime.toDate() : null;
+          const startTime = quizData.startTime?.toDate ? quizData.startTime.toDate() : null;
+          
+          return {
+            id: doc.id,
+            ...quizData,
+            endTime: endTime,
+            startTime: startTime,
+            duration: quizData.duration || 60,
+            isEnded: endTime ? endTime < now : false,
+            isStarted: startTime ? startTime <= now : false
+          };
+        })
+        .filter(quiz => {
+          // Show quiz if:
+          // 1. It hasn't ended yet (or end time is in future)
+          // 2. Student hasn't attempted it yet
+          // 3. Quiz has started (optional - if you want to show only started quizzes)
+          const isActive = quiz.endTime && quiz.endTime > now;
+          const isNotAttempted = !attemptedQuizIds.includes(quiz.id);
+          return isActive && isNotAttempted;
+        })
+        .sort((a, b) => {
+          // Sort by end time (earliest first)
+          if (a.endTime && b.endTime) {
+            return a.endTime - b.endTime;
+          }
+          return 0;
+        });
 
       setStats({
-        totalNotes: notesSnapshot.size,
-        attendance: userDetails.attendance || 0,
-        quizzesAttempted: 0,
-        pendingQuizzes: quizzesSnapshot.size
+        totalNotes: totalNotesCount,
+        attendance: totalClasses,
+        attendancePercentage: attendancePercentage,
+        quizzesAttempted: quizzesAttemptedCount,
+        pendingQuizzes: upcomingQuizzesList.length
       });
 
       setRecentAnnouncements(
-        announcementsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        announcementsSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date()
+        }))
       );
 
-      setUpcomingQuizzes(
-        quizzesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      );
+      setUpcomingQuizzes(upcomingQuizzesList);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     }
@@ -85,43 +212,45 @@ const StudentDashboard = () => {
   };
 
   const menuItems = [
-    { icon: <User />, label: 'Profile', path: '/student/profile' },
-    { icon: <BookOpen />, label: 'Notes', path: '/student/notes' },
-    { icon: <Calendar />, label: 'Attendance', path: '/student/attendance' },
-    { icon: <Award />, label: 'Quizzes', path: '/student/quiz/list' },
-    { icon: <Code />, label: 'Code Editor', path: '/student/code-editor' },
-    { icon: <HelpCircle />, label: 'Support', path: '/student/support' }
+    { icon: <User className="w-5 h-5" />, label: 'Profile', path: '/student/profile' },
+    { icon: <BookOpen className="w-5 h-5" />, label: 'Notes', path: '/student/notes' },
+    { icon: <Calendar className="w-5 h-5" />, label: 'Attendance', path: '/student/attendance' },
+    { icon: <Award className="w-5 h-5" />, label: 'Quizzes', path: '/student/quiz/list' }, 
+    { icon: <Code className="w-5 h-5" />, label: 'Code Editor', path: '/student/code-editor' },
+    { icon: <HelpCircle className="w-5 h-5" />, label: 'Support', path: '/student/support' }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Top Navbar */}
-      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="bg-slate-800 shadow-lg border-b border-slate-700 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+                className="lg:hidden p-2 rounded-lg hover:bg-slate-700 transition text-slate-300"
               >
                 {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
               <div className="flex items-center gap-2">
-                <Code className="w-8 h-8 text-indigo-600" />
-                <span className="text-xl font-bold text-gray-800">Coding Nexus</span>
+                <Code className="w-8 h-8 text-indigo-500" />
+                <span className="text-lg sm:text-xl font-bold text-white hidden sm:inline">Coding Nexus</span>
+                <span className="text-xl font-bold text-white sm:hidden">CN</span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-lg">
-                <Award className="w-5 h-5 text-indigo-600" />
-                <span className="text-sm font-medium text-gray-700">{userDetails?.batch} Batch</span>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="hidden sm:flex items-center gap-2 bg-indigo-900/50 px-4 py-2 rounded-lg border border-indigo-700/50">
+                <Award className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-300" />
+                <span className="text-xs sm:text-sm font-medium text-indigo-200">{userDetails?.batch} Batch</span>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-red-400 hover:bg-red-900/30 rounded-lg transition border border-red-700/30 hover:border-red-600/50"
+                title="Logout"
               >
-                <LogOut className="w-5 h-5" />
-                <span className="hidden md:inline">Logout</span>
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline text-sm">Logout</span>
               </button>
             </div>
           </div>
@@ -133,25 +262,41 @@ const StudentDashboard = () => {
         <aside
           className={`${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 fixed lg:sticky top-16 left-0 z-30 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 transition-transform duration-300 overflow-y-auto`}
+          } lg:translate-x-0 fixed lg:sticky top-16 left-0 z-30 w-64 h-[calc(100vh-4rem)] bg-slate-800 border-r border-slate-700 transition-transform duration-300 overflow-y-auto`}
         >
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-8 pb-6 border-b border-gray-200">
-              <div className="w-12 h-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                {userDetails?.name?.charAt(0).toUpperCase()}
+          <div className="p-4 sm:p-6">
+            {/* Profile Card */}
+            <Link
+              to="/student/profile"
+              className="flex items-center gap-3 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-slate-700 hover:opacity-80 transition group"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden ring-2 ring-indigo-500/50 border border-indigo-400/30">
+                {userDetails?.photoURL ? (
+                  <img
+                    src={userDetails.photoURL}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  userDetails?.name?.charAt(0).toUpperCase()
+                )}
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-800">{userDetails?.name}</h3>
-                <p className="text-sm text-gray-500">{userDetails?.rollNo}</p>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-white truncate text-sm sm:text-base group-hover:text-indigo-400 transition">{userDetails?.name}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 truncate">{userDetails?.rollNo}</p>
               </div>
-            </div>
+            </Link>
 
-            <nav className="space-y-2">
-              {menuItems.map((item, index) => (
+            <nav className="space-y-1 sm:space-y-2">
+              {menuItems.map((item, idx) => (
                 <Link
-                  key={index}
+                  key={idx}
                   to={item.path}
-                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition"
+                  className="flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-slate-300 hover:bg-indigo-600/20 hover:text-indigo-400 rounded-lg transition border border-transparent hover:border-indigo-600/50 text-sm sm:text-base"
                   onClick={() => setIsSidebarOpen(false)}
                 >
                   {item.icon}
@@ -163,154 +308,132 @@ const StudentDashboard = () => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             {/* Welcome Section */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            <div className="mb-6 sm:mb-8">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                 Welcome back, {userDetails?.name?.split(' ')[0]}! 👋
               </h1>
-              <p className="text-gray-600">Here's what's happening with your learning today.</p>
+              <p className="text-sm sm:text-base text-slate-400">Here's what's happening with your learning today.</p>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <BookOpen className="w-8 h-8" />
-                  <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1 text-sm">
-                    Total
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.totalNotes}</h3>
-                <p className="text-blue-100">Notes Available</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <Calendar className="w-8 h-8" />
-                  <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1 text-sm">
-                    Current
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.attendance}%</h3>
-                <p className="text-green-100">Attendance Rate</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <Award className="w-8 h-8" />
-                  <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1 text-sm">
-                    Pending
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.pendingQuizzes}</h3>
-                <p className="text-purple-100">Quizzes to Attempt</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <TrendingUp className="w-8 h-8" />
-                  <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1 text-sm">
-                    Progress
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.quizzesAttempted}</h3>
-                <p className="text-orange-100">Quizzes Completed</p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+              <StatCard
+                icon={<BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />}
+                badge="Total"
+                value={stats.totalNotes}
+                label="Notes Available"
+                color="blue"
+              />
+              <StatCard
+                icon={<Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-400" />}
+                badge="Current"
+                value={`${stats.attendancePercentage}%`}
+                label="Attendance Rate"
+                color="emerald"
+              />
+              <StatCard
+                icon={<Award className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400" />}
+                badge="Pending"
+                value={stats.pendingQuizzes}
+                label="Quizzes to Attempt"
+                color="purple"
+              />
+              <StatCard
+                icon={<TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />}
+                badge="Progress"
+                value={stats.quizzesAttempted}
+                label="Quizzes Completed"
+                color="amber"
+              />
             </div>
 
             {/* Recent Announcements & Upcoming Quizzes */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
               {/* Announcements */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-indigo-600" />
-                    Recent Announcements
-                  </h2>
+              <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-4 sm:p-6 hover:border-slate-600 transition">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+                  <h2 className="text-lg sm:text-xl font-bold text-white">Recent Announcements</h2>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {recentAnnouncements.length > 0 ? (
                     recentAnnouncements.map((announcement) => (
-                      <div key={announcement.id} className="border-l-4 border-indigo-500 pl-4 py-2">
-                        <h3 className="font-semibold text-gray-800">{announcement.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{announcement.content}</p>
-                        <p className="text-xs text-gray-400 mt-2">
-                          {new Date(announcement.createdAt).toLocaleDateString()}
+                      <div key={announcement.id} className="border-l-4 border-indigo-500 pl-3 sm:pl-4 py-2 bg-slate-700/30 rounded p-3 hover:bg-slate-700/50 transition">
+                        <h3 className="font-semibold text-white text-sm sm:text-base">{announcement.title}</h3>
+                        <p className="text-xs sm:text-sm text-slate-400 mt-1 line-clamp-2">{announcement.content}</p>
+                        <p className="text-xs text-slate-500 mt-2">
+                          {announcement.createdAt && announcement.createdAt.toLocaleDateString 
+                            ? announcement.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : 'N/A'}
                         </p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 text-center py-8">No announcements yet</p>
+                    <p className="text-slate-400 text-center py-6 sm:py-8 text-sm">No announcements yet</p>
                   )}
                 </div>
               </div>
 
               {/* Upcoming Quizzes */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-purple-600" />
-                    Upcoming Quizzes
-                  </h2>
+              <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-4 sm:p-6 hover:border-slate-600 transition">
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                  <h2 className="text-lg sm:text-xl font-bold text-white">Upcoming Quizzes</h2>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {upcomingQuizzes.length > 0 ? (
                     upcomingQuizzes.map((quiz) => (
-                      <div key={quiz.id} className="bg-purple-50 rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-800">{quiz.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Duration: {quiz.duration} minutes
-                        </p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Ends: {new Date(quiz.endTime.toDate()).toLocaleString()}
-                        </p>
+                      <div key={quiz.id} className="bg-purple-900/30 rounded-lg p-3 sm:p-4 border border-purple-700/50 hover:border-purple-600/50 transition">
+                        <h3 className="font-semibold text-white text-sm sm:text-base">{quiz.title}</h3>
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="flex items-center gap-1 text-xs sm:text-sm text-purple-300">
+                            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span>{formatQuizDuration(quiz.duration)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs sm:text-sm text-slate-400">
+                            <span>Ends: {formatDateTime(quiz.endTime)}</span>
+                          </div>
+                        </div>
                         <Link
                           to={`/student/quiz/${quiz.id}`}
-                          className="inline-block mt-3 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition"
+                          className="inline-block mt-3 px-3 sm:px-4 py-1 sm:py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm hover:bg-purple-700 transition border border-purple-700/50"
                         >
                           Attempt Now
                         </Link>
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 text-center py-8">No upcoming quizzes</p>
+                    <p className="text-slate-400 text-center py-6 sm:py-8 text-sm">No upcoming quizzes</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Link
-                to="/student/notes"
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition text-center"
-              >
-                <FileText className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-800">View Notes</h3>
-              </Link>
-              <Link
-                to="/student/code-editor"
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition text-center"
-              >
-                <Code className="w-8 h-8 text-green-600 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-800">Code Editor</h3>
-              </Link>
-              <Link
-                to="/student/attendance"
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition text-center"
-              >
-                <Calendar className="w-8 h-8 text-purple-600 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-800">Attendance</h3>
-              </Link>
-              <Link
-                to="/student/support"
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition text-center"
-              >
-                <HelpCircle className="w-8 h-8 text-orange-600 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-800">Get Support</h3>
-              </Link>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+              <QuickActionCard
+                icon={<FileText className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />}
+                label="View Notes"
+                link="/student/notes"
+              />
+              <QuickActionCard
+                icon={<Code className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-400" />}
+                label="Code Editor"
+                link="/student/code-editor"
+              />
+              <QuickActionCard
+                icon={<Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400" />}
+                label="Attendance"
+                link="/student/attendance"
+              />
+              <QuickActionCard
+                icon={<HelpCircle className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />}
+                label="Support"
+                link="/student/support"
+              />
             </div>
           </div>
         </main>
@@ -318,5 +441,43 @@ const StudentDashboard = () => {
     </div>
   );
 };
+
+// Stat Card Component
+function StatCard({ icon, badge, value, label, color }) {
+  const colorStyles = {
+    blue: 'from-blue-600/20 to-blue-700/20 border-blue-600/30 hover:border-blue-500/50',
+    emerald: 'from-emerald-600/20 to-emerald-700/20 border-emerald-600/30 hover:border-emerald-500/50',
+    purple: 'from-purple-600/20 to-purple-700/20 border-purple-600/30 hover:border-purple-500/50',
+    amber: 'from-amber-600/20 to-amber-700/20 border-amber-600/30 hover:border-amber-500/50'
+  };
+
+  return (
+    <div className={`bg-gradient-to-br ${colorStyles[color]} rounded-xl p-4 sm:p-6 text-white border transition`}>
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        {icon}
+        <div className="bg-slate-900/30 rounded-lg px-2 sm:px-3 py-1 text-xs sm:text-sm border border-slate-700/50">
+          {badge}
+        </div>
+      </div>
+      <h3 className="text-2xl sm:text-3xl font-bold mb-1">{value}</h3>
+      <p className="text-xs sm:text-sm text-slate-300">{label}</p>
+    </div>
+  );
+}
+
+// Quick Action Card Component
+function QuickActionCard({ icon, label, link }) {
+  return (
+    <Link
+      to={link}
+      className="bg-slate-800 rounded-xl shadow-sm border border-slate-700 p-4 sm:p-6 hover:border-slate-600 hover:shadow-lg transition text-center group"
+    >
+      <div className="group-hover:scale-110 transition">
+        {icon}
+      </div>
+      <h3 className="font-semibold text-white text-xs sm:text-sm mt-2 sm:mt-3">{label}</h3>
+    </Link>
+  );
+}
 
 export default StudentDashboard;

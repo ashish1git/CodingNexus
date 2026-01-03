@@ -1,66 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, 
-  UserPlus, 
-  Shield, 
-  Trash2, 
-  Edit, 
-  Eye, 
-  EyeOff, 
-  X, 
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Lock,
-  User,
-  Mail,
-  ShieldCheck
+  ArrowLeft, UserPlus, Shield, Trash2, Edit, Eye, EyeOff, 
+  X, CheckCircle, AlertCircle, Loader2, Lock, User, Mail, ShieldCheck
 } from 'lucide-react';
-// Added deleteApp to imports for the fix
-import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
+
+// ✅ 1. Import necessary Firebase modules
+import { initializeApp, deleteApp } from 'firebase/app';
 import { 
   getAuth, 
   createUserWithEmailAndPassword, 
-  onAuthStateChanged, 
-  signInAnonymously, 
-  signInWithCustomToken,
   signOut 
 } from 'firebase/auth';
 import { 
-  getFirestore, 
   collection, 
-  getDocs, 
   doc, 
   setDoc, 
   deleteDoc, 
   updateDoc, 
   Timestamp,
-  onSnapshot
+  onSnapshot,
+  query,
+  where
 } from 'firebase/firestore';
 
-// --- Firebase Configuration & Initialization (KEPT EXACTLY AS YOU HAD IT) ---
-const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-// Check if an app is already initialized to prevent the "duplicate-app" error
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-// Reference to our specific admins collection following Rule 1
-const adminsCollectionPath = ['artifacts', appId, 'public', 'data', 'admins'];
+// ✅ 2. Import YOUR project's firebase config
+import { db, auth } from '../../services/firebase'; // Adjust path if needed
 
 const SubAdminManager = ({ onBack }) => {
-  const [user, setUser] = useState(null);
   const [subAdmins, setSubAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   
+  // Modal & Form States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [notification, setNotification] = useState(null);
 
+  // Permissions Data
   const initialPermissions = {
     manageStudents: true,
     manageNotes: true,
@@ -78,128 +56,98 @@ const SubAdminManager = ({ onBack }) => {
     permissions: { ...initialPermissions }
   });
 
-  // --- Utility: Show Notifications ---
+  // --- Notification Helper ---
   const notify = (message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // --- Effect: Auth Listener (KEPT FOR ROUTING) ---
+  // --- 3. Fixed: Fetch Sub-Admins from the correct 'admins' collection ---
   useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        try {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } catch (e) {
-          await signInAnonymously(auth);
-        }
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- Effect: Fetch Sub-Admins (KEPT ORIGINAL PATH) ---
-  useEffect(() => {
-    // We don't block if !user in this specific sandbox setup to ensure loading
     setLoading(true);
     
-    // Using onSnapshot with your specific path
-    const q = collection(db, ...adminsCollectionPath);
+    // Query the 'admins' collection for role == 'subadmin'
+    const q = query(collection(db, 'admins'), where('role', '==', 'subadmin'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(a => a.role === 'subadmin');
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setSubAdmins(list);
       setLoading(false);
     }, (error) => {
       console.error("Firestore error:", error);
-      // Don't show error immediately on init as permissions might take a moment
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
-  // --- Logic: Create Sub-Admin (FIXED WITH SECONDARY APP TRICK) ---
+  // --- 4. Fixed: Create Sub-Admin Logic using Environment Variables ---
   const handleCreateSubAdmin = async (e) => {
-  e.preventDefault();
-  if (formData.password.length < 6) {
-   notify("Password must be at least 6 characters", "error");
-   return;
-  }
+    e.preventDefault();
+    if (formData.password.length < 6) {
+      notify("Password must be at least 6 characters", "error");
+      return;
+    }
 
-  setProcessing(true);
-  let secondaryApp = null;
+    setProcessing(true);
+    let secondaryApp = null;
 
-  try {
-      // 1. EXPLICIT CONFIGURATION
-      // We hardcode this here to ensure the API key is absolutely present
-      // regardless of how the environment loads variables.
+    try {
+      // ✅ Use Environment Variables (Same as adminService.js)
       const secondaryConfig = {
-        apiKey: "AIzaSyDrQBfHF4I7jwEQ8yj0VLoAUfNDY432_b8",
-        authDomain: "codingnexus.firebaseapp.com",
-        projectId: "codingnexus",
-        storageBucket: "codingnexus.firebasestorage.app",
-        messagingSenderId: "606029795296",
-        appId: "1:606029795296:web:d1392a93837a660ce46585"
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID
       };
 
-   // 2. Initialize a Secondary App using the explicit config
-   // This allows us to create a user WITHOUT logging out the current admin
-   secondaryApp = initializeApp(secondaryConfig, "SecondaryApp");
-   const secondaryAuth = getAuth(secondaryApp);
+      if (!secondaryConfig.apiKey) throw new Error("API Key missing in .env");
 
-   // 3. Create Firebase Auth user on the Secondary App
-   const cred = await createUserWithEmailAndPassword(
-    secondaryAuth,
-    formData.email,
-    formData.password
-   );
+      // Initialize Secondary App
+      secondaryApp = initializeApp(secondaryConfig, "SecondaryApp");
+      const secondaryAuth = getAuth(secondaryApp);
 
-   const subAdminUid = cred.user.uid;
+      // Create User in Auth
+      const cred = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        formData.email,
+        formData.password
+      );
 
-   // 4. Sign out the secondary user immediately
-   await signOut(secondaryAuth);
+      const subAdminUid = cred.user.uid;
 
-   // 5. Create Firestore admin document using the MAIN db connection
-      // (We use 'db' from the top of the file, which is already connected)
-   const adminDocRef = doc(db, ...adminsCollectionPath, subAdminUid);
-   
-   await setDoc(adminDocRef, {
-    uid: subAdminUid,
-    name: formData.name,
-    email: formData.email,
-    role: 'subadmin',
-    permissions: formData.permissions,
-    createdBy: user ? user.uid : 'system',
-    createdAt: Timestamp.now()
-   });
+      // Sign out secondary immediately
+      await signOut(secondaryAuth);
 
-   notify('Sub-admin created successfully');
-   setShowCreateModal(false);
-   resetForm();
-  } catch (error) {
-   console.error("Creation Error:", error);
-   const msg = error.code === 'auth/email-already-in-use' 
-    ? 'Email already in use' 
-    : error.message;
-   notify(msg, 'error');
-  } finally {
-   // 6. CRITICAL: Delete the secondary app to clean up memory
-   if (secondaryApp) {
-    await deleteApp(secondaryApp).catch(console.error);
-   }
-   setProcessing(false);
-  }
- };
+      // ✅ Save to the correct 'admins' collection in MAIN Firestore
+      await setDoc(doc(db, 'admins', subAdminUid), {
+        uid: subAdminUid,
+        name: formData.name,
+        email: formData.email,
+        role: 'subadmin',
+        permissions: formData.permissions,
+        createdBy: auth.currentUser ? auth.currentUser.uid : 'system',
+        createdAt: Timestamp.now()
+      });
+
+      notify('Sub-admin created successfully');
+      setShowCreateModal(false);
+      resetForm();
+    } catch (error) {
+      console.error("Creation Error:", error);
+      const msg = error.code === 'auth/email-already-in-use' 
+        ? 'Email already in use' 
+        : error.message;
+      notify(msg, 'error');
+    } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp).catch(console.error);
+      }
+      setProcessing(false);
+    }
+  };
 
   // --- Logic: Update Permissions ---
   const handleUpdatePermissions = async (e) => {
@@ -208,7 +156,8 @@ const SubAdminManager = ({ onBack }) => {
 
     try {
       setProcessing(true);
-      const adminDocRef = doc(db, ...adminsCollectionPath, selectedAdmin.id);
+      // ✅ Fixed collection path
+      const adminDocRef = doc(db, 'admins', selectedAdmin.id);
       
       await updateDoc(adminDocRef, {
         name: formData.name,
@@ -230,10 +179,11 @@ const SubAdminManager = ({ onBack }) => {
 
   // --- Logic: Delete Sub-Admin ---
   const handleDeleteSubAdmin = async (adminId, name) => {
-    if (!confirm(`Are you sure you want to remove ${name} as a sub-admin?`)) return;
+    if (!confirm(`Are you sure you want to remove ${name} as a sub-admin?\n\nNote: This removes their database access, but the login account remains in Authentication.`)) return;
 
     try {
-      await deleteDoc(doc(db, ...adminsCollectionPath, adminId));
+      // ✅ Fixed collection path
+      await deleteDoc(doc(db, 'admins', adminId));
       notify('Sub-admin removed from database');
     } catch (e) {
       console.error(e);
@@ -241,7 +191,7 @@ const SubAdminManager = ({ onBack }) => {
     }
   };
 
-  // --- Utils ---
+  // --- Helper Functions ---
   const resetForm = () => {
     setFormData({
       name: '',
@@ -272,6 +222,7 @@ const SubAdminManager = ({ onBack }) => {
     setShowEditModal(true);
   };
 
+  // --- RENDER (UI Code remains the same, simplified for brevity) ---
   if (loading && !subAdmins.length) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
@@ -283,7 +234,7 @@ const SubAdminManager = ({ onBack }) => {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 bg-white min-h-screen">
-      {/* Notification Toast */}
+      {/* Notifications */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg border animate-in slide-in-from-top-4 duration-300 ${
           notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
@@ -318,7 +269,7 @@ const SubAdminManager = ({ onBack }) => {
         </button>
       </div>
 
-      {/* Sub-Admin List */}
+      {/* Table Section */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -393,7 +344,7 @@ const SubAdminManager = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Create/Edit Modal Overlay */}
+      {/* Modals (Create & Edit) */}
       {(showCreateModal || showEditModal) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200">
@@ -411,6 +362,7 @@ const SubAdminManager = ({ onBack }) => {
 
             <form onSubmit={showCreateModal ? handleCreateSubAdmin : handleUpdatePermissions} className="p-6">
               <div className="space-y-4 mb-8">
+                {/* Inputs for Name, Email, Password - Simplified for brevity but kept functional */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <div className="relative">
@@ -463,12 +415,12 @@ const SubAdminManager = ({ onBack }) => {
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
-                      <p className="mt-1 text-xs text-gray-400">Must be at least 6 characters</p>
                     </div>
                   </>
                 )}
               </div>
 
+              {/* Permissions Checkboxes */}
               <div className="mb-8">
                 <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center">
                   <ShieldCheck className="w-4 h-4 mr-2 text-blue-500" />
@@ -503,6 +455,7 @@ const SubAdminManager = ({ onBack }) => {
                 </div>
               </div>
 
+              {/* Form Buttons */}
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="button"
@@ -531,15 +484,4 @@ const SubAdminManager = ({ onBack }) => {
   );
 };
 
-// --- App Wrapper for Sandbox environment ---
-const App = () => {
-  const [view, setView] = useState('list');
-  
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <SubAdminManager onBack={() => window.history.back()} />
-    </div>
-  );
-};
-
-export default App;
+export default SubAdminManager;

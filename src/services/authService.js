@@ -232,14 +232,25 @@ export const authService = {
       
       // Check if user exists in admins collection
       const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      
       if (!adminDoc.exists()) {
         await signOut(auth);
         toast.error('You are not authorized as an admin.');
         return { success: false, error: 'Not authorized as admin' };
       }
       
+      // ✅ EXTRACT DATA TO GET ROLE
+      const adminData = adminDoc.data();
+      
       toast.success('Admin login successful!');
-      return { success: true, user };
+      
+      // ✅ RETURN ROLE SO DASHBOARD KNOWS PERMISSIONS
+      return { 
+        success: true, 
+        user, 
+        role: adminData.role // e.g., 'superadmin' or 'subadmin'
+      };
+
     } catch (error) {
       console.error('Admin login error:', error);
       

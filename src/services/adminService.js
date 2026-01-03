@@ -6,12 +6,12 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
+  setDoc, 
   query,
   where,
   orderBy,
-  serverTimestamp ,
+  serverTimestamp,
   Timestamp,
-  getFirestore,
   getDoc
 } from 'firebase/firestore';
 import { 
@@ -21,6 +21,8 @@ import {
 } from 'firebase/auth';
 import { initializeApp, getApp, deleteApp } from 'firebase/app'; 
 import { db, auth } from './firebase';
+
+const COLLECTION_NAME = 'admins';
 
 export const adminService = {
   // Student Management
@@ -301,8 +303,8 @@ export const adminService = {
 
 async getAllSubAdmins() {
     try {
-      // Assuming you store admins in an 'admins' or 'users' collection
-      const q = query(collection(db, 'admins'), where('role', '==', 'subadmin'));
+      // Fetch users from 'admins' collection where role is 'subadmin'
+      const q = query(collection(db, COLLECTION_NAME), where('role', '==', 'subadmin'));
       const querySnapshot = await getDocs(q);
       const admins = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -316,25 +318,10 @@ async getAllSubAdmins() {
   },
 
   // 2. Create Sub-Admin (The Safe Way)
-  async getAllSubAdmins() {
-    try {
-      const q = query(collection(db, COLLECTION_NAME), where('role', '==', 'subadmin'));
-      const querySnapshot = await getDocs(q);
-      return { 
-        success: true, 
-        data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) 
-      };
-    } catch (error) {
-      console.error('Get sub-admins error:', error);
-      return { success: false, error: error.message };
-    }
-  },
-
-  // 2. Create Sub-Admin (Fixed API Key & Logout Issue)
   async createSubAdmin(adminData, password) {
     let secondaryApp = null;
     try {
-      // 1. Load config explicitly to fix "Invalid API Key"
+      // 1. Load config explicitly
       const firebaseConfig = {
         apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
         authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -346,11 +333,11 @@ async getAllSubAdmins() {
 
       if (!firebaseConfig.apiKey) throw new Error("API Key missing in .env");
 
-      // 2. Initialize Secondary App
+      // 2. Initialize Secondary App (to create user without logging out current admin)
       secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
       const secondaryAuth = getAuth(secondaryApp);
 
-      // 3. Create Auth User
+      // 3. Create Auth User in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         secondaryAuth, 
         adminData.email, 
@@ -358,18 +345,19 @@ async getAllSubAdmins() {
       );
       const uid = userCredential.user.uid;
 
-      // 4. Create Firestore Doc (Using MAIN db connection)
+      // 4. Create Firestore Doc in the MAIN 'admins' collection
+      // ✅ This ensures they can login via loginAdmin()
       await setDoc(doc(db, COLLECTION_NAME, uid), {
         uid: uid,
         name: adminData.name,
         email: adminData.email,
-        role: 'subadmin',
-        permissions: adminData.permissions,
+        role: 'subadmin',         // Role identifies them
+        permissions: 'all',       // ✅ Giving them full access as requested
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser?.uid || 'system'
       });
 
-      // 5. Logout Secondary User
+      // 5. Logout Secondary User (Cleanup)
       await signOut(secondaryAuth);
       
       return { success: true };
@@ -399,13 +387,29 @@ async getAllSubAdmins() {
   // 4. Delete Sub-Admin
   async deleteSubAdmin(adminId) {
     try {
-      // Note: This does not delete the Auth account, only the data.
-      // The user will lose access, but the login credentials remain valid in Firebase Auth.
       await deleteDoc(doc(db, COLLECTION_NAME, adminId));
       return { success: true };
     } catch (error) {
       console.error('Delete sub-admin error:', error);
       return { success: false, error: error.message };
     }
-  }
+  },
+  
+  // 5. Get Current Admin Profile (Helper for Dashboard)
+  async getCurrentAdminProfile() {
+    try {
+      const user = auth.currentUser;
+      if (!user) return null;
+
+      const adminDoc = await getDoc(doc(db, COLLECTION_NAME, user.uid));
+      
+      if (adminDoc.exists()) {
+        return adminDoc.data(); 
+      }
+      return null; 
+    } catch (error) {
+      console.error("Error fetching admin profile:", error);
+      return null;
+    }
+  },
 };
