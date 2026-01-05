@@ -12,12 +12,30 @@ const AttendanceManager = () => {
   const [students, setStudents] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('Basic');
   const [attendance, setAttendance] = useState({});
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  // Initialize with today's date formatted as YYYY-MM-DD
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+
+  // --- LOGIC: Calculate "Today" to block Future Dates ---
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const maxDate = getTodayString(); // This restricts the Date Picker
+  // -----------------------------------------------------
 
   useEffect(() => {
     fetchStudents();
@@ -25,7 +43,7 @@ const AttendanceManager = () => {
   }, [selectedBatch]);
 
   useEffect(() => {
-    // Check if attendance for today already exists
+    // Check if attendance for selected date already exists
     if (students.length > 0) {
       checkExistingAttendance();
     }
@@ -44,12 +62,10 @@ const AttendanceManager = () => {
         const existingRecord = snapshot.docs[0].data();
         const existingAttendance = {};
         
-        // Convert presentStudents array to object
         existingRecord.presentStudents?.forEach(studentId => {
           existingAttendance[studentId] = true;
         });
         
-        // Set attendance for all students
         const finalAttendance = {};
         students.forEach(student => {
           finalAttendance[student.id] = existingAttendance[student.id] || false;
@@ -58,13 +74,11 @@ const AttendanceManager = () => {
         setAttendance(finalAttendance);
         setLastSaved(snapshot.docs[0].id);
         
-        // FIX: Use toast() instead of toast.info()
         toast('Attendance for this date already exists. Editing existing record.', {
           icon: '📝',
           duration: 3000
         });
       } else {
-        // Initialize all as absent for new date
         const initialAttendance = {};
         students.forEach(s => {
           initialAttendance[s.id] = false;
@@ -74,7 +88,6 @@ const AttendanceManager = () => {
       }
     } catch (error) {
       console.error('Error checking existing attendance:', error);
-      // Initialize all as absent if error occurs
       const initialAttendance = {};
       students.forEach(s => {
         initialAttendance[s.id] = false;
@@ -97,7 +110,6 @@ const AttendanceManager = () => {
       }));
       setStudents(studentsList);
       
-      // Initialize all as absent initially
       const initialAttendance = {};
       studentsList.forEach(s => {
         initialAttendance[s.id] = false;
@@ -136,13 +148,18 @@ const AttendanceManager = () => {
   };
 
   const toggleAttendance = (studentId, studentName) => {
+    // --- CHECK: Prevent future date editing ---
+    if (date > maxDate) {
+      toast.error("Cannot edit attendance for future dates.");
+      return;
+    }
+    
     const newStatus = !attendance[studentId];
     setAttendance(prev => ({
       ...prev,
       [studentId]: newStatus
     }));
     
-    // Show immediate feedback
     if (newStatus) {
       toast(`${studentName} marked Present ✓`, {
         icon: '✅',
@@ -157,6 +174,7 @@ const AttendanceManager = () => {
   };
 
   const markAllPresent = () => {
+    if (date > maxDate) return; 
     const allPresent = {};
     students.forEach(s => {
       allPresent[s.id] = true;
@@ -169,6 +187,7 @@ const AttendanceManager = () => {
   };
 
   const markAllAbsent = () => {
+    if (date > maxDate) return;
     const allAbsent = {};
     students.forEach(s => {
       allAbsent[s.id] = false;
@@ -181,6 +200,12 @@ const AttendanceManager = () => {
   };
 
   const handleSubmit = async () => {
+    // --- VALIDATION: Only allow Today or Past ---
+    if (date > maxDate) {
+      toast.error('Cannot mark attendance for future dates!');
+      return;
+    }
+    
     if (students.length === 0) {
       toast.error('No students found for this batch');
       return;
@@ -199,7 +224,6 @@ const AttendanceManager = () => {
         .filter(s => !attendance[s.id])
         .map(s => ({ id: s.id, name: s.name, rollNo: s.rollNo }));
 
-      // Calculate attendance percentage
       const attendancePercentage = students.length > 0 
         ? Math.round((presentStudents.length / students.length) * 100)
         : 0;
@@ -222,26 +246,19 @@ const AttendanceManager = () => {
 
       let result;
       if (lastSaved) {
-        // Update existing record
         const docRef = doc(db, 'attendance', lastSaved);
         await updateDoc(docRef, attendanceData);
         result = { id: lastSaved };
         toast.success(`✅ Attendance updated! ${presentStudents.length}/${students.length} present`);
       } else {
-        // Create new record
         const docRef = await addDoc(collection(db, 'attendance'), attendanceData);
         result = docRef;
         setLastSaved(docRef.id);
         toast.success(`✅ Attendance saved! ${presentStudents.length}/${students.length} present`);
       }
 
-      // Update each student's attendance count in their user document
       await updateStudentAttendanceRecords(presentStudents, absentStudents);
-
-      // Fetch updated history
       await fetchAttendanceHistory();
-      
-      // Show summary
       showAttendanceSummary(presentStudents.length, students.length, absentStudents);
       
     } catch (error) {
@@ -255,28 +272,24 @@ const AttendanceManager = () => {
   const updateStudentAttendanceRecords = async (presentStudents, absentStudents) => {
     try {
       const updatePromises = [];
+      const attendanceDate = new Date(date);
       
-      // Get today's date
-      const today = new Date(date);
-      
-      // Update present students
       presentStudents.forEach(studentId => {
         const studentDoc = doc(db, 'users', studentId);
         updatePromises.push(
           updateDoc(studentDoc, {
-            lastAttendanceDate: today,
+            lastAttendanceDate: attendanceDate,
             lastAttendanceStatus: 'present',
             attendanceUpdated: new Date()
           })
         );
       });
       
-      // Update absent students
       absentStudents.forEach(student => {
         const studentDoc = doc(db, 'users', student.id);
         updatePromises.push(
           updateDoc(studentDoc, {
-            lastAttendanceDate: today,
+            lastAttendanceDate: attendanceDate,
             lastAttendanceStatus: 'absent',
             attendanceUpdated: new Date()
           })
@@ -411,6 +424,8 @@ const AttendanceManager = () => {
               <input
                 type="date"
                 value={date}
+                max={maxDate} // <--- THIS is what blocks Future dates only
+                // No 'min' attribute, so past dates are allowed
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               />
@@ -444,14 +459,20 @@ const AttendanceManager = () => {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={markAllPresent}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              disabled={date > maxDate}
+              className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg transition ${
+                date > maxDate ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+              }`}
             >
               <UserCheck className="w-4 h-4" />
               Mark All Present
             </button>
             <button
               onClick={markAllAbsent}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              disabled={date > maxDate}
+              className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg transition ${
+                date > maxDate ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+              }`}
             >
               Mark All Absent
             </button>
@@ -527,8 +548,12 @@ const AttendanceManager = () => {
 
             <button
               onClick={handleSubmit}
-              disabled={loading || students.length === 0}
-              className="w-full mt-6 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+              disabled={loading || students.length === 0 || date > maxDate}
+              className={`w-full mt-6 flex items-center justify-center gap-2 px-6 py-3 text-white rounded-lg shadow-md transition ${
+                loading || students.length === 0 || date > maxDate
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
               {loading ? (
                 <>

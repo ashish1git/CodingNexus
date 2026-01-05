@@ -29,7 +29,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
   ? JSON.parse(__firebase_config) 
   : {};
 
-const app = ! getApps().length ? initializeApp(firebaseConfig) : getApp();
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -75,19 +75,19 @@ export default function AttendanceView() {
       }
     };
     
-    if (! currentUser) {
+    if (!currentUser) {
       initAuth();
     }
     
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Firebase auth state:', user?. uid);
+      console.log('Firebase auth state:', user?.uid);
     });
     return () => unsubscribe();
   }, [currentUser]);
 
   const fetchAttendance = async () => {
-    if (!currentUser || !studentDetails. moodleId) {
-      console.log('Waiting for user authentication or student details.. .');
+    if (!currentUser || !studentDetails.moodleId) {
+      console.log('Waiting for user authentication or student details...');
       return;
     }
     
@@ -108,18 +108,18 @@ export default function AttendanceView() {
         const data = doc.data();
         
         const isPresent = 
-          data.presentStudents?. includes(currentUser.uid) || 
+          data.presentStudents?.includes(currentUser.uid) || 
           data.presentMoodleIds?.includes(studentDetails.moodleId) ||
           data.presentRollNos?.includes(studentDetails.rollNo);
         
         let dateObj;
         try {
-          if (data.date?. toDate) {
+          if (data.date?.toDate) {
             dateObj = data.date.toDate();
           } else if (data.date instanceof Date) {
             dateObj = data.date;
           } else if (data.date) {
-            dateObj = new Date(data. date);
+            dateObj = new Date(data.date);
           } else {
             dateObj = new Date();
           }
@@ -128,7 +128,7 @@ export default function AttendanceView() {
           dateObj = new Date();
         }
         
-        if (! dateObj || isNaN(dateObj.getTime())) {
+        if (!dateObj || isNaN(dateObj.getTime())) {
           console.warn('Invalid date for record:', data);
           return;
         }
@@ -142,7 +142,7 @@ export default function AttendanceView() {
       });
 
       const filteredRecords = records.filter(record => {
-        return record.date. getMonth() === selectedMonth && 
+        return record.date.getMonth() === selectedMonth && 
                record.date.getFullYear() === selectedYear;
       });
 
@@ -163,13 +163,13 @@ export default function AttendanceView() {
           duration: 3000
         });
       } else {
-        toast. success(`Loaded ${total} attendance records`);
+        toast.success(`Loaded ${total} attendance records`);
       }
       
     } catch (error) {
       console.error('Error fetching attendance:', error);
       
-      if (error.code === 'permission-denied' || error.message. includes('permissions')) {
+      if (error.code === 'permission-denied' || error.message.includes('permissions')) {
         toast.error('Permission denied. Please make sure you are logged in as a student.');
       } else if (error.code === 'unavailable') {
         toast.error('Network error. Please check your internet connection.');
@@ -203,7 +203,7 @@ export default function AttendanceView() {
 
   const exportAttendance = () => {
     if (attendance.length === 0) {
-      toast. error('No attendance records to export');
+      toast.error('No attendance records to export');
       return;
     }
 
@@ -224,11 +224,11 @@ export default function AttendanceView() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${studentDetails. name}_attendance_${getMonthName(selectedMonth)}_${selectedYear}.csv`;
+    a.download = `${studentDetails.name}_attendance_${getMonthName(selectedMonth)}_${selectedYear}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     
-    toast.success('Attendance exported successfully! ');
+    toast.success('Attendance exported successfully!');
   };
 
   const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
@@ -252,7 +252,7 @@ export default function AttendanceView() {
             <button
               onClick={exportAttendance}
               disabled={attendance.length === 0}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover: bg-indigo-700 transition text-sm font-medium disabled:opacity-50"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
@@ -291,7 +291,7 @@ export default function AttendanceView() {
             { label: 'Present', value: stats.present, color: 'green', icon:  CheckCircle },
             { label: 'Absent', value:  stats.absent, color: 'red', icon: XCircle },
             { label: 'Percentage', value: `${stats.percentage}%`, color: 'purple', icon: TrendingUp }
-          ]. map((stat, i) => (
+          ].map((stat, i) => (
             <div key={i} className="bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-700 shadow-lg hover:border-slate-600 transition">
               <div className={`w-10 h-10 rounded-lg mb-3 flex items-center justify-center ${
                 stat.color === 'blue' ? 'bg-blue-900/30' : 
@@ -302,7 +302,7 @@ export default function AttendanceView() {
                 <stat.icon className={`w-6 h-6 ${
                   stat.color === 'blue' ? 'text-blue-400' : 
                   stat.color === 'green' ? 'text-green-400' : 
-                  stat. color === 'red' ? 'text-red-400' :  
+                  stat.color === 'red' ? 'text-red-400' :  
                   'text-purple-400'
                 }`} />
               </div>
@@ -328,10 +328,10 @@ export default function AttendanceView() {
               </select>
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target. value))}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 className="flex-1 sm:flex-none px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm font-medium text-white outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {[2023, 2024, 2025, 2026]. map(year => (
+                {[2023, 2024, 2025, 2026].map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>
@@ -360,26 +360,34 @@ export default function AttendanceView() {
                   {Array.from({ length: daysInMonth }, (_, i) => {
                     const day = i + 1;
                     const record = isDateMarked(day);
-                    const isToday = day === new Date().getDate() &&
-                                   selectedMonth === new Date().getMonth() &&
-                                   selectedYear === new Date().getFullYear();
+                    
+                    // --- DATE LOGIC ---
+                    const cellDate = new Date(selectedYear, selectedMonth, day);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Reset time for accurate comparison
+                    
+                    const isToday = cellDate.getTime() === today.getTime();
+                    const isFutureDate = cellDate > today;
+                    // ------------------
 
                     return (
                       <div
                         key={day}
                         className={`aspect-square flex flex-col items-center justify-center rounded-lg border transition-all text-xs font-bold ${
                           isToday
-                            ? 'border-2 border-indigo-500 bg-indigo-900/30 scale-105 shadow-lg'
-                            :  record
+                            ? 'border-2 border-indigo-500 bg-indigo-900/30 scale-105 shadow-lg z-10'
+                            : record
                             ? record.isPresent
                               ? 'border-green-700/50 bg-green-900/30 text-green-400'
                               : 'border-red-700/50 bg-red-900/30 text-red-400'
-                            : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                            : isFutureDate
+                            ? 'border-slate-800 bg-slate-800/40 text-slate-600 cursor-default' // GRAY STYLE FOR FUTURE
+                            : 'border-slate-700 text-slate-400 hover:border-slate-600' // NORMAL STYLE FOR PAST
                         }`}
                       >
                         <span>{day}</span>
                         {record && (
-                          <div className={`w-1. 5 h-1.5 rounded-full mt-1 ${
+                          <div className={`w-1.5 h-1.5 rounded-full mt-1 ${
                             record.isPresent ? 'bg-green-400' : 'bg-red-400'
                           }`} />
                         )}
@@ -408,7 +416,7 @@ export default function AttendanceView() {
         </div>
 
         {/* Low Attendance Alert */}
-        {! loading && stats.total > 0 && (
+        {!loading && stats.total > 0 && (
           <div className={`mt-6 p-5 rounded-xl border-l-4 flex items-start gap-4 transition-all ${
             stats.percentage < 75 
               ? 'bg-red-900/30 border-red-500' 
@@ -484,6 +492,6 @@ export default function AttendanceView() {
 
 function AlertCircle(props) {
   return (
-    <svg {... props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
   );
 }
