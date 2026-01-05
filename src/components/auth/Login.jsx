@@ -71,7 +71,11 @@ const Login = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full mb-4">
             <Code className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Coding Nexus</h1>
+          <Link to="/" className="block">
+  <h1 className="text-3xl font-bold text-gray-800 mb-2 hover:text-indigo-600 transition-colors cursor-pointer">
+    Coding Nexus
+  </h1>
+</Link>
           <p className="text-gray-600">Welcome back! Please login to continue</p>
         </div>
 
