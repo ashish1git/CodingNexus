@@ -246,14 +246,20 @@ const StudentDashboard = () => {
   };
 
   const handleLogout = async () => {
+  // Navigate FIRST, then logout
+  navigate('/', { replace: true });
+  
+  // Logout in background after navigation starts
+  setTimeout(async () => {
     try {
       await logout();
       toast.success('Logged out successfully');
-      navigate('/login');
     } catch (error) {
+      console.error('Logout error:', error);
       toast.error('Failed to logout');
     }
-  };
+  }, 10);
+};
 
   const menuItems = [
     { icon: <User className="w-5 h-5" />, label: 'Profile', path: '/student/profile' },
