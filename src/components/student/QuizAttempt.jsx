@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Clock, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
-import { db } from "../../services/firebase";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { studentService } from "../../services/studentService";
@@ -71,19 +62,18 @@ const QuizAttempt = () => {
 
   const fetchQuiz = async () => {
     try {
-      const quizRef = doc(db, "quizzes", quizId);
-      const quizSnap = await getDoc(quizRef);
+      const response = await studentService.getQuizById(quizId);
 
-      if (!quizSnap.exists()) {
+      if (!response.success) {
         toast.error("Quiz not found");
         navigate("/student/dashboard");
         return;
       }
 
-      const quizData = { id: quizSnap.id, ...quizSnap.data() };
+      const quizData = response.data;
       const now = new Date();
-      const start = quizData.startTime.toDate();
-      const end = quizData.endTime.toDate();
+      const start = new Date(quizData.startTime);
+      const end = new Date(quizData.endTime);
 
       if (now < start || now > end) {
         toast.error("Quiz is not active");
@@ -109,13 +99,8 @@ const QuizAttempt = () => {
 
   const checkAttempt = async () => {
     try {
-      const q = query(
-        collection(db, "quiz_attempts"),
-        where("quizId", "==", quizId),
-        where("studentId", "==", currentUser.uid)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
+      const response = await studentService.getQuizAttempt(quizId);
+      if (response.success && response.data) {
         toast.error("You have already attempted this quiz");
         navigate("/student/dashboard");
       }

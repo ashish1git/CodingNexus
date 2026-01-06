@@ -5,11 +5,8 @@ import {
   ArrowLeft, MessageCircle, Send, Clock, CheckCircle, AlertCircle, 
   Search, Filter, X 
 } from 'lucide-react';
-import { 
-  collection, getDocs, doc, updateDoc, arrayUnion, orderBy, query 
-} from 'firebase/firestore';
-import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { adminService } from '../../services/adminService';
 import toast, { Toaster } from 'react-hot-toast';
 
 const TicketManagement = () => {
@@ -36,21 +33,22 @@ const TicketManagement = () => {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const ticketsQuery = query(
-        collection(db, 'support_tickets'),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(ticketsQuery);
-      const ticketsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
-      }));
-      setTickets(ticketsList);
+      const response = await adminService.getAllTickets();
+      if (response.success && response.tickets) {
+        const ticketsList = response.tickets.map(ticket => ({
+          ...ticket,
+          createdAt: new Date(ticket.createdAt),
+          updatedAt: ticket.updatedAt ? new Date(ticket.updatedAt) : null
+        }));
+        setTickets(ticketsList);
+      } else {
+        toast.error(response.error || 'Failed to load tickets');
+        setTickets([]);
+      }
     } catch (error) {
       console.error('Error fetching tickets:', error);
       toast.error('Failed to load tickets');
+      setTickets([]);
     } finally {
       setLoading(false);
     }
@@ -145,8 +143,7 @@ const TicketManagement = () => {
           return {
             ...ticket,
             status: newStatus,
-            updatedAt: new Date(),
-            updatedBy: userDetails.name
+            updatedAt: new Date()
           };
         }
         return ticket;
@@ -158,20 +155,23 @@ const TicketManagement = () => {
         setSelectedTicket(prev => ({
           ...prev,
           status: newStatus,
-          updatedAt: new Date(),
-          updatedBy: userDetails.name
+          updatedAt: new Date()
         }));
       }
 
       // Show toast notification
       showStatusToast(newStatus);
 
-      // Update Firestore
-      await updateDoc(doc(db, 'support_tickets', ticketId), {
-        status: newStatus,
-        updatedAt: new Date(),
-        updatedBy: userDetails.name
+      // Update via adminService
+      const response = await adminService.updateTicket(ticketId, {
+        status: newStatus
       });
+      
+      if (!response.success) {
+        // Revert local state on error
+        fetchTickets();
+        toast.error(response.error || 'Failed to update status');
+      }
 
     } catch (error) {
       console.error('Error updating status:', error);
@@ -196,7 +196,7 @@ const TicketManagement = () => {
         from: 'admin',
         name: userDetails.name,
         message: replyText,
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       };
 
       // Update local state immediately for instant feedback
@@ -230,12 +230,17 @@ const TicketManagement = () => {
       // Clear reply text
       setReplyText('');
 
-      // Update Firestore
-      await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
-        responses: arrayUnion(newResponse),
-        updatedAt: new Date(),
+      // Update via adminService
+      const response = await adminService.updateTicket(selectedTicket.id, {
+        reply: replyText,
         status: selectedTicket.status === 'open' ? 'in-progress' : selectedTicket.status
       });
+      
+      if (!response.success) {
+        // Revert local state on error
+        fetchTickets();
+        toast.error(response.error || 'Failed to send reply');
+      }
 
     } catch (error) {
       console.error('Error sending reply:', error);

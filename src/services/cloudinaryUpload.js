@@ -1,9 +1,9 @@
 // src/services/cloudinaryUpload.js
 import toast from 'react-hot-toast';
 
-// Get Cloudinary configuration
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
+// Get Cloudinary configuration (only use import.meta.env for Vite)
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 // Validate configuration
 export const validateCloudinaryConfig = () => {

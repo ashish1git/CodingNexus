@@ -1,8 +1,7 @@
 // src/components/student/ProfilePhotoUpload.jsx
 import React, { useState } from 'react';
 import { Camera, Upload, X, Check, Loader } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -102,15 +101,12 @@ const ProfilePhotoUpload = ({ currentPhotoUrl, onPhotoUpdate }) => {
       // Step 1: Upload to Cloudinary
       const photoUrl = await uploadToCloudinary(selectedFile);
 
-      // Step 2: Save URL to Firestore
-      const userRef = doc(db, 'users', userDetails.uid);
-      await updateDoc(userRef, {
-        photoURL: photoUrl,
-        updatedAt: new Date(),
-        photoUploadedAt: new Date().toISOString()
+      // Step 2: Save URL using studentService
+      await studentService.updateProfile({
+        photoURL: photoUrl
       });
 
-      toast.success('✅ Profile photo updated! ', { id: 'upload' });
+      toast.success('✅ Profile photo updated!', { id: 'upload' });
       
       // Callback to parent component
       if (onPhotoUpdate) {

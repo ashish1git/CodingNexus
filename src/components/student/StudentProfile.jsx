@@ -2,8 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import toast from 'react-hot-toast';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -119,16 +118,15 @@ const StudentProfile = () => {
       const data = await response.json();
       const newPhotoUrl = data.secure_url;
 
-      const userRef = doc(db, 'users', currentUser?. uid);
-      await updateDoc(userRef, {
-        photoURL: newPhotoUrl,
-        updatedAt: new Date()
+      // Update profile photo using studentService
+      await studentService.updateProfile({
+        photoURL: newPhotoUrl
       });
 
       setPhotoURL(newPhotoUrl);
       setShowCropModal(false);
       setImageSrc(null);
-      setCrop({ x:  0, y: 0 });
+      setCrop({ x: 0, y: 0 });
       setZoom(1);
       setCroppedAreaPixels(null);
 

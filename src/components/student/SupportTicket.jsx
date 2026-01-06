@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, Send, RefreshCw, X } from 'lucide-react';
-import { collection, addDoc, query, where, getDocs, orderBy, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -35,18 +34,12 @@ const SupportTicket = () => {
   const fetchTickets = async () => {
     if (!currentUser) return;
     try {
-      const ticketsQuery = query(
-        collection(db, 'support_tickets'),
-        where('studentId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(ticketsQuery);
-      const ticketsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
-      }));
-      setTickets(ticketsList);
+      const response = await studentService.getTickets();
+      if (response.success) {
+        setTickets(response.data);
+      } else {
+        throw new Error(response.error || 'Failed to fetch tickets');
+      }
     } catch (error) {
       console.error('Error fetching tickets:', error);
       if (!loading) {
@@ -68,23 +61,20 @@ const SupportTicket = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'support_tickets'), {
-        studentId: currentUser.uid,
-        studentName: userDetails.name,
-        studentEmail: userDetails.email,
-        studentRollNo: userDetails.rollNo,
+      const response = await studentService.createTicket({
         subject: formData.subject,
         description: formData.description,
-        priority: formData.priority,
-        status: 'open',
-        responses: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
+        priority: formData.priority
       });
-      toast.success('Support ticket created successfully! ');
-      setShowCreateModal(false);
-      setFormData({ subject: '', description: '', priority: 'medium' });
-      fetchTickets();
+      
+      if (response.success) {
+        toast.success('Support ticket created successfully!');
+        setShowCreateModal(false);
+        setFormData({ subject: '', description: '', priority: 'medium' });
+        fetchTickets();
+      } else {
+        throw new Error(response.error || 'Failed to create ticket');
+      }
     } catch (error) {
       console.error('Error creating ticket:', error);
       toast.error('Failed to create ticket');
@@ -98,32 +88,31 @@ const SupportTicket = () => {
     if (!replyText.trim()) return;
     setSubmitting(true);
     try {
-      await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
-        responses: arrayUnion({
-          from: 'student',
-          name: userDetails.name,
-          message: replyText,
-          timestamp: new Date()
-        }),
-        updatedAt: new Date()
-      });
-      toast.success('Reply added successfully! ');
-      setReplyText('');
-      fetchTickets();
-      const updatedTicket = tickets.find(t => t.id === selectedTicket.id);
-      if (updatedTicket) {
-        setSelectedTicket({
-          ...updatedTicket,
-          responses: [
-            ...(updatedTicket.responses || []),
-            {
-              from: 'student',
-              name: userDetails.name,
-              message: replyText,
-              timestamp: new Date()
-            }
-          ]
-        });
+      const response = await studentService.addTicketReply(selectedTicket.id, replyText);
+      
+      if (response.success) {
+        toast.success('Reply added successfully!');
+        setReplyText('');
+        fetchTickets();
+        
+        // Update selected ticket locally
+        const updatedTicket = tickets.find(t => t.id === selectedTicket.id);
+        if (updatedTicket) {
+          setSelectedTicket({
+            ...updatedTicket,
+            responses: [
+              ...(updatedTicket.responses || []),
+              {
+                from: 'student',
+                name: userDetails.name,
+                message: replyText,
+                timestamp: new Date()
+              }
+            ]
+          });
+        }
+      } else {
+        throw new Error(response.error || 'Failed to add reply');
       }
     } catch (error) {
       console.error('Error adding reply:', error);

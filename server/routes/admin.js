@@ -1,0 +1,537 @@
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import prisma from '../config/db.js';
+import { authenticate, authorizeRole } from '../middleware/auth.js';
+import upload, { uploadToCloudinary } from '../middleware/upload.js';
+
+const router = express.Router();
+
+// All routes require admin authentication
+router.use(authenticate);
+router.use(authorizeRole('admin', 'subadmin', 'superadmin'));
+
+// ============ STUDENT MANAGEMENT ============
+
+// Create student (admin only) - auto-activated
+router.post('/students', async (req, res) => {
+  try {
+    const { email, password, name, moodleId, batch, phone, rollNo } = req.body;
+
+    // Check if user exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { moodleId: moodleId || undefined }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User with this email or Moodle ID already exists' 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user and student profile - AUTO-ACTIVATED since created by admin
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role: 'student',
+        moodleId,
+        isActive: true, // Auto-activate when admin creates student
+        studentProfile: {
+          create: {
+            name,
+            rollNo,
+            batch,
+            phone
+          }
+        }
+      },
+      include: {
+        studentProfile: true
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Student created and activated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        name: user.studentProfile.name
+      }
+    });
+  } catch (error) {
+    console.error('Create student error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all students
+router.get('/students', async (req, res) => {
+  try {
+    const students = await prisma.user.findMany({
+      where: { role: 'student' },
+      include: {
+        studentProfile: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ 
+      success: true, 
+      students: students.map(u => ({
+        id: u.id,
+        email: u.email,
+        moodleId: u.moodleId,
+        isActive: u.isActive,
+        ...u.studentProfile,
+        createdAt: u.createdAt
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update student
+router.put('/students/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, batch, phone, profilePhotoUrl, isActive } = req.body;
+
+    // Update user
+    if (isActive !== undefined) {
+      await prisma.user.update({
+        where: { id },
+        data: { isActive }
+      });
+    }
+
+    // Update profile
+    await prisma.student.update({
+      where: { userId: id },
+      data: {
+        name,
+        batch,
+        phone,
+        profilePhotoUrl
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete student
+router.delete('/students/:id', async (req, res) => {
+  try {
+    await prisma.user.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ FILE UPLOAD ============
+
+// Upload file to Cloudinary
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const result = await uploadToCloudinary(req.file.buffer, 'codingnexus');
+
+    res.json({
+      success: true,
+      fileUrl: result.secure_url,
+      publicId: result.public_id
+    });
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ NOTES MANAGEMENT ============
+
+// Upload note
+router.post('/notes', async (req, res) => {
+  try {
+    const { title, description, fileUrl, batch, subject } = req.body;
+
+    await prisma.note.create({
+      data: {
+        title,
+        description,
+        fileUrl,
+        batch,
+        subject,
+        uploadedBy: req.user.id
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all notes
+router.get('/notes', async (req, res) => {
+  try {
+    const notes = await prisma.note.findMany({
+      orderBy: { uploadedAt: 'desc' }
+    });
+    res.json({ success: true, notes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete note
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    await prisma.note.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ANNOUNCEMENTS ============
+
+// Create announcement
+router.post('/announcements', async (req, res) => {
+  try {
+    const { title, message, batch, priority } = req.body;
+
+    await prisma.announcement.create({
+      data: {
+        title,
+        message,
+        batch,
+        priority: priority || 'normal',
+        createdBy: req.user.id
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all announcements
+router.get('/announcements', async (req, res) => {
+  try {
+    const announcements = await prisma.announcement.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, announcements });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update announcement
+router.put('/announcements/:id', async (req, res) => {
+  try {
+    await prisma.announcement.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete announcement
+router.delete('/announcements/:id', async (req, res) => {
+  try {
+    await prisma.announcement.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ATTENDANCE ============
+
+// Mark attendance
+router.post('/attendance', async (req, res) => {
+  try {
+    const { userId, date, status, batch } = req.body;
+
+    await prisma.attendance.upsert({
+      where: {
+        userId_date: {
+          userId,
+          date: new Date(date)
+        }
+      },
+      create: {
+        userId,
+        date: new Date(date),
+        status,
+        batch,
+        markedBy: req.user.id
+      },
+      update: {
+        status,
+        markedBy: req.user.id
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get attendance by date
+router.get('/attendance/:date', async (req, res) => {
+  try {
+    const attendance = await prisma.attendance.findMany({
+      where: {
+        date: new Date(req.params.date)
+      },
+      include: {
+        user: {
+          include: {
+            studentProfile: true
+          }
+        }
+      }
+    });
+
+    res.json({ success: true, data: attendance });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ QUIZZES ============
+
+// Create quiz
+router.post('/quizzes', async (req, res) => {
+  try {
+    const { title, description, batch, startTime, endTime, duration, questions } = req.body;
+
+    await prisma.quiz.create({
+      data: {
+        title,
+        description,
+        batch,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        duration,
+        questions,
+        createdBy: req.user.id
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all quizzes
+router.get('/quizzes', async (req, res) => {
+  try {
+    const quizzes = await prisma.quiz.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, quizzes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update quiz
+router.put('/quizzes/:id', async (req, res) => {
+  try {
+    const { startTime, endTime, ...rest } = req.body;
+    
+    await prisma.quiz.update({
+      where: { id: req.params.id },
+      data: {
+        ...rest,
+        ...(startTime && { startTime: new Date(startTime) }),
+        ...(endTime && { endTime: new Date(endTime) })
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete quiz
+router.delete('/quizzes/:id', async (req, res) => {
+  try {
+    await prisma.quiz.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ TICKETS ============
+
+// Get all tickets
+router.get('/tickets', async (req, res) => {
+  try {
+    const tickets = await prisma.supportTicket.findMany({
+      include: {
+        user: {
+          include: {
+            studentProfile: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, tickets });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update ticket
+router.put('/tickets/:id', async (req, res) => {
+  try {
+    const { status, response } = req.body;
+
+    await prisma.supportTicket.update({
+      where: { id: req.params.id },
+      data: {
+        status,
+        response,
+        respondedBy: req.user.id,
+        respondedAt: new Date()
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ SUB-ADMIN MANAGEMENT ============
+
+// Get all sub-admins
+router.get('/subadmins', async (req, res) => {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'subadmin' },
+      include: {
+        adminProfile: true
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      data: admins.map(u => ({
+        id: u.id,
+        email: u.email,
+        ...u.adminProfile
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create sub-admin
+router.post('/subadmins', async (req, res) => {
+  try {
+    const { email, password, name, permissions } = req.body;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role: 'subadmin',
+        isActive: true,
+        adminProfile: {
+          create: {
+            name,
+            permissions: permissions || 'all',
+            createdBy: req.user.id
+          }
+        }
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update sub-admin
+router.put('/subadmins/:id', async (req, res) => {
+  try {
+    const { name, permissions } = req.body;
+
+    await prisma.admin.update({
+      where: { userId: req.params.id },
+      data: { name, permissions }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete sub-admin
+router.delete('/subadmins/:id', async (req, res) => {
+  try {
+    await prisma.user.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+export default router;

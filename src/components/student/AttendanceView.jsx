@@ -8,30 +8,9 @@ import {
   TrendingUp, 
   Download,
 } from 'lucide-react';
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  getDocs,
-  query,
-  where
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInAnonymously, 
-  signInWithCustomToken 
-} from 'firebase/auth';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {};
-
-const app = ! getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
 
 export default function AttendanceView() {
   const navigate = useNavigate();
@@ -54,95 +33,33 @@ export default function AttendanceView() {
     moodleId: userDetails?.moodleId || ""
   }), [userDetails]);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (!currentUser) {
-          return;
-        }
-        
-        try {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (authError) {
-          console.warn("Auth initialization warning:", authError);
-        }
-      } catch (err) {
-        console.error("Auth initialization failed:", err);
-      }
-    };
-    
-    if (! currentUser) {
-      initAuth();
-    }
-    
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Firebase auth state:', user?. uid);
-    });
-    return () => unsubscribe();
-  }, [currentUser]);
+
 
   const fetchAttendance = async () => {
-    if (!currentUser || !studentDetails. moodleId) {
-      console.log('Waiting for user authentication or student details.. .');
+    if (!currentUser || !studentDetails.moodleId) {
+      console.log('Waiting for user authentication or student details...');
       return;
     }
     
     setLoading(true);
     try {
-      const attendanceRef = collection(db, 'attendance');
+      const response = await studentService.getAttendance();
       
-      const attendanceQuery = query(
-        attendanceRef,
-        where('batch', '==', studentDetails.batch)
-      );
+      if (!response.success) {
+        toast.error(response.error || 'Failed to load attendance');
+        setLoading(false);
+        return;
+      }
       
-      const snapshot = await getDocs(attendanceQuery);
+      const records = response.attendance.map(record => ({
+        id: record.id,
+        date: new Date(record.date),
+        isPresent: record.isPresent,
+        markedBy: record.markedBy || 'Unknown'
+      }));
       
-      const records = [];
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        
-        const isPresent = 
-          data.presentStudents?. includes(currentUser.uid) || 
-          data.presentMoodleIds?.includes(studentDetails.moodleId) ||
-          data.presentRollNos?.includes(studentDetails.rollNo);
-        
-        let dateObj;
-        try {
-          if (data.date?. toDate) {
-            dateObj = data.date.toDate();
-          } else if (data.date instanceof Date) {
-            dateObj = data.date;
-          } else if (data.date) {
-            dateObj = new Date(data. date);
-          } else {
-            dateObj = new Date();
-          }
-        } catch (dateError) {
-          console.warn('Date parsing error:', dateError);
-          dateObj = new Date();
-        }
-        
-        if (! dateObj || isNaN(dateObj.getTime())) {
-          console.warn('Invalid date for record:', data);
-          return;
-        }
-
-        records.push({
-          id: doc.id,
-          date: dateObj,
-          isPresent:  isPresent,
-          markedBy: data.markedBy || 'Unknown'
-        });
-      });
-
       const filteredRecords = records.filter(record => {
-        return record.date. getMonth() === selectedMonth && 
+        return record.date.getMonth() === selectedMonth && 
                record.date.getFullYear() === selectedYear;
       });
 
@@ -163,19 +80,12 @@ export default function AttendanceView() {
           duration: 3000
         });
       } else {
-        toast. success(`Loaded ${total} attendance records`);
+        toast.success(`Loaded ${total} attendance records`);
       }
       
     } catch (error) {
       console.error('Error fetching attendance:', error);
-      
-      if (error.code === 'permission-denied' || error.message. includes('permissions')) {
-        toast.error('Permission denied. Please make sure you are logged in as a student.');
-      } else if (error.code === 'unavailable') {
-        toast.error('Network error. Please check your internet connection.');
-      } else {
-        toast.error(`Failed to load attendance: ${error.message}`);
-      }
+      toast.error(error.message || 'Failed to load attendance');
     } finally {
       setLoading(false);
     }

@@ -5,8 +5,7 @@ import {
   LogOut, Menu, X, User, Clock, TrendingUp, FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import toast from 'react-hot-toast';
 
 const StudentDashboard = () => {
@@ -63,181 +62,71 @@ const StudentDashboard = () => {
     if (!userDetails || !currentUser) return;
     
     try {
-      // Fetch notes - Include "All" notes as well as batch-specific notes
-      let totalNotesCount = 0;
-      try {
-        const notesQuery = query(
-          collection(db, 'notes'),
-          where('batch', 'in', [userDetails.batch, 'All'])
-        );
-        const notesSnapshot = await getDocs(notesQuery);
-        totalNotesCount = notesSnapshot.size;
-      } catch (notesError) {
-        console.error('Error fetching notes:', notesError);
-        if (notesError.code === 'failed-precondition') {
-          console.log('Firestore index required for notes query');
-        }
-      }
+      // Fetch all dashboard data in parallel using studentService
+      const [notesRes, attendanceRes, quizzesRes, attemptsRes, announcementsRes] = await Promise.all([
+        studentService.getNotes(),
+        studentService.getAttendance(),
+        studentService.getQuizzes(),
+        studentService.getQuizAttempts(),
+        studentService.getAnnouncements()
+      ]);
 
-      // Fetch attendance records
+      // Process notes count
+      const totalNotesCount = notesRes.success ? notesRes.data.length : 0;
+
+      // Process attendance
       let attendancePercentage = 0;
-      let totalClasses = 0;
-      let presentClasses = 0;
+      if (attendanceRes.success) {
+        const records = attendanceRes.data;
+        const totalClasses = records.length;
+        const presentClasses = records.filter(r => r.isPresent).length;
+        attendancePercentage = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 0;
+      }
+
+      // Process quizzes
+      let quizzesAttemptedCount = 0;
+      let upcomingQuizzesList = [];
       
-      if (userDetails.batch) {
-        try {
-          const attendanceQuery = query(
-            collection(db, 'attendance'),
-            where('batch', '==', userDetails.batch)
-          );
-          const attendanceSnapshot = await getDocs(attendanceQuery);
-          
-          totalClasses = attendanceSnapshot.size;
-          
-          attendanceSnapshot.docs.forEach(doc => {
-            const data = doc.data();
-            const isPresent = 
-              data.presentStudents?.includes(currentUser.uid) || 
-              data.presentMoodleIds?.includes(userDetails.moodleId) ||
-              data.presentRollNos?.includes(userDetails.rollNo);
-            
-            if (isPresent) {
-              presentClasses++;
-            }
-          });
-          
-          attendancePercentage = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 0;
-        } catch (attendanceError) {
-          console.error('Error fetching attendance:', attendanceError);
-        }
-      }
-
-      // Fetch student's quiz attempts
-      let attemptedQuizIds = [];
-      try {
-        const attemptsQuery = query(
-          collection(db, 'quiz_attempts'),
-          where('studentId', '==', currentUser.uid)
-        );
-        const attemptsSnapshot = await getDocs(attemptsQuery);
-        attemptedQuizIds = attemptsSnapshot.docs.map(doc => doc.data().quizId);
-        console.log('All attempted quiz IDs:', attemptedQuizIds);
-      } catch (attemptsError) {
-        console.error('Error fetching quiz attempts:', attemptsError);
-      }
-
-      // Fetch announcements
-      try {
-        const announcementsQuery = query(
-          collection(db, 'announcements'),
-          where('batch', 'in', [userDetails.batch, 'All']),
-          orderBy('createdAt', 'desc'),
-          limit(5)
-        );
-        const announcementsSnapshot = await getDocs(announcementsQuery);
+      if (quizzesRes.success && attemptsRes.success) {
+        const allQuizzes = quizzesRes.data;
+        const attemptedQuizIds = new Set(attemptsRes.data.map(a => a.quizId));
         
-        setRecentAnnouncements(
-          announcementsSnapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date()
-          }))
-        );
-      } catch (announcementsError) {
-        console.error('Error fetching announcements:', announcementsError);
-      }
-
-      // FIXED: Fetch ALL quizzes for this batch (including "All" batch)
-      try {
-        // Fetch quizzes specific to student's batch
-        const batchQuizzesQuery = query(
-          collection(db, 'quizzes'),
-          where('batch', '==', userDetails.batch)
-        );
-        const batchQuizzesSnapshot = await getDocs(batchQuizzesQuery);
-
-        // Fetch quizzes marked as "All" batch
-        const allBatchQuizzesQuery = query(
-          collection(db, 'quizzes'),
-          where('batch', '==', 'All')
-        );
-        const allBatchQuizzesSnapshot = await getDocs(allBatchQuizzesQuery);
-
-        // Combine both query results
-        const combinedQuizDocs = [...batchQuizzesSnapshot.docs, ...allBatchQuizzesSnapshot.docs];
+        quizzesAttemptedCount = allQuizzes.filter(q => attemptedQuizIds.has(q.id)).length;
         
-        console.log('Total quizzes found:', combinedQuizDocs.length);
-        console.log('Batch-specific quizzes:', batchQuizzesSnapshot.docs.length);
-        console.log('All-batch quizzes:', allBatchQuizzesSnapshot.docs.length);
-
-        // FIXED: Calculate attempted quizzes count for this batch only
-        const attemptedQuizIdsSet = new Set(attemptedQuizIds);
-        const quizzesInBatch = combinedQuizDocs.map(doc => doc.id);
-        const quizzesAttemptedCount = quizzesInBatch.filter(quizId => 
-          attemptedQuizIdsSet.has(quizId)
-        ).length;
-        
-        console.log('Quizzes in batch:', quizzesInBatch.length);
-        console.log('Attempted quizzes in batch:', quizzesAttemptedCount);
-
-        // Now filter: get upcoming quizzes (not ended AND not attempted)
+        // Get upcoming quizzes (not ended and not attempted)
         const now = new Date();
-        const upcomingQuizzesList = combinedQuizDocs
-          .map(doc => {
-            const quizData = doc.data();
-            const endTime = quizData.endTime?.toDate ? quizData.endTime.toDate() : null;
-            const startTime = quizData.startTime?.toDate ? quizData.startTime.toDate() : null;
-            
-            return {
-              id: doc.id,
-              ...quizData,
-              endTime: endTime,
-              startTime: startTime,
-              duration: quizData.duration || 60,
-              isEnded: endTime ? endTime < now : false,
-              isStarted: startTime ? startTime <= now : false
-            };
-          })
-          .filter(quiz => {
-            // Show quiz if:
-            // 1. It hasn't ended yet (end time is in future)
-            // 2. Student hasn't attempted it yet
-            const isActive = quiz.endTime && quiz.endTime > now;
-            const isNotAttempted = !attemptedQuizIds.includes(quiz.id);
-            return isActive && isNotAttempted;
-          })
-          .sort((a, b) => {
-            // Sort by end time (earliest first)
-            if (a.endTime && b.endTime) {
-              return a.endTime - b.endTime;
-            }
-            return 0;
-          })
-          .slice(0, 5); // Show only top 5 upcoming quizzes
-
-        console.log('Upcoming quizzes after filtering:', upcomingQuizzesList.length);
-        
-        setUpcomingQuizzes(upcomingQuizzesList);
-
-        setStats({
-          totalNotes: totalNotesCount,
-          attendance: totalClasses,
-          attendancePercentage: attendancePercentage,
-          quizzesAttempted: quizzesAttemptedCount, // FIXED: Now correctly counts only batch quizzes
-          pendingQuizzes: upcomingQuizzesList.length
-        });
-      } catch (quizError) {
-        console.error('Error fetching quizzes:', quizError);
-        
-        // Set stats without quiz data
-        setStats({
-          totalNotes: totalNotesCount,
-          attendance: totalClasses,
-          attendancePercentage: attendancePercentage,
-          quizzesAttempted: 0,
-          pendingQuizzes: 0
-        });
+        upcomingQuizzesList = allQuizzes
+          .map(quiz => ({
+            ...quiz,
+            endTime: new Date(quiz.endTime),
+            startTime: new Date(quiz.startTime),
+            isEnded: new Date(quiz.endTime) < now,
+            isStarted: new Date(quiz.startTime) <= now
+          }))
+          .filter(quiz => !quiz.isEnded && !attemptedQuizIds.has(quiz.id))
+          .sort((a, b) => a.startTime - b.startTime)
+          .slice(0, 5);
       }
+
+      // Process announcements
+      const announcements = announcementsRes.success 
+        ? announcementsRes.data.slice(0, 5).map(a => ({
+            ...a,
+            createdAt: new Date(a.createdAt)
+          }))
+        : [];
+
+      // Update state
+      setStats({
+        totalNotes: totalNotesCount,
+        attendance: attendancePercentage,
+        attendancePercentage,
+        quizzesAttempted: quizzesAttemptedCount,
+        pendingQuizzes: upcomingQuizzesList.length
+      });
+      
+      setUpcomingQuizzes(upcomingQuizzesList);
+      setRecentAnnouncements(announcements);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

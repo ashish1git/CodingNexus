@@ -12,8 +12,7 @@ import {
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -41,41 +40,29 @@ const QuizResults = () => {
       
       console.log('Fetching quiz results for:', { quizId, userId: currentUser.uid });
       
-      // 1. Get quiz data
-      const quizRef = doc(db, 'quizzes', quizId);
-      const quizSnap = await getDoc(quizRef);
+      // Get quiz data and attempt using studentService
+      const [quizResponse, attemptResponse] = await Promise.all([
+        studentService.getQuizById(quizId),
+        studentService.getQuizAttempt(quizId)
+      ]);
       
-      if (!quizSnap.exists()) {
+      if (!quizResponse.success) {
         throw new Error('Quiz not found');
       }
       
-      const quiz = {
-        id: quizSnap.id,
-        ...quizSnap.data(),
-        startTime: quizSnap.data().startTime?.toDate?.() || new Date(),
-        endTime: quizSnap.data().endTime?.toDate?.() || new Date()
-      };
-      
-      console.log('Quiz data:', quiz.title);
-      
-      // 2. Get student's attempt for this quiz
-      const attemptsQuery = query(
-        collection(db, 'quiz_attempts'),
-        where('quizId', '==', quizId),
-        where('studentId', '==', currentUser.uid)
-      );
-      
-      const attemptsSnap = await getDocs(attemptsQuery);
-      
-      if (attemptsSnap.empty) {
+      if (!attemptResponse.success || !attemptResponse.data) {
         throw new Error('No attempt found for this quiz');
       }
       
-      const attemptDoc = attemptsSnap.docs[0];
+      const quiz = {
+        ...quizResponse.data,
+        startTime: new Date(quizResponse.data.startTime),
+        endTime: new Date(quizResponse.data.endTime)
+      };
+      
       const studentAttempt = {
-        id: attemptDoc.id,
-        ...attemptDoc.data(),
-        submittedAt: attemptDoc.data().submittedAt?.toDate?.() || new Date()
+        ...attemptResponse.data,
+        submittedAt: new Date(attemptResponse.data.submittedAt)
       };
       
       console.log('Attempt data:', {

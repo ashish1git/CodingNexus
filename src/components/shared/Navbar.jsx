@@ -15,8 +15,6 @@ import {
   Shield
 } from 'lucide-react';
 import { getInitials } from '../../utils/helpers';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../services/firebase';
 
 const Navbar = () => {
   const { userData, logout, currentUser } = useAuth();
@@ -27,32 +25,12 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch notifications for current user
+  // TODO: Implement notifications via REST API
+  // For now, notifications are disabled
   useEffect(() => {
-    if (!currentUser) return;
-
-    const notificationsQuery = query(
-      collection(db, 'notifications'),
-      where('recipientId', '==', currentUser.uid),
-      where('isRead', '==', false)
-    );
-
-    const unsubscribe = onSnapshot(
-      notificationsQuery,
-      (snapshot) => {
-        const notifs = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setNotifications(notifs);
-        setUnreadCount(notifs.length);
-      },
-      (error) => {
-        console.warn('Error fetching notifications:', error);
-      }
-    );
-
-    return () => unsubscribe();
+    // Notifications will be added when backend API is ready
+    setNotifications([]);
+    setUnreadCount(0);
   }, [currentUser]);
 
   const handleLogout = async () => {

@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, UserCheck, Save, Calendar, Download, Search, Filter } from 'lucide-react';
-import { collection, addDoc, getDocs, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
 
 const AttendanceManager = () => {
@@ -33,38 +32,43 @@ const AttendanceManager = () => {
 
   const checkExistingAttendance = async () => {
     try {
-      const attendanceQuery = query(
-        collection(db, 'attendance'),
-        where('date', '==', new Date(date)),
-        where('batch', '==', selectedBatch)
-      );
-      const snapshot = await getDocs(attendanceQuery);
+      const response = await adminService.getAttendanceByDate(date);
       
-      if (!snapshot.empty) {
-        const existingRecord = snapshot.docs[0].data();
-        const existingAttendance = {};
+      if (response.success && response.attendance) {
+        const existingRecord = response.attendance.find(r => r.batch === selectedBatch);
         
-        // Convert presentStudents array to object
-        existingRecord.presentStudents?.forEach(studentId => {
-          existingAttendance[studentId] = true;
-        });
-        
-        // Set attendance for all students
-        const finalAttendance = {};
-        students.forEach(student => {
-          finalAttendance[student.id] = existingAttendance[student.id] || false;
-        });
-        
-        setAttendance(finalAttendance);
-        setLastSaved(snapshot.docs[0].id);
-        
-        // FIX: Use toast() instead of toast.info()
-        toast('Attendance for this date already exists. Editing existing record.', {
-          icon: '📝',
-          duration: 3000
-        });
+        if (existingRecord) {
+          const existingAttendance = {};
+          
+          // Convert presentStudents array to object
+          existingRecord.presentStudents?.forEach(studentId => {
+            existingAttendance[studentId] = true;
+          });
+          
+          // Set attendance for all students
+          const finalAttendance = {};
+          students.forEach(student => {
+            finalAttendance[student.id] = existingAttendance[student.id] || false;
+          });
+          
+          setAttendance(finalAttendance);
+          setLastSaved(existingRecord.id);
+          
+          toast('Attendance for this date already exists. Editing existing record.', {
+            icon: '📝',
+            duration: 3000
+          });
+        } else {
+          // Initialize all as absent for new date
+          const initialAttendance = {};
+          students.forEach(s => {
+            initialAttendance[s.id] = false;
+          });
+          setAttendance(initialAttendance);
+          setLastSaved(null);
+        }
       } else {
-        // Initialize all as absent for new date
+        // Initialize all as absent
         const initialAttendance = {};
         students.forEach(s => {
           initialAttendance[s.id] = false;
@@ -85,26 +89,22 @@ const AttendanceManager = () => {
 
   const fetchStudents = async () => {
     try {
-      const studentsQuery = query(
-        collection(db, 'users'),
-        where('role', '==', 'student'),
-        where('batch', '==', selectedBatch)
-      );
-      const snapshot = await getDocs(studentsQuery);
-      const studentsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setStudents(studentsList);
-      
-      // Initialize all as absent initially
-      const initialAttendance = {};
-      studentsList.forEach(s => {
-        initialAttendance[s.id] = false;
-      });
-      setAttendance(initialAttendance);
-      
-      toast.success(`Loaded ${studentsList.length} students from ${selectedBatch} batch`);
+      const response = await adminService.getAllStudents();
+      if (response.success) {
+        const studentsList = response.students.filter(s => s.batch === selectedBatch);
+        setStudents(studentsList);
+        
+        // Initialize all as absent initially
+        const initialAttendance = {};
+        studentsList.forEach(s => {
+          initialAttendance[s.id] = false;
+        });
+        setAttendance(initialAttendance);
+        
+        toast.success(`Loaded ${studentsList.length} students from ${selectedBatch} batch`);
+      } else {
+        toast.error(response.error || 'Failed to load students');
+      }
     } catch (error) {
       console.error('Error fetching students:', error);
       toast.error('Failed to load students');
@@ -114,19 +114,9 @@ const AttendanceManager = () => {
   const fetchAttendanceHistory = async () => {
     try {
       setLoading(true);
-      const attendanceQuery = query(
-        collection(db, 'attendance'),
-        where('batch', '==', selectedBatch),
-        orderBy('date', 'desc')
-      );
-      const snapshot = await getDocs(attendanceQuery);
-      const history = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate()
-      }));
-      setAttendanceHistory(history);
-      toast.success(`Loaded ${history.length} attendance records`);
+      // TODO: Implement attendance history endpoint
+      // For now, just clear history
+      setAttendanceHistory([]);
     } catch (error) {
       console.error('Error fetching attendance history:', error);
       toast.error('Failed to load attendance history');
@@ -205,7 +195,7 @@ const AttendanceManager = () => {
         : 0;
 
       const attendanceData = {
-        date: new Date(date),
+        date: date,
         batch: selectedBatch,
         presentStudents,
         presentMoodleIds,
@@ -214,35 +204,23 @@ const AttendanceManager = () => {
         totalStudents: students.length,
         presentCount: presentStudents.length,
         absentCount: students.length - presentStudents.length,
-        attendancePercentage,
-        markedBy: userDetails.name,
-        markedByUid: userDetails.uid,
-        markedAt: new Date()
+        attendancePercentage
       };
 
-      let result;
-      if (lastSaved) {
-        // Update existing record
-        const docRef = doc(db, 'attendance', lastSaved);
-        await updateDoc(docRef, attendanceData);
-        result = { id: lastSaved };
-        toast.success(`✅ Attendance updated! ${presentStudents.length}/${students.length} present`);
-      } else {
-        // Create new record
-        const docRef = await addDoc(collection(db, 'attendance'), attendanceData);
-        result = docRef;
-        setLastSaved(docRef.id);
-        toast.success(`✅ Attendance saved! ${presentStudents.length}/${students.length} present`);
-      }
-
-      // Update each student's attendance count in their user document
-      await updateStudentAttendanceRecords(presentStudents, absentStudents);
-
-      // Fetch updated history
-      await fetchAttendanceHistory();
+      const response = await adminService.markAttendance(attendanceData);
       
-      // Show summary
-      showAttendanceSummary(presentStudents.length, students.length, absentStudents);
+      if (response.success) {
+        setLastSaved(response.attendance?.id);
+        toast.success(`✅ Attendance saved! ${presentStudents.length}/${students.length} present`);
+        
+        // Fetch updated history
+        await fetchAttendanceHistory();
+        
+        // Show summary
+        showAttendanceSummary(presentStudents.length, students.length, absentStudents);
+      } else {
+        toast.error(response.error || 'Failed to save attendance');
+      }
       
     } catch (error) {
       console.error('Error marking attendance:', error);
@@ -252,44 +230,7 @@ const AttendanceManager = () => {
     }
   };
 
-  const updateStudentAttendanceRecords = async (presentStudents, absentStudents) => {
-    try {
-      const updatePromises = [];
-      
-      // Get today's date
-      const today = new Date(date);
-      
-      // Update present students
-      presentStudents.forEach(studentId => {
-        const studentDoc = doc(db, 'users', studentId);
-        updatePromises.push(
-          updateDoc(studentDoc, {
-            lastAttendanceDate: today,
-            lastAttendanceStatus: 'present',
-            attendanceUpdated: new Date()
-          })
-        );
-      });
-      
-      // Update absent students
-      absentStudents.forEach(student => {
-        const studentDoc = doc(db, 'users', student.id);
-        updatePromises.push(
-          updateDoc(studentDoc, {
-            lastAttendanceDate: today,
-            lastAttendanceStatus: 'absent',
-            attendanceUpdated: new Date()
-          })
-        );
-      });
-      
-      await Promise.all(updatePromises);
-      toast.success('📊 Student records updated');
-    } catch (error) {
-      console.error('Error updating student records:', error);
-      toast.error('⚠️ Could not update all student records');
-    }
-  };
+
 
   const showAttendanceSummary = (presentCount, totalCount, absentStudents) => {
     if (absentStudents.length > 0) {

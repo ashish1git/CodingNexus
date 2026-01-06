@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User model - unified auth for students and admins
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  role              String    // 'student', 'admin', 'subadmin', 'superadmin'
+  moodleId          String?   @unique
+  isActive          Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  studentProfile    Student?
+  adminProfile      Admin?
+  quizAttempts      QuizAttempt[]
+  tickets           SupportTicket[]
+  attendanceRecords Attendance[]
+  
+  @@index([email])
+  @@index([moodleId])
+}
+
+// Student profile
+model Student {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  name            String
+  rollNo          String?
+  batch           String
+  phone           String?
+  profilePhotoUrl String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([batch])
+}
+
+// Admin profile
+model Admin {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  name        String
+  permissions String    @default("all") // JSON string or enum
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Notes/Resources
+model Note {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  fileUrl     String
+  batch       String    // 'All' or specific batch
+  subject     String?
+  uploadedBy  String
+  uploadedAt  DateTime  @default(now())
+  
+  @@index([batch])
+  @@index([uploadedAt])
+}
+
+// Announcements
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  message     String
+  batch       String    // 'All' or specific batch
+  priority    String    @default("normal") // 'low', 'normal', 'high'
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([batch])
+  @@index([createdAt])
+}
+
+// Quizzes
+model Quiz {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  batch       String    // 'All' or specific batch
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int       // in minutes
+  questions   Json      // Array of question objects
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  attempts    QuizAttempt[]
+  
+  @@index([batch])
+  @@index([startTime])
+}
+
+// Quiz attempts
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  quizId      String
+  userId      String
+  answers     Json      // User's answers
+  score       Float
+  maxScore    Float
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([quizId, userId]) // One attempt per user per quiz
+  @@index([userId])
+}
+
+// Attendance
+model Attendance {
+  id          String    @id @default(uuid())
+  userId      String
+  date        DateTime
+  status      String    // 'present', 'absent', 'late'
+  batch       String
+  markedBy    String
+  markedAt    DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date]) // One record per user per date
+  @@index([date])
+  @@index([batch])
+}
+
+// Support Tickets
+model SupportTicket {
+  id          String    @id @default(uuid())
+  userId      String
+  subject     String
+  message     String
+  status      String    @default("open") // 'open', 'in-progress', 'resolved', 'closed'
+  priority    String    @default("normal")
+  response    String?
+  respondedBy String?
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}

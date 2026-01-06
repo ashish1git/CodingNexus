@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, Search, Calendar, Filter, Eye, AlertCircle } from 'lucide-react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -44,39 +43,29 @@ const NotesViewer = () => {
     setError(null);
     
     try {
-      const notesQuery = query(
-        collection(db, 'notes'),
-        where('batch', 'in', [userDetails.batch, 'All']),
-        orderBy('createdAt', 'desc')
-      );
+      const response = await studentService.getNotes();
       
-      const snapshot = await getDocs(notesQuery);
-      
-      const notesList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
-      }));
-      
-      setNotes(notesList);
-      
-      if (notesList.length === 0) {
-        toast(`No notes available for ${userDetails.batch} batch yet`);
+      if (response.success) {
+        const notesList = response.data.map(note => ({
+          ...note,
+          createdAt: note.createdAt ? new Date(note.createdAt) : new Date()
+        }));
+        
+        setNotes(notesList);
+        
+        if (notesList.length === 0) {
+          toast(`No notes available for ${userDetails.batch} batch yet`);
+        } else {
+          toast.success(`Loaded ${notesList.length} notes`);
+        }
       } else {
-        toast.success(`Loaded ${notesList.length} notes`);
+        throw new Error(response.error || 'Failed to fetch notes');
       }
       
     } catch (error) {
       console.error('Error fetching notes:', error);
       setError(error.message);
-      
-      if (error.code === 'failed-precondition') {
-        toast.error('Firestore index required. Creating index...');
-      } else if (error.code === 'permission-denied') {
-        toast.error('Permission denied. Please make sure you are logged in as a student.');
-      } else {
-        toast.error(`Failed to load notes: ${error.message}`);
-      }
+      toast.error(`Failed to load notes: ${error.message}`);
     } finally {
       setLoading(false);
       setIsFetching(false);

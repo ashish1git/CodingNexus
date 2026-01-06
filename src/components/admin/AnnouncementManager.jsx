@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Plus, Bell, Edit, Trash2, Search } from 'lucide-react';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, orderBy, query } from 'firebase/firestore';
-import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
 
 const AnnouncementManager = () => {
@@ -33,17 +32,21 @@ const AnnouncementManager = () => {
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const announcementsQuery = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(announcementsQuery);
-      const list = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
-      }));
-      setAnnouncements(list);
+      const response = await adminService.getAllAnnouncements();
+      if (response.success && response.announcements) {
+        const list = response.announcements.map(a => ({
+          ...a,
+          createdAt: new Date(a.createdAt)
+        }));
+        setAnnouncements(list);
+      } else {
+        toast.error(response.error || 'Failed to load announcements');
+        setAnnouncements([]);
+      }
     } catch (error) {
       console.error('Error fetching announcements:', error);
       toast.error('Failed to load announcements');
+      setAnnouncements([]);
     } finally {
       setLoading(false);
     }
@@ -68,25 +71,32 @@ const AnnouncementManager = () => {
     try {
       if (editMode && selectedAnnouncement) {
         // Update existing announcement
-        await updateDoc(doc(db, 'announcements', selectedAnnouncement.id), {
+        const response = await adminService.updateAnnouncement(selectedAnnouncement.id, {
           title: formData.title,
           content: formData.content,
-          batch: formData.batch,
-          updatedAt: new Date(),
-          updatedBy: userDetails.name
+          batch: formData.batch
         });
-        toast.success('Announcement updated successfully!');
+        
+        if (response.success) {
+          toast.success('Announcement updated successfully!');
+        } else {
+          toast.error(response.error || 'Failed to update announcement');
+          return;
+        }
       } else {
         // Create new announcement
-        await addDoc(collection(db, 'announcements'), {
+        const response = await adminService.createAnnouncement({
           title: formData.title,
           content: formData.content,
-          batch: formData.batch,
-          createdBy: userDetails.name,
-          createdByEmail: userDetails.email,
-          createdAt: new Date()
+          batch: formData.batch
         });
-        toast.success('Announcement created successfully!');
+        
+        if (response.success) {
+          toast.success('Announcement created successfully!');
+        } else {
+          toast.error(response.error || 'Failed to create announcement');
+          return;
+        }
       }
 
       resetForm();
@@ -115,9 +125,13 @@ const AnnouncementManager = () => {
     }
 
     try {
-      await deleteDoc(doc(db, 'announcements', id));
-      toast.success('Announcement deleted successfully!');
-      fetchAnnouncements();
+      const response = await adminService.deleteAnnouncement(id);
+      if (response.success) {
+        toast.success('Announcement deleted successfully!');
+        fetchAnnouncements();
+      } else {
+        toast.error(response.error || 'Failed to delete announcement');
+      }
     } catch (error) {
       console.error('Error deleting announcement:', error);
       toast.error('Failed to delete announcement');
