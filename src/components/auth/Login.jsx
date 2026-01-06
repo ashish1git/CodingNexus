@@ -50,7 +50,6 @@ const Login = () => {
       // Error toast is already shown in authService.loginStudent
       
     } catch (error) {
-      // This catch block will only run if there's an unexpected error
       console.error('Unexpected login error:', error);
       toast.error('An unexpected error occurred. Please try again.');
     } finally {

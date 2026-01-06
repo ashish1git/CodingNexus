@@ -248,7 +248,7 @@ export const authService = {
       return { 
         success: true, 
         user, 
-        role: adminData.role // e.g., 'superadmin' or 'subadmin'
+        role: adminData.role // e.g., 'superadmin'
       };
 
     } catch (error) {
@@ -312,6 +312,7 @@ export const authService = {
       return { success: false, error: error.message };
     }
   },
+  
 
   updateProfile: async (displayName, photoURL) => {
     try {
