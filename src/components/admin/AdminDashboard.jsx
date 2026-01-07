@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -72,6 +72,7 @@ const AdminDashboard = () => {
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
+    { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
     { icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }
   ] : [
@@ -80,6 +81,7 @@ const AdminDashboard = () => {
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
+    { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' }
   ];
 

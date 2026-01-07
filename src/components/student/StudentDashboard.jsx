@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Bell, Calendar, Award, Code, HelpCircle,
-  LogOut, Menu, X, User, Clock, TrendingUp, FileText
+  LogOut, Menu, X, User, Clock, TrendingUp, FileText, Trophy
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
@@ -154,7 +154,8 @@ const StudentDashboard = () => {
     { icon: <User className="w-5 h-5" />, label: 'Profile', path: '/student/profile' },
     { icon: <BookOpen className="w-5 h-5" />, label: 'Notes', path: '/student/notes' },
     { icon: <Calendar className="w-5 h-5" />, label: 'Attendance', path: '/student/attendance' },
-    { icon: <Award className="w-5 h-5" />, label: 'Quizzes', path: '/student/quiz/list' }, 
+    { icon: <Award className="w-5 h-5" />, label: 'Quizzes', path: '/student/quiz/list' },
+    { icon: <Trophy className="w-5 h-5" />, label: 'Competitions', path: '/student/competitions' },
     { icon: <Code className="w-5 h-5" />, label: 'Code Editor', path: '/student/code-editor' },
     { icon: <HelpCircle className="w-5 h-5" />, label: 'Support', path: '/student/support' }
   ];
