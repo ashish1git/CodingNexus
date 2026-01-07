@@ -61,6 +61,16 @@ export const studentService = {
     }
   },
 
+  async getQuizAttempts() {
+    try {
+      const response = await apiClient.get('/student/quiz-attempts');
+      return response;
+    } catch (error) {
+      console.error('Get quiz attempts error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ ATTENDANCE ============
   
   async getAttendance() {

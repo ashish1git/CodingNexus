@@ -181,7 +181,7 @@ const StudentDashboard = () => {
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="hidden sm:flex items-center gap-2 bg-indigo-900/50 px-4 py-2 rounded-lg border border-indigo-700/50">
                 <Award className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-300" />
-                <span className="text-xs sm:text-sm font-medium text-indigo-200">{userDetails?.batch} Batch</span>
+                <span className="text-xs sm:text-sm font-medium text-indigo-200">{userDetails?.studentProfile?.batch || userDetails?.batch} Batch</span>
               </div>
               <button
                 onClick={handleLogout}
@@ -221,12 +221,12 @@ const StudentDashboard = () => {
                     }}
                   />
                 ) : (
-                  userDetails?.name?.charAt(0).toUpperCase()
+                  userDetails?.studentProfile?.name?.charAt(0).toUpperCase() || userDetails?.name?.charAt(0).toUpperCase()
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-white truncate text-sm sm:text-base group-hover:text-indigo-400 transition">{userDetails?.name}</h3>
-                <p className="text-xs sm:text-sm text-slate-400 truncate">{userDetails?.rollNo}</p>
+                <h3 className="font-semibold text-white truncate text-sm sm:text-base group-hover:text-indigo-400 transition">{userDetails?.studentProfile?.name || userDetails?.name}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 truncate">{userDetails?.studentProfile?.rollNo || userDetails?.rollNo}</p>
               </div>
             </Link>
 
@@ -252,7 +252,7 @@ const StudentDashboard = () => {
             {/* Welcome Section */}
             <div className="mb-6 sm:mb-8">
               <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                Welcome back, {userDetails?.name?.split(' ')[0]}! 👋
+                Welcome back, {userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0]}! 👋
               </h1>
               <p className="text-sm sm:text-base text-slate-400">Here's what's happening with your learning today.</p>
             </div>

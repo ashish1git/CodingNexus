@@ -135,6 +135,29 @@ router.get('/quizzes/:id/attempt', async (req, res) => {
   }
 });
 
+// Get all quiz attempts for current student
+router.get('/quiz-attempts', async (req, res) => {
+  try {
+    const attempts = await prisma.quizAttempt.findMany({
+      where: { userId: req.user.id },
+      include: {
+        quiz: {
+          select: {
+            title: true,
+            description: true,
+            duration: true
+          }
+        }
+      },
+      orderBy: { submittedAt: 'desc' }
+    });
+
+    res.json({ success: true, data: attempts });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ ATTENDANCE ============
 
 // Get student's attendance

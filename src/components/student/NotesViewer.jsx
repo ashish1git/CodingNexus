@@ -19,10 +19,11 @@ const NotesViewer = () => {
   const batchRef = useRef('');
 
   useEffect(() => {
-    if (userDetails?.batch && userDetails.batch !== batchRef.current) {
-      batchRef.current = userDetails.batch;
+    const studentBatch = userDetails?.studentProfile?.batch || userDetails?.batch;
+    if (studentBatch && studentBatch !== batchRef.current) {
+      batchRef.current = studentBatch;
       fetchNotes();
-    } else if (userDetails && !userDetails.batch) {
+    } else if (userDetails && !studentBatch) {
       setError('Your account does not have a batch assigned. Please contact admin.');
       setLoading(false);
     }
@@ -53,8 +54,9 @@ const NotesViewer = () => {
         
         setNotes(notesList);
         
+        const studentBatch = userDetails?.studentProfile?.batch || userDetails?.batch;
         if (notesList.length === 0) {
-          toast(`No notes available for ${userDetails.batch} batch yet`);
+          toast(`No notes available for ${studentBatch} batch yet`);
         } else {
           toast.success(`Loaded ${notesList.length} notes`);
         }
@@ -201,12 +203,12 @@ const NotesViewer = () => {
               <p className="text-xs sm:text-sm text-slate-400 mt-1">Total Notes</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-blue-400">{userDetails?.batch || 'N/A'}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-blue-400">{userDetails?.studentProfile?.batch || userDetails?.batch || 'N/A'}</p>
               <p className="text-xs sm:text-sm text-slate-400 mt-1">Your Batch</p>
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-green-400">
-                {notes.filter(n => n.batch === userDetails?.batch).length}
+                {notes.filter(n => n.batch === (userDetails?.studentProfile?.batch || userDetails?.batch)).length}
               </p>
               <p className="text-xs sm:text-sm text-slate-400 mt-1">Batch Specific</p>
             </div>
