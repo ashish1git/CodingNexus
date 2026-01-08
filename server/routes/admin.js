@@ -461,7 +461,10 @@ router.get('/subadmins', async (req, res) => {
       data: admins.map(u => ({
         id: u.id,
         email: u.email,
-        ...u.adminProfile
+        ...u.adminProfile,
+        permissions: u.adminProfile?.permissions ? 
+          (u.adminProfile.permissions === 'all' ? 'all' : JSON.parse(u.adminProfile.permissions)) 
+          : 'all'
       }))
     });
   } catch (error) {
@@ -493,7 +496,7 @@ router.post('/subadmins', async (req, res) => {
         adminProfile: {
           create: {
             name,
-            permissions: permissions || 'all',
+            permissions: typeof permissions === 'object' ? JSON.stringify(permissions) : (permissions || 'all'),
             createdBy: req.user.id
           }
         }
@@ -513,7 +516,10 @@ router.put('/subadmins/:id', async (req, res) => {
 
     await prisma.admin.update({
       where: { userId: req.params.id },
-      data: { name, permissions }
+      data: { 
+        name, 
+        permissions: typeof permissions === 'object' ? JSON.stringify(permissions) : permissions 
+      }
     });
 
     res.json({ success: true });

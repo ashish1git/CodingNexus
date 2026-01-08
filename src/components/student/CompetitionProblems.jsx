@@ -6,12 +6,13 @@ import {
   ChevronUp, List, FileText, TestTube, Terminal, Maximize
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
+import Loading from '../shared/Loading';
 
 const CompetitionProblems = () => {
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const { userDetails } = useAuth();
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
@@ -23,148 +24,46 @@ const CompetitionProblems = () => {
   const [showProblemList, setShowProblemList] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [problemSolutions, setProblemSolutions] = useState({});
+  const [competition, setCompetition] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Static competition data - will be replaced with API
-  const competition = {
-    id: 1,
-    title: 'Weekly Code Sprint #42',
-    description: 'Test your problem-solving skills in this fast-paced coding competition',
-    difficulty: 'medium',
-    status: 'ongoing',
-    startTime: '2026-01-07T10:00:00',
-    endTime: '2026-01-07T18:00:00',
-    problems: [
-      {
-        id: 1,
-        title: 'Two Sum',
-        difficulty: 'easy',
-        points: 100,
-        solved: true,
-        description: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
+  useEffect(() => {
+    fetchCompetition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [competitionId]);
 
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
-
-You can return the answer in any order.`,
-        constraints: [
-          '2 <= nums.length <= 10^4',
-          '-10^9 <= nums[i] <= 10^9',
-          '-10^9 <= target <= 10^9',
-          'Only one valid answer exists.'
-        ],
-        examples: [
-          {
-            input: 'nums = [2,7,11,15], target = 9',
-            output: '[0,1]',
-            explanation: 'Because nums[0] + nums[1] == 9, we return [0, 1].'
-          },
-          {
-            input: 'nums = [3,2,4], target = 6',
-            output: '[1,2]',
-            explanation: 'Because nums[1] + nums[2] == 6, we return [1, 2].'
-          }
-        ],
-        testCases: [
-          { input: '[2,7,11,15]\n9', output: '[0,1]', hidden: false },
-          { input: '[3,2,4]\n6', output: '[1,2]', hidden: false },
-          { input: '[3,3]\n6', output: '[0,1]', hidden: false },
-          { input: '[1,2,3,4,5]\n9', output: '[3,4]', hidden: true },
-          { input: '[-1,-2,-3,-4,-5]\n-8', output: '[2,4]', hidden: true }
-        ],
-        submissions: 234,
-        acceptanceRate: 68
-      },
-      {
-        id: 2,
-        title: 'Valid Parentheses',
-        difficulty: 'easy',
-        points: 150,
-        solved: true,
-        description: `Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.
-
-An input string is valid if:
-1. Open brackets must be closed by the same type of brackets.
-2. Open brackets must be closed in the correct order.
-3. Every close bracket has a corresponding open bracket of the same type.`,
-        constraints: [
-          '1 <= s.length <= 10^4',
-          's consists of parentheses only \'()[]{}\'.'
-        ],
-        examples: [
-          {
-            input: 's = "()"',
-            output: 'true',
-            explanation: 'The string contains valid parentheses.'
-          },
-          {
-            input: 's = "()[]{}"',
-            output: 'true',
-            explanation: 'All brackets are properly closed.'
-          },
-          {
-            input: 's = "(]"',
-            output: 'false',
-            explanation: 'Brackets are not closed in correct order.'
-          }
-        ],
-        testCases: [
-          { input: '()', output: 'true', hidden: false },
-          { input: '()[]{}', output: 'true', hidden: false },
-          { input: '(]', output: 'false', hidden: false },
-          { input: '([)]', output: 'false', hidden: true },
-          { input: '{[]}', output: 'true', hidden: true }
-        ],
-        submissions: 189,
-        acceptanceRate: 72
-      },
-      {
-        id: 3,
-        title: 'Longest Substring Without Repeating Characters',
-        difficulty: 'medium',
-        points: 300,
-        solved: false,
-        description: `Given a string s, find the length of the longest substring without repeating characters.`,
-        constraints: [
-          '0 <= s.length <= 5 * 10^4',
-          's consists of English letters, digits, symbols and spaces.'
-        ],
-        examples: [
-          {
-            input: 's = "abcabcbb"',
-            output: '3',
-            explanation: 'The answer is "abc", with the length of 3.'
-          },
-          {
-            input: 's = "bbbbb"',
-            output: '1',
-            explanation: 'The answer is "b", with the length of 1.'
-          }
-        ],
-        testCases: [
-          { input: 'abcabcbb', output: '3', hidden: false },
-          { input: 'bbbbb', output: '1', hidden: false },
-          { input: 'pwwkew', output: '3', hidden: false },
-          { input: 'dvdf', output: '3', hidden: true },
-          { input: 'abcdefghijk', output: '11', hidden: true }
-        ],
-        submissions: 312,
-        acceptanceRate: 45
+  const fetchCompetition = async () => {
+    try {
+      setLoading(true);
+      const data = await competitionService.getCompetition(competitionId);
+      setCompetition(data);
+      if (data.problems && data.problems.length > 0) {
+        setSelectedProblem(data.problems[0]);
       }
-    ]
+      if (data.hasSubmitted) {
+        setSubmitted(true);
+      }
+    } catch (error) {
+      console.error('Error fetching competition:', error);
+      toast.error('Failed to load competition');
+      navigate('/student/competitions');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (competition.problems.length > 0 && !selectedProblem) {
+    if (competition && competition.problems && competition.problems.length > 0 && !selectedProblem) {
       setSelectedProblem(competition.problems[0]);
     }
-    // Enter fullscreen on component mount
-    enterFullscreen();
-
+    
     // Exit fullscreen on component unmount
     return () => {
       if (document.fullscreenElement) {
         document.exitFullscreen();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -172,10 +71,26 @@ An input string is valid if:
     if (selectedProblem && problemSolutions[selectedProblem.id]) {
       setCode(problemSolutions[selectedProblem.id].code || '');
       setLanguage(problemSolutions[selectedProblem.id].language || 'python');
+    } else if (selectedProblem) {
+      // Set starter code from problem if available
+      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || '';
+      setCode(starterCode);
     } else {
       setCode('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProblem]);
+
+  useEffect(() => {
+    // Update code when language changes (only if not saved)
+    if (selectedProblem && !problemSolutions[selectedProblem.id]?.saved) {
+      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || '';
+      if (starterCode) {
+        setCode(starterCode);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const enterFullscreen = () => {
     const elem = document.documentElement;
@@ -361,26 +276,34 @@ An input string is valid if:
     setSubmitting(true);
     toast.loading('Submitting all solutions...');
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Prepare solutions array
+      const solutions = Object.entries(problemSolutions)
+        .filter(([, solution]) => solution?.saved)
+        .map(([problemId, solution]) => ({
+          problemId,
+          code: solution.code,
+          language: solution.language
+        }));
+
+      await competitionService.submitSolutions(competitionId, solutions);
+      
       setSubmitted(true);
       toast.dismiss();
       toast.success(`Submitted ${solvedCount}/${totalProblems} solutions successfully! 🎉`);
       
-      // Exit fullscreen and redirect after 3 seconds
+      // Show option to view results or go back
       setTimeout(() => {
         if (document.fullscreenElement) {
           document.exitFullscreen();
         }
-        navigate('/student/competitions');
-      }, 3000);
-      
+      }, 1000);
+    } catch (error) {
+      console.error('Error submitting solutions:', error);
+      toast.dismiss();
+      toast.error(error.response?.data?.error || 'Failed to submit solutions');
       setSubmitting(false);
-    }, 2000);
-  };
-
-  const handleSubmit = async () => {
-    toast.error('You need to solve all problems before final submission. Use "Save Solution" to save your work.');
+    }
   };
 
   const getDifficultyColor = (difficulty) => {
@@ -400,6 +323,10 @@ An input string is valid if:
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m remaining`;
   };
+
+  if (loading || !competition) {
+    return <Loading />;
+  }
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] text-white">
@@ -432,6 +359,13 @@ An input string is valid if:
                   {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length}
                 </span>
               </div>
+              <button
+                onClick={enterFullscreen}
+                className="p-2 text-gray-400 hover:text-white transition"
+                title="Enter Fullscreen"
+              >
+                <Maximize className="w-4 h-4" />
+              </button>
               {!submitted && (
                 <button
                   onClick={handleSubmitAll}
@@ -443,9 +377,18 @@ An input string is valid if:
                 </button>
               )}
               {submitted && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-600/20 text-green-400 text-sm rounded border border-green-600/30">
-                  <CheckCircle className="w-4 h-4" />
-                  Submitted
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-600/20 text-green-400 text-sm rounded border border-green-600/30">
+                    <CheckCircle className="w-4 h-4" />
+                    Submitted
+                  </div>
+                  <Link
+                    to={`/student/competition/${competitionId}/results`}
+                    className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium flex items-center gap-2"
+                  >
+                    <Award className="w-4 h-4" />
+                    View Results
+                  </Link>
                 </div>
               )}
             </div>

@@ -25,6 +25,7 @@ import CodeEditor from './components/student/CodeEditor';
 import SupportTicket from './components/student/SupportTicket';
 import Competitions from './components/student/Competitions';
 import CompetitionProblems from './components/student/CompetitionProblems';
+import CompetitionResults from './components/student/CompetitionResults';
 
 // Admin components
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -138,6 +139,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <CompetitionProblems />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/competition/:id/results" 
+                element={
+                  <ProtectedRoute>
+                    <CompetitionResults />
                   </ProtectedRoute>
                 } 
               />

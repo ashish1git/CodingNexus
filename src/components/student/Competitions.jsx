@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Calendar, Clock, Users, Award, 
@@ -6,153 +6,63 @@ import {
   ChevronRight, Star, Code, CheckCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import competitionService from '../../services/competitionService';
+import toast from 'react-hot-toast';
+import Loading from '../shared/Loading';
 
 const Competitions = () => {
-  const { userDetails } = useAuth();
   const [activeTab, setActiveTab] = useState('ongoing'); // ongoing, upcoming, past
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState('all'); // all, easy, medium, hard
+  const [competitions, setCompetitions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Static data - will be replaced with API calls later
-  const competitions = [
-    {
-      id: 1,
-      title: 'Weekly Code Sprint #42',
-      description: 'Test your problem-solving skills in this fast-paced coding competition',
-      difficulty: 'medium',
-      status: 'ongoing',
-      startTime: '2026-01-07T10:00:00',
-      endTime: '2026-01-07T18:00:00',
-      participants: 156,
-      problems: 5,
-      prize: '₹5000',
-      type: 'rated',
-      category: 'Algorithm',
-      registered: true,
-      problemsSolved: 2,
-      problemsList: [
-        { id: 1, title: 'Two Sum', difficulty: 'easy', points: 100, solved: true, testCases: 15 },
-        { id: 2, title: 'Valid Parentheses', difficulty: 'easy', points: 150, solved: true, testCases: 20 },
-        { id: 3, title: 'Longest Substring', difficulty: 'medium', points: 300, solved: false, testCases: 25 },
-        { id: 4, title: 'Binary Tree Traversal', difficulty: 'medium', points: 400, solved: false, testCases: 30 },
-        { id: 5, title: 'Maximum Subarray', difficulty: 'hard', points: 600, solved: false, testCases: 35 }
-      ],
-      image: 'https://via.placeholder.com/400x200/6366f1/ffffff?text=Code+Sprint'
-    },
-    {
-      id: 2,
-      title: 'January Long Challenge',
-      description: 'Month-long coding challenge with increasing difficulty',
-      difficulty: 'hard',
-      status: 'ongoing',
-      startTime: '2026-01-01T00:00:00',
-      endTime: '2026-01-31T23:59:59',
-      participants: 423,
-      problems: 8,
-      prize: '₹15000',
-      type: 'rated',
-      category: 'Mixed',
-      registered: true,
-      problemsSolved: 3,
-      problemsList: [
-        { id: 1, title: 'Array Manipulation', difficulty: 'easy', points: 100, solved: true, testCases: 12 },
-        { id: 2, title: 'String Matching', difficulty: 'easy', points: 150, solved: true, testCases: 18 },
-        { id: 3, title: 'Graph DFS', difficulty: 'medium', points: 300, solved: true, testCases: 22 },
-        { id: 4, title: 'DP Knapsack', difficulty: 'medium', points: 400, solved: false, testCases: 28 },
-        { id: 5, title: 'Segment Tree', difficulty: 'hard', points: 500, solved: false, testCases: 30 },
-        { id: 6, title: 'Advanced Trees', difficulty: 'hard', points: 600, solved: false, testCases: 35 },
-        { id: 7, title: 'Greedy Algorithm', difficulty: 'medium', points: 350, solved: false, testCases: 25 },
-        { id: 8, title: 'Bit Manipulation', difficulty: 'hard', points: 700, solved: false, testCases: 40 }
-      ],
-      image: 'https://via.placeholder.com/400x200/8b5cf6/ffffff?text=Long+Challenge'
-    },
-    {
-      id: 3,
-      title: 'Dynamic Programming Marathon',
-      description: 'Master DP with specially curated problems',
-      difficulty: 'hard',
-      status: 'upcoming',
-      startTime: '2026-01-10T14:00:00',
-      endTime: '2026-01-10T17:00:00',
-      participants: 0,
-      problems: 6,
-      prize: '₹8000',
-      type: 'rated',
-      category: 'Dynamic Programming',
-      registered: false,
-      problemsSolved: 0,
-      problemsList: [
-        { id: 1, title: 'Fibonacci Variants', difficulty: 'easy', points: 150, solved: false, testCases: 15 },
-        { id: 2, title: 'Coin Change', difficulty: 'medium', points: 300, solved: false, testCases: 20 },
-        { id: 3, title: 'LCS Problem', difficulty: 'medium', points: 350, solved: false, testCases: 25 },
-        { id: 4, title: 'Matrix Chain', difficulty: 'hard', points: 500, solved: false, testCases: 30 },
-        { id: 5, title: 'DP on Trees', difficulty: 'hard', points: 600, solved: false, testCases: 35 },
-        { id: 6, title: 'State Machine DP', difficulty: 'hard', points: 700, solved: false, testCases: 40 }
-      ],
-      image: 'https://via.placeholder.com/400x200/ec4899/ffffff?text=DP+Marathon'
-    },
-    {
-      id: 4,
-      title: 'Beginner Friendly Contest #12',
-      description: 'Perfect for those starting their competitive programming journey',
-      difficulty: 'easy',
-      status: 'upcoming',
-      startTime: '2026-01-09T15:00:00',
-      endTime: '2026-01-09T17:00:00',
-      registered: false,
-      problemsSolved: 0,
-      problemsList: [
-        { id: 1, title: 'Hello World', difficulty: 'easy', points: 50, solved: false, testCases: 5 },
-        { id: 2, title: 'Sum of Array', difficulty: 'easy', points: 100, solved: false, testCases: 10 },
-        { id: 3, title: 'Reverse String', difficulty: 'easy', points: 100, solved: false, testCases: 12 },
-        { id: 4, title: 'Find Maximum', difficulty: 'easy', points: 150, solved: false, testCases: 15 }
-      ],
-      participants: 0,
-      problems: 4,
-      prize: 'Certificates',
-      type: 'practice',
-      category: 'Basics',
-      image: 'https://via.placeholder.com/400x200/10b981/ffffff?text=Beginner+Contest'
-    },
-    {
-      id: 5,
-      title: 'December Code Championship',
-      description: 'Year-end championship with challenging problems',
-      difficulty: 'hard',
-      status: 'past',
-      startTime: '2025-12-20T10:00:00',
-      endTime: '2025-12-20T15:00:00',
-      participants: 389,
-      problems: 7,
-      prize: '₹20000',
-      type: 'rated',
-      category: 'Championship',
-      registered: true,
-      problemsSolved: 5,
-      problemsList: [
-        { id: 1, title: 'Sorting Challenge', difficulty: 'easy', points: 100, solved: true, testCases: 15 },
-        { id: 2, title: 'Binary Search', difficulty: 'medium', points: 250, solved: true, testCases: 20 },
-        { id: 3, title: 'Graph Cycles', difficulty: 'medium', points: 350, solved: true, testCases: 25 },
-        { id: 4, title: 'Trie Data Structure', difficulty: 'hard', points: 500, solved: true, testCases: 30 },
-        { id: 5, title: 'Advanced DP', difficulty: 'hard', points: 600, solved: true, testCases: 35 },
-        { id: 6, title: 'Network Flow', difficulty: 'hard', points: 700, solved: false, testCases: 40 },
-        { id: 7, title: 'Game Theory', difficulty: 'hard', points: 800, solved: false, testCases: 45 }
-      ],
-      myRank: 42,
-      image: 'https://via.placeholder.com/400x200/f59e0b/ffffff?text=Championship'
+  useEffect(() => {
+    fetchCompetitions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, filterDifficulty]);
+
+  const fetchCompetitions = async () => {
+    try {
+      setLoading(true);
+      const filters = {};
+      if (activeTab !== 'all') filters.status = activeTab;
+      if (filterDifficulty !== 'all') filters.difficulty = filterDifficulty;
+      
+      console.log('🔍 Fetching competitions with filters:', filters);
+      const data = await competitionService.getAllCompetitions(filters);
+      console.log('📊 Received data:', data);
+      console.log('📊 Is array?', Array.isArray(data));
+      console.log('📊 Data length:', data?.length);
+      setCompetitions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('❌ Error fetching competitions:', error);
+      toast.error('Failed to load competitions');
+      setCompetitions([]); // Set empty array on error
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
+  const handleRegister = async (competitionId) => {
+    try {
+      await competitionService.registerForCompetition(competitionId);
+      toast.success('Successfully registered!');
+      fetchCompetitions(); // Refresh to update registration status
+    } catch (error) {
+      console.error('Error registering:', error);
+      toast.error(error.response?.data?.error || 'Failed to register');
+    }
+  };
+
+  // User stats - can be fetched from API later
   const userStats = {
-    rating: 1547,
-    rank: 'Expert',
-    globalRank: 1234,
-    contestsParticipated: 23,
-    problemsSolved: 156,
-    accuracy: 78,
-    maxStreak: 15,
-    currentStreak: 7,
-    badges: ['Fast Solver', 'Streak Master', 'Top 100']
+    rating: 0,
+    rank: 'Newbie',
+    globalRank: '-',
+    contestsParticipated: 0,
+    problemsSolved: 0,
+    badges: []
   };
 
   const getDifficultyColor = (difficulty) => {
@@ -200,13 +110,16 @@ const Competitions = () => {
     return `${hours}h ${minutes}m left`;
   };
 
-  const filteredCompetitions = competitions
-    .filter(comp => comp.status === activeTab)
-    .filter(comp => filterDifficulty === 'all' || comp.difficulty === filterDifficulty)
+  const filteredCompetitions = (competitions || [])
     .filter(comp => 
+      searchTerm === '' || 
       comp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.description.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+  if (loading) {
+    return <Loading />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -397,11 +310,11 @@ const Competitions = () => {
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Users className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-300">{competition.participants} participants</span>
+                    <span className="text-slate-300">{competition.participantCount} participants</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Target className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-300">{competition.problems} problems</span>
+                    <span className="text-slate-300">{competition.problemCount || 0} problems</span>
                   </div>
                 </div>
 
@@ -410,12 +323,12 @@ const Competitions = () => {
                   <div className="mb-4 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-slate-400">Your Progress</span>
-                      <span className="text-xs font-semibold text-indigo-400">{competition.problemsSolved}/{competition.problems} solved</span>
+                      <span className="text-xs font-semibold text-indigo-400">{competition.problemsSolved || 0}/{competition.problemCount || 0} solved</span>
                     </div>
                     <div className="w-full bg-slate-600 rounded-full h-2">
                       <div 
                         className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all"
-                        style={{ width: `${(competition.problemsSolved / competition.problems) * 100}%` }}
+                        style={{ width: `${competition.problemCount > 0 ? ((competition.problemsSolved || 0) / competition.problemCount) * 100 : 0}%` }}
                       />
                     </div>
                   </div>
@@ -441,45 +354,73 @@ const Competitions = () => {
                         <p className="text-xs text-slate-400">Your Rank</p>
                         <p className="text-xl font-bold text-white">#{competition.myRank}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-400">Problems Solved</p>
-                        <p className="text-xl font-bold text-green-400">{competition.problemsSolved}/{competition.problems}</p>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-500 mb-1">Problems Solved</p>
+                        <p className="text-xl font-bold text-green-400">{competition.problemsSolved || 0}/{competition.problemCount || 0}</p>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Action Button */}
-                <Link
-                  to={`/student/competition/${competition.id}`}
-                  className={`mt-4 w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                    competition.status === 'ongoing'
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : competition.status === 'upcoming'
-                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                  }`}
-                >
-                  {competition.status === 'ongoing' && (
-                    <>
-                      <Code className="w-5 h-5" />
-                      {competition.registered ? 'Continue Solving' : 'Start Contest'}
-                    </>
-                  )}
-                  {competition.status === 'upcoming' && (
-                    <>
-                      <Calendar className="w-5 h-5" />
-                      {competition.registered ? 'View Details' : 'Register Now'}
-                    </>
-                  )}
-                  {competition.status === 'past' && (
-                    <>
+                {!competition.isRegistered && competition.status !== 'past' ? (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleRegister(competition.id);
+                    }}
+                    className="mt-4 w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    Register Now
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                ) : competition.hasSubmitted ? (
+                  <div className="mt-4 flex gap-2">
+                    <div className="flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 bg-slate-700 border-2 border-green-500/50 text-green-400 cursor-not-allowed">
+                      <CheckCircle className="w-5 h-5" />
+                      Attempted
+                    </div>
+                    <Link
+                      to={`/student/competition/${competition.id}/results`}
+                      className="flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    >
                       <Award className="w-5 h-5" />
-                      View Solutions
-                    </>
-                  )}
-                  <ChevronRight className="w-5 h-5" />
-                </Link>
+                      View Results
+                    </Link>
+                  </div>
+                ) : (
+                  <Link
+                    to={`/student/competition/${competition.id}`}
+                    className={`mt-4 w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                      competition.status === 'ongoing'
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : competition.status === 'upcoming'
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                    }`}
+                  >
+                    {competition.status === 'ongoing' && (
+                      <>
+                        <Code className="w-5 h-5" />
+                        Continue Solving
+                      </>
+                    )}
+                    {competition.status === 'upcoming' && (
+                      <>
+                        <Calendar className="w-5 h-5" />
+                        View Details
+                      </>
+                    )}
+                    {competition.status === 'past' && (
+                      <>
+                        <Award className="w-5 h-5" />
+                        View Solutions
+                      </>
+                    )}
+                    <ChevronRight className="w-5 h-5" />
+                  </Link>
+                )}
               </div>
             </div>
           ))}

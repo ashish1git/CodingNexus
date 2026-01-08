@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
+import competitionRoutes from './routes/competition.js';
+import contestRoutes from './routes/contest.js';
 import prisma from './config/db.js';
 
 const app = express();
@@ -51,6 +53,8 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/competitions', competitionRoutes);
+app.use('/api/contest', contestRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal
+  Filter, Download, Upload, BarChart3, Medal, FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
+import Loading from '../shared/Loading';
 
 const CompetitionManager = () => {
   const { userDetails } = useAuth();
@@ -35,9 +37,38 @@ const CompetitionManager = () => {
     examples: [{ input: '', output: '', explanation: '' }],
     testCases: [{ input: '', output: '', hidden: false }]
   });
+  const [competitions, setCompetitions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewCompetition, setViewCompetition] = useState(null);
+  const [editCompetition, setEditCompetition] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
-  // Static data - will be replaced with API calls later
-  const competitions = [
+  useEffect(() => {
+    fetchCompetitions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const fetchCompetitions = async () => {
+    try {
+      setLoading(true);
+      const filters = activeTab !== 'all' ? { status: activeTab } : {};
+      const data = await competitionService.getAllCompetitions(filters);
+      setCompetitions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching competitions:', error);
+      toast.error('Failed to load competitions');
+      setCompetitions([]); // Set empty array on error
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Remove static data - now fetched from API
+  const _staticCompetitions = [
     {
       id: 1,
       title: 'Weekly Code Sprint #42',
@@ -88,13 +119,16 @@ const CompetitionManager = () => {
     }
   ];
 
+  // Calculate stats from actual competitions data
   const stats = {
-    total: 15,
-    ongoing: 2,
-    upcoming: 5,
-    completed: 8,
-    totalParticipants: 1234,
-    averageParticipation: 82
+    total: competitions.length,
+    ongoing: competitions.filter(c => c.status === 'ongoing').length,
+    upcoming: competitions.filter(c => c.status === 'upcoming').length,
+    completed: competitions.filter(c => c.status === 'past').length,
+    totalParticipants: competitions.reduce((sum, c) => sum + (c.participantCount || 0), 0),
+    averageParticipation: competitions.length > 0 
+      ? Math.round((competitions.reduce((sum, c) => sum + (c.participantCount || 0), 0) / competitions.length))
+      : 0
   };
 
   const getDifficultyColor = (difficulty) => {
@@ -132,21 +166,106 @@ const CompetitionManager = () => {
       setCurrentStep(2);
       return;
     }
-    // TODO: API call to create competition with problems
-    const competitionData = {
-      ...formData,
-      problems: problems
-    };
-    console.log('Creating competition:', competitionData);
-    toast.success('Competition created successfully!');
-    setShowCreateModal(false);
-    resetForm();
+
+    try {
+      const competitionData = {
+        ...formData,
+        problems: problems
+      };
+      
+      await competitionService.createCompetition(competitionData);
+      toast.success('Competition created successfully!');
+      setShowCreateModal(false);
+      resetForm();
+      fetchCompetitions(); // Refresh list
+    } catch (error) {
+      console.error('Error creating competition:', error);
+      toast.error(error.response?.data?.error || 'Failed to create competition');
+    }
   };
 
   const handleDeleteCompetition = async (id) => {
     if (window.confirm('Are you sure you want to delete this competition?')) {
-      // TODO: API call to delete
-      toast.success('Competition deleted successfully!');
+      try {
+        await competitionService.deleteCompetition(id);
+        toast.success('Competition deleted successfully!');
+        fetchCompetitions(); // Refresh list
+      } catch (error) {
+        console.error('Error deleting competition:', error);
+        toast.error(error.response?.data?.error || 'Failed to delete competition');
+      }
+    }
+  };
+
+  const handleViewCompetition = async (id) => {
+    try {
+      const data = await competitionService.getCompetition(id);
+      setViewCompetition(data);
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error fetching competition details:', error);
+      toast.error('Failed to load competition details');
+    }
+  };
+
+  const handleViewSubmissions = async (id) => {
+    try {
+      const data = await competitionService.getCompetitionSubmissions(id);
+      setSubmissions(Array.isArray(data) ? data : []);
+      setViewCompetition(await competitionService.getCompetition(id));
+      setShowSubmissionsModal(true);
+    } catch (error) {
+      console.error('Error fetching submissions:', error);
+      toast.error('Failed to load submissions');
+    }
+  };
+
+  const handleEditCompetition = async (id) => {
+    try {
+      const data = await competitionService.getCompetition(id);
+      setEditCompetition(data);
+      setFormData({
+        title: data.title,
+        description: data.description,
+        difficulty: data.difficulty,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        duration: data.duration,
+        prize: data.prizePool || data.prize || '',
+        category: data.category,
+        type: data.type || 'rated'
+      });
+      setProblems(data.problems || []);
+      setShowEditModal(true);
+    } catch (error) {
+      console.error('Error fetching competition for edit:', error);
+      toast.error('Failed to load competition for editing');
+    }
+  };
+
+  const handleUpdateCompetition = async () => {
+    if (!formData.title || !formData.description) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    try {
+      const competitionData = {
+        ...formData,
+        problems: problems.map((p, index) => ({
+          ...p,
+          orderIndex: index
+        }))
+      };
+
+      await competitionService.updateCompetition(editCompetition.id, competitionData);
+      toast.success('Competition updated successfully!');
+      setShowEditModal(false);
+      setEditCompetition(null);
+      fetchCompetitions();
+    } catch (error) {
+      console.error('Error updating competition:', error);
+      toast.error(error.response?.data?.error || 'Failed to update competition');
     }
   };
 
@@ -261,12 +380,16 @@ const CompetitionManager = () => {
     });
   };
 
-  const filteredCompetitions = competitions
+  const filteredCompetitions = (competitions || [])
     .filter(comp => activeTab === 'all' || comp.status === activeTab)
     .filter(comp => 
       comp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+  if (loading) {
+    return <Loading />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -450,8 +573,8 @@ const CompetitionManager = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">{competition.participants}</span>
-                        <span className="text-xs text-gray-500">/ {competition.registrations} reg.</span>
+                        <span className="text-sm text-gray-900">{competition.participantCount}</span>
+                        <span className="text-xs text-gray-500">/ {competition.participantCount} reg.</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-yellow-600">
@@ -460,12 +583,21 @@ const CompetitionManager = () => {
                     <td className="px-6 py-4 text-sm font-medium">
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={() => handleViewCompetition(competition.id)}
                           className="text-indigo-600 hover:text-indigo-900"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => handleViewSubmissions(competition.id)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="View Submissions"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEditCompetition(competition.id)}
                           className="text-blue-600 hover:text-blue-900"
                           title="Edit"
                         >
@@ -912,6 +1044,479 @@ const CompetitionManager = () => {
                 </div>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Competition Modal */}
+      {showViewModal && viewCompetition && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-4xl w-full p-6 my-8 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">{viewCompetition.title}</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Competition Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Status</label>
+                  <p className="text-gray-900 capitalize">{viewCompetition.status}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Difficulty</label>
+                  <p className="text-gray-900 capitalize">{viewCompetition.difficulty}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Category</label>
+                  <p className="text-gray-900">{viewCompetition.category}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Prize Pool</label>
+                  <p className="text-gray-900">{viewCompetition.prizePool || viewCompetition.prize}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Start Time</label>
+                  <p className="text-gray-900">{new Date(viewCompetition.startTime).toLocaleString()}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">End Time</label>
+                  <p className="text-gray-900">{new Date(viewCompetition.endTime).toLocaleString()}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Participants</label>
+                  <p className="text-gray-900">{viewCompetition.participantCount || 0}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Problems</label>
+                  <p className="text-gray-900">{viewCompetition.problems?.length || 0}</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-sm font-medium text-gray-600 block mb-2">Description</label>
+                <p className="text-gray-900 bg-gray-50 p-4 rounded-lg">{viewCompetition.description}</p>
+              </div>
+
+              {/* Problems List */}
+              {viewCompetition.problems && viewCompetition.problems.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Problems ({viewCompetition.problems.length})</h3>
+                  <div className="space-y-3">
+                    {viewCompetition.problems.map((problem, index) => (
+                      <div key={problem.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">
+                              {index + 1}. {problem.title}
+                            </h4>
+                            <p className="text-sm text-gray-600 mt-1">{problem.description?.substring(0, 150)}...</p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                problem.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                                problem.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {problem.difficulty}
+                              </span>
+                              <span className="text-xs text-gray-600">{problem.points} points</span>
+                              <span className="text-xs text-gray-600">{problem.testCases?.length || 0} test cases</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  handleEditCompetition(viewCompetition.id);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Edit Competition
+              </button>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Competition Modal */}
+      {showEditModal && editCompetition && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-5xl w-full p-6 my-8 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Edit Competition</h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditCompetition(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Competition Title"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Competition Description"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                  <select
+                    value={formData.difficulty}
+                    onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <input
+                    type="text"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="e.g., Algorithm, Data Structures"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Prize Pool</label>
+                  <input
+                    type="text"
+                    value={formData.prize}
+                    onChange={(e) => setFormData({ ...formData, prize: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="e.g., ₹5000"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="rated">Rated</option>
+                    <option value="unrated">Unrated</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Problems Preview */}
+              {problems.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Problems ({problems.length})</h3>
+                  <div className="space-y-2">
+                    {problems.map((problem, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <span className="font-medium text-gray-900">{problem.title}</span>
+                          <span className="ml-3 text-sm text-gray-600 capitalize">({problem.difficulty})</span>
+                        </div>
+                        <span className="text-sm text-gray-600">{problem.points} points</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditCompetition(null);
+                  }}
+                  className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUpdateCompetition}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  Update Competition
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Submissions Modal */}
+      {showSubmissionsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-6xl w-full p-6 my-8 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Submissions - {viewCompetition?.title}</h2>
+                <p className="text-sm text-gray-600 mt-1">{submissions.length} total submissions</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowSubmissionsModal(false);
+                  setSelectedSubmission(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {submissions.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No submissions yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {submissions.map((submission) => (
+                  <div key={submission.submissionId} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{submission.userName}</p>
+                          <p className="text-sm text-gray-600">Roll: {submission.rollNo} | Batch: {submission.batch}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          submission.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          submission.status === 'judging' ? 'bg-blue-100 text-blue-800' :
+                          submission.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {submission.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div>
+                          <p className="text-xs text-gray-600">Score</p>
+                          <p className="text-lg font-bold text-gray-900">{submission.totalScore || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Time</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {submission.totalTime ? `${(submission.totalTime / 1000).toFixed(2)}s` : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Submitted</p>
+                          <p className="text-xs text-gray-900">
+                            {new Date(submission.submittedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedSubmission(
+                            selectedSubmission?.submissionId === submission.submissionId ? null : submission
+                          )}
+                          className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
+                        >
+                          {selectedSubmission?.submissionId === submission.submissionId ? 'Hide' : 'View Code'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Problem-wise submissions */}
+                    {selectedSubmission?.submissionId === submission.submissionId && (
+                      <div className="p-4 bg-white space-y-4">
+                        {submission.problemSubmissions.map((ps, idx) => (
+                          <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h4 className="font-medium text-gray-900">{ps.problemTitle}</h4>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    ps.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                                    ps.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
+                                  }`}>
+                                    {ps.difficulty}
+                                  </span>
+                                  <span className="text-xs text-gray-600">{ps.language}</span>
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    ps.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                                    ps.status === 'wrong-answer' ? 'bg-red-100 text-red-800' :
+                                    ps.status === 'judging' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {ps.status}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-600">Score</p>
+                                <p className="text-lg font-bold text-gray-900">{ps.score}/{ps.maxScore}</p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {ps.testsPassed}/{ps.totalTests} tests passed
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Code Display */}
+                            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                              <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">
+                                {ps.code}
+                              </pre>
+                            </div>
+
+                            {ps.errorMessage && (
+                              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded">
+                                <p className="text-sm text-red-800 font-medium">Error:</p>
+                                <pre className="text-xs text-red-700 mt-1 whitespace-pre-wrap">{ps.errorMessage}</pre>
+                              </div>
+                            )}
+
+                            {/* Test Case Results */}
+                            {ps.testResults && Array.isArray(ps.testResults) && ps.testResults.length > 0 && (
+                              <div className="mt-4">
+                                <h5 className="text-sm font-medium text-gray-900 mb-2">Test Case Results:</h5>
+                                <div className="space-y-2">
+                                  {ps.testResults.map((test, testIdx) => (
+                                    <div key={testIdx} className={`p-3 rounded-lg border ${
+                                      test.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                    }`}>
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                              test.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
+                                              Test Case {testIdx + 1}
+                                            </span>
+                                            <span className={`text-xs font-medium ${
+                                              test.passed ? 'text-green-700' : 'text-red-700'
+                                            }`}>
+                                              {test.passed ? '✓ Passed' : '✗ Failed'}
+                                            </span>
+                                          </div>
+                                          {!test.passed && (
+                                            <div className="mt-2 space-y-1">
+                                              {test.expectedOutput !== undefined && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium text-gray-700">Expected:</span>
+                                                  <pre className="mt-1 p-2 bg-white rounded text-gray-900 overflow-x-auto">{String(test.expectedOutput)}</pre>
+                                                </div>
+                                              )}
+                                              {test.actualOutput !== undefined && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium text-gray-700">Got:</span>
+                                                  <pre className="mt-1 p-2 bg-white rounded text-gray-900 overflow-x-auto">{String(test.actualOutput)}</pre>
+                                                </div>
+                                              )}
+                                              {test.error && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium text-red-700">Error:</span>
+                                                  <pre className="mt-1 p-2 bg-white rounded text-red-700 overflow-x-auto">{test.error}</pre>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="text-right ml-4">
+                                          {test.executionTime && (
+                                            <p className="text-xs text-gray-600">
+                                              {test.executionTime}ms
+                                            </p>
+                                          )}
+                                          {test.memoryUsed && (
+                                            <p className="text-xs text-gray-600">
+                                              {(test.memoryUsed / 1024).toFixed(2)} KB
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowSubmissionsModal(false);
+                  setSelectedSubmission(null);
+                }}
+                className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
