@@ -85,7 +85,8 @@ const StudentManagement = () => {
    const email = `${formData.moodleId}@codingnexus.com`;
 
    // Use the admin endpoint to create student (auto-activated)
-   const response = await fetch(`${import.meta.env.VITE_API_URL}/admin/students`, {
+   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+   const response = await fetch(`${API_URL}/admin/students`, {
      method: 'POST',
      headers: {
        'Content-Type': 'application/json',

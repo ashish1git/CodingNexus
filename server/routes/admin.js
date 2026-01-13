@@ -540,4 +540,57 @@ router.delete('/subadmins/:id', async (req, res) => {
   }
 });
 
+// ============ COMPETITION MANAGEMENT ============
+
+// Get competition by ID (for evaluation dashboard)
+router.get('/competitions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const competition = await prisma.competition.findUnique({
+      where: { id },
+      include: {
+        problems: {
+          orderBy: { orderIndex: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            difficulty: true,
+            points: true,
+            orderIndex: true
+          }
+        },
+        _count: {
+          select: {
+            registrations: true,
+            submissions: true
+          }
+        }
+      }
+    });
+
+    if (!competition) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+
+    // Add computed status
+    const now = new Date();
+    let status = 'upcoming';
+    if (now >= new Date(competition.startTime) && now <= new Date(competition.endTime)) {
+      status = 'ongoing';
+    } else if (now > new Date(competition.endTime)) {
+      status = 'past';
+    }
+
+    res.json({
+      ...competition,
+      status,
+      participantCount: competition._count.registrations
+    });
+  } catch (error) {
+    console.error('Error fetching competition:', error);
+    res.status(500).json({ error: 'Failed to fetch competition' });
+  }
+});
+
 export default router;

@@ -589,6 +589,13 @@ const CompetitionManager = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+                        <Link
+                          to={`/admin/competitions/${competition.id}/evaluate`}
+                          className="text-green-600 hover:text-green-900"
+                          title="Evaluate Submissions"
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                        </Link>
                         <button
                           onClick={() => handleViewSubmissions(competition.id)}
                           className="text-purple-600 hover:text-purple-900"

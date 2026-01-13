@@ -37,6 +37,7 @@ import QuizCreator from './components/admin/QuizCreator';
 import TicketManagement from './components/admin/TicketManagement';
 import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
+import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 
 function App() {
   return (
@@ -237,6 +238,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <CompetitionManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/competitions/:competitionId/evaluate" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <SubmissionEvaluator />
                   </ProtectedRoute>
                 } 
               />

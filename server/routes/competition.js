@@ -122,7 +122,7 @@ router.get('/:id/my-submission', authenticate, async (req, res) => {
                 id: true,
                 title: true,
                 difficulty: true,
-                maxScore: true
+                points: true
               }
             }
           },
@@ -812,6 +812,132 @@ router.delete('/:id', authenticate, authorizeRole('superadmin'), async (req, res
   } catch (error) {
     console.error('Error deleting competition:', error);
     res.status(500).json({ error: 'Failed to delete competition' });
+  }
+});
+
+// Get all problems for a competition (Admin only - for evaluation)
+router.get('/:id/problems', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const problems = await prisma.problem.findMany({
+      where: { competitionId: id },
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        difficulty: true,
+        points: true,
+        orderIndex: true
+      }
+    });
+
+    res.json(problems);
+  } catch (error) {
+    console.error('Error fetching problems:', error);
+    res.status(500).json({ error: 'Failed to fetch problems' });
+  }
+});
+
+// Get all submissions for a specific problem (Admin only - for evaluation)
+router.get('/:competitionId/problems/:problemId/submissions', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId, problemId } = req.params;
+
+    const submissions = await prisma.problemSubmission.findMany({
+      where: {
+        problemId: problemId,
+        problem: {
+          competitionId: competitionId
+        }
+      },
+      include: {
+        user: {
+          include: {
+            studentProfile: {
+              select: {
+                name: true,
+                rollNo: true
+              }
+            }
+          }
+        },
+        problem: {
+          select: {
+            title: true,
+            points: true
+          }
+        }
+      },
+      orderBy: [
+        { user: { studentProfile: { name: 'asc' } } },
+        { submittedAt: 'desc' }
+      ]
+    });
+
+    res.json(submissions);
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+// Save manual evaluation for a submission (Admin only)
+router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evaluate', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { marks, comments } = req.body;
+
+    if (marks === undefined || marks === null) {
+      return res.status(400).json({ error: 'Marks are required' });
+    }
+
+    const marksNum = parseFloat(marks);
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
+      return res.status(400).json({ error: 'Marks must be between 0 and 100' });
+    }
+
+    // Update the submission with manual evaluation
+    const submission = await prisma.problemSubmission.update({
+      where: { id: submissionId },
+      data: {
+        score: Math.round(marksNum), // Convert percentage to score
+        status: 'accepted', // Mark as manually evaluated
+        errorMessage: comments || null // Store comments in errorMessage field
+      },
+      include: {
+        user: {
+          include: {
+            studentProfile: true
+          }
+        }
+      }
+    });
+
+    // Update the competition submission total score
+    const competitionSubmission = await prisma.competitionSubmission.findUnique({
+      where: { id: submission.competitionSubmissionId },
+      include: {
+        problemSubmissions: true
+      }
+    });
+
+    if (competitionSubmission) {
+      const totalScore = competitionSubmission.problemSubmissions.reduce((sum, sub) => sum + sub.score, 0);
+      await prisma.competitionSubmission.update({
+        where: { id: competitionSubmission.id },
+        data: { totalScore }
+      });
+    }
+
+    res.json({ 
+      message: 'Evaluation saved successfully',
+      submission 
+    });
+  } catch (error) {
+    console.error('Error saving evaluation:', error);
+    res.status(500).json({ error: 'Failed to save evaluation' });
   }
 });
 
