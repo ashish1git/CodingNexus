@@ -98,7 +98,7 @@ const Signup = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full mb-4">
             <Code className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Join Coding Nexus</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Join Coding Nexus Club</h1>
           <p className="text-gray-600">Create your account and start learning</p>
         </div>
 
@@ -117,7 +117,7 @@ const Signup = () => {
                 value={formData.name}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="John Doe"
+                placeholder="Ashish"
                 required
               />
             </div>
@@ -134,7 +134,7 @@ const Signup = () => {
                 value={formData.rollNo}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="CS001"
+                placeholder="125"
                 required
               />
             </div>
@@ -151,7 +151,7 @@ const Signup = () => {
                 value={formData.moodleId}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="moodle123"
+                placeholder="23106031"
                 required
               />
             </div>
@@ -168,7 +168,7 @@ const Signup = () => {
                 value={formData.mobile}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="1234567890"
+                placeholder="8104287477"
                 maxLength="10"
                 required
               />

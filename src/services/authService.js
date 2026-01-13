@@ -71,6 +71,18 @@ export const authService = {
         localStorage.setItem('user', JSON.stringify(response.user));
         toast.success('Admin login successful!');
       }
+      
+      // ✅ EXTRACT DATA TO GET ROLE
+      const adminData = adminDoc.data();
+      
+      toast.success('Admin login successful!');
+      
+      // ✅ RETURN ROLE SO DASHBOARD KNOWS PERMISSIONS
+      return { 
+        success: true, 
+        user, 
+        role: adminData.role // e.g., 'superadmin'
+      };
 
       return response;
     } catch (error) {
@@ -129,6 +141,7 @@ export const authService = {
       return { success: false, error: error.message };
     }
   },
+  
 
   // Activate student account (admin only)
   activateStudentAccount: async (userId, password) => {

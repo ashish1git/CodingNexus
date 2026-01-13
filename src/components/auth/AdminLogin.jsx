@@ -144,7 +144,7 @@ const AdminLogin = () => {
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-xs text-blue-800">
             <strong>Note:</strong> Only authorized administrators can access this portal.
-            Super Admin manages sub-admin accounts from the admin dashboard.
+            Super Admin manages  accounts from the  Super Admin dashboard.
           </p>
         </div>
 
