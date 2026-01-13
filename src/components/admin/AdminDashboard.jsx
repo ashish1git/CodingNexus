@@ -3,11 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
@@ -30,28 +29,26 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch all students
-      const studentsQuery = query(collection(db, 'users'), where('role', '==', 'student'));
-      const studentsSnapshot = await getDocs(studentsQuery);
-      const students = studentsSnapshot.docs.map(doc => doc.data());
+      // Fetch all data in parallel using adminService
+      const [studentsRes, notesRes, quizzesRes, ticketsRes] = await Promise.all([
+        adminService.getAllStudents(),
+        adminService.getAllNotes(),
+        adminService.getAllQuizzes(),
+        adminService.getAllTickets()
+      ]);
 
-      // Fetch notes
-      const notesSnapshot = await getDocs(collection(db, 'notes'));
-
-      // Fetch quizzes
-      const quizzesSnapshot = await getDocs(collection(db, 'quizzes'));
-
-      // Fetch pending tickets
-      const ticketsQuery = query(collection(db, 'support_tickets'), where('status', '==', 'open'));
-      const ticketsSnapshot = await getDocs(ticketsQuery);
+      const students = studentsRes.success ? (studentsRes.students || []) : [];
+      const notes = notesRes.success ? (notesRes.notes || []) : [];
+      const quizzes = quizzesRes.success ? (quizzesRes.quizzes || []) : [];
+      const tickets = ticketsRes.success ? (ticketsRes.tickets || []) : [];
 
       setStats({
         totalStudents: students.length,
         basicBatch: students.filter(s => s.batch === 'Basic').length,
         advancedBatch: students.filter(s => s.batch === 'Advanced').length,
-        totalNotes: notesSnapshot.size,
-        totalQuizzes: quizzesSnapshot.size,
-        pendingTickets: ticketsSnapshot.size
+        totalNotes: notes.length,
+        totalQuizzes: quizzes.length,
+        pendingTickets: tickets.filter(t => t.status === 'open').length
       });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -75,6 +72,7 @@ const AdminDashboard = () => {
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
+    { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
     { icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }
   ] : [
@@ -83,6 +81,7 @@ const AdminDashboard = () => {
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
+    { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' }
   ];
 

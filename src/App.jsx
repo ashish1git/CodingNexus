@@ -23,6 +23,9 @@ import QuizList from './components/student/QuizzesList'; // Add this import
 import QuizResults from './components/student/QuizResults'; // Add this import
 import CodeEditor from './components/student/CodeEditor';
 import SupportTicket from './components/student/SupportTicket';
+import Competitions from './components/student/Competitions';
+import CompetitionProblems from './components/student/CompetitionProblems';
+import CompetitionResults from './components/student/CompetitionResults';
 
 // Admin components
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -33,6 +36,8 @@ import AttendanceManager from './components/admin/AttendanceManager';
 import QuizCreator from './components/admin/QuizCreator';
 import TicketManagement from './components/admin/TicketManagement';
 import SubAdminManager from './components/admin/SubAdminManager';
+import CompetitionManager from './components/admin/CompetitionManager';
+import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 
 function App() {
   return (
@@ -123,6 +128,30 @@ function App() {
                 } 
               />
               <Route 
+                path="/student/competitions" 
+                element={
+                  <ProtectedRoute>
+                    <Competitions />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/competition/:competitionId" 
+                element={
+                  <ProtectedRoute>
+                    <CompetitionProblems />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/competition/:id/results" 
+                element={
+                  <ProtectedRoute>
+                    <CompetitionResults />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
                 path="/student/code-editor" 
                 element={
                   <ProtectedRoute>
@@ -201,6 +230,22 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <SubAdminManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/competitions" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <CompetitionManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/competitions/:competitionId/evaluate" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <SubmissionEvaluator />
                   </ProtectedRoute>
                 } 
               />

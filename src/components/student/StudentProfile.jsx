@@ -2,8 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import toast from 'react-hot-toast';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -119,16 +118,15 @@ const StudentProfile = () => {
       const data = await response.json();
       const newPhotoUrl = data.secure_url;
 
-      const userRef = doc(db, 'users', currentUser?. uid);
-      await updateDoc(userRef, {
-        photoURL: newPhotoUrl,
-        updatedAt: new Date()
+      // Update profile photo using studentService
+      await studentService.updateProfile({
+        photoURL: newPhotoUrl
       });
 
       setPhotoURL(newPhotoUrl);
       setShowCropModal(false);
       setImageSrc(null);
-      setCrop({ x:  0, y: 0 });
+      setCrop({ x: 0, y: 0 });
       setZoom(1);
       setCroppedAreaPixels(null);
 
@@ -152,9 +150,10 @@ const StudentProfile = () => {
     }
   };
 
-  const attendance = userDetails?.attendance ??  0;
-  const userFirstName = userDetails?.name?.split(' ')[0] || 'User';
-  const joinedDate = new Date(userDetails?.createdAt?. toDate?. () || userDetails?.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  const attendance = userDetails?.attendance ?? 0;
+  const userFirstName = userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0] || 'User';
+  const studentProfile = userDetails?.studentProfile || {};
+  const joinedDate = new Date(userDetails?.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -195,7 +194,7 @@ const StudentProfile = () => {
                     />
                   ) : (
                     <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold">
-                      {userDetails?.name?.charAt(0).toUpperCase() || 'U'}
+                      {studentProfile?.name?.charAt(0).toUpperCase() || userDetails?.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}
                 </div>
@@ -223,8 +222,8 @@ const StudentProfile = () => {
 
               {/* User Info */}
               <div className="text-center sm:text-left flex-1">
-                <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">{userDetails?.name || 'Student'}</h1>
-                <p className="text-sm sm:text-base text-slate-400 mt-1">{userDetails?.batch || 'Basic'} Batch Student</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">{studentProfile?.name || userDetails?.name || 'Student'}</h1>
+                <p className="text-sm sm:text-base text-slate-400 mt-1">{studentProfile?.batch || 'Basic'} Batch Student</p>
                 <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
                   <span className="px-3 py-1 bg-indigo-900/50 text-indigo-300 rounded-full text-xs sm:text-sm font-medium border border-indigo-700/50">
                     Student
@@ -239,10 +238,10 @@ const StudentProfile = () => {
             {/* Profile Information Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mt-6 sm:mt-8">
               <InfoCard icon={<Hash className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />} label="Moodle ID" value={userDetails?.moodleId || 'N/A'} />
-              <InfoCard icon={<User className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />} label="Roll Number" value={userDetails?.rollNo || 'N/A'} />
-              <InfoCard icon={<Phone className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />} label="Mobile Number" value={userDetails?.mobile || 'N/A'} />
-              <InfoCard icon={<Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />} label="Email" value={`${userDetails?.moodleId || 'student'}@apsit.edu. in`} />
-              <InfoCard icon={<Award className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />} label="Batch" value={userDetails?.batch || 'N/A'} />
+              <InfoCard icon={<User className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />} label="Roll Number" value={studentProfile?.rollNo || 'N/A'} />
+              <InfoCard icon={<Phone className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />} label="Mobile Number" value={studentProfile?.phone || 'N/A'} />
+              <InfoCard icon={<Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />} label="Email" value={userDetails?.email || 'N/A'} />
+              <InfoCard icon={<Award className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />} label="Batch" value={studentProfile?.batch || 'N/A'} />
               <InfoCard icon={<Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-pink-400" />} label="Registered On" value={joinedDate} />
             </div>
 

@@ -16,8 +16,7 @@ import {
   BarChart
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -31,39 +30,35 @@ const QuizList = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState('upcoming');
 
-  // Fetch Quiz Attempts with real-time updates
+  // Fetch Quiz Attempts
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    console.log('Setting up quiz attempts listener for student:', currentUser.uid);
+    const fetchQuizAttempts = async () => {
+      try {
+        const response = await studentService.getQuizAttempts();
+        if (response.success) {
+          const attempts = response.data.map(attempt => ({
+            ...attempt,
+            submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt) : new Date()
+          }));
+          setQuizAttempts(attempts);
+          console.log('Quiz attempts loaded:', attempts.length);
+        }
+      } catch (error) {
+        console.error("Error fetching quiz attempts:", error);
+        toast.error("Failed to load quiz attempts");
+      }
+    };
 
-    const attemptsQuery = query(
-      collection(db, 'quiz_attempts'),
-      where('studentId', '==', currentUser.uid)
-    );
+    fetchQuizAttempts();
     
-    const unsubscribe = onSnapshot(attemptsQuery, (snapshot) => {
-      const attempts = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date()
-        };
-      });
-      
-      setQuizAttempts(attempts);
-      console.log('Quiz attempts loaded:', attempts.length);
-      console.log('Attempted quiz IDs:', attempts.map(a => a.quizId));
-    }, (error) => {
-      console.error("Error fetching quiz attempts:", error);
-      toast.error("Failed to load quiz attempts");
-    });
-
-    return () => unsubscribe();
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchQuizAttempts, 30000);
+    return () => clearInterval(interval);
   }, [currentUser]);
 
-  // Fetch Quizzes with FIXED batch filtering
+  // Fetch Quizzes
   useEffect(() => {
     if (!currentUser || !userDetails?.batch) {
       setLoading(false);
@@ -72,52 +67,50 @@ const QuizList = () => {
 
     console.log('Fetching quizzes for batch:', userDetails.batch);
     
-    setLoading(true);
-    const quizzesCollection = collection(db, 'quizzes');
+    const fetchQuizzes = async () => {
+      setLoading(true);
+      try {
+        const response = await studentService.getQuizzes();
+        if (response.success) {
+          const list = response.data.map(quiz => ({
+            ...quiz,
+            startTime: quiz.startTime ? new Date(quiz.startTime) : new Date(),
+            endTime: quiz.endTime ? new Date(quiz.endTime) : new Date()
+          }));
+
+          // Filter quizzes for student's batch
+          const filteredByBatch = list.filter(quiz => {
+            const quizBatch = quiz.batch?.trim();
+            const studentBatch = userDetails.batch?.trim();
+            
+            // Show quiz if batch is "All" or matches student's batch
+            const isForAllBatches = quizBatch?.toLowerCase() === 'all';
+            const isForStudentBatch = quizBatch === studentBatch;
+            
+            return isForAllBatches || isForStudentBatch;
+          });
+          
+          console.log('Total quizzes from API:', list.length);
+          console.log('Filtered for batch', userDetails.batch, ':', filteredByBatch.length);
+          
+          // Sort by start time (newest first)
+          const sortedList = filteredByBatch.sort((a, b) => b.startTime - a.startTime);
+          
+          setQuizzes(sortedList);
+        }
+      } catch (error) {
+        console.error("Error fetching quizzes:", error);
+        toast.error("Failed to load quizzes");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuizzes();
     
-    const unsubscribe = onSnapshot(quizzesCollection, (snapshot) => {
-      const list = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const startTime = data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime);
-        const endTime = data.endTime?.toDate ? data.endTime.toDate() : new Date(data.endTime);
-        
-        return {
-          id: doc.id,
-          ...data,
-          startTime,
-          endTime
-        };
-      });
-
-      // FIXED: Proper batch filtering - only show quizzes for student's batch OR "All" batch
-      const filteredByBatch = list.filter(quiz => {
-        const quizBatch = quiz.batch?.trim();
-        const studentBatch = userDetails.batch?.trim();
-        
-        // Show quiz if:
-        // 1. Quiz batch is explicitly "All" (case-insensitive)
-        // 2. Quiz batch exactly matches student's batch
-        const isForAllBatches = quizBatch?.toLowerCase() === 'all';
-        const isForStudentBatch = quizBatch === studentBatch;
-        
-        return isForAllBatches || isForStudentBatch;
-      });
-      
-      console.log('Total quizzes from DB:', list.length);
-      console.log('Filtered for batch', userDetails.batch, ':', filteredByBatch.length);
-      
-      // Sort by start time (newest first)
-      const sortedList = filteredByBatch.sort((a, b) => b.startTime - a.startTime);
-      
-      setQuizzes(sortedList);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore sync error:", error);
-      toast.error("Failed to sync quizzes");
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchQuizzes, 30000);
+    return () => clearInterval(interval);
   }, [currentUser, userDetails]);
 
   const getQuizStatus = (quiz) => {

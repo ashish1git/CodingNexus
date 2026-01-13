@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { loginAdmin } = useAuth();
+  const { login } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,8 +31,8 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      // loginAdmin returns an object with {success, error}
-      const result = await loginAdmin(formData.email, formData.password);
+      // login with isAdmin=true
+      const result = await login(formData.email, formData.password, true);
       
       if (result.success) {
         toast.success('Login successful!');

@@ -5,10 +5,11 @@ import {
 } from "lucide-react";
 // Import the service and auth
 import { adminService } from "../../services/adminService";
-import { auth } from "../../services/firebase";
+import { useAuth } from "../../context/AuthContext";
 
 const QuizCreator = () => {
   const navigate = useNavigate();
+  const { userDetails } = useAuth();
 
   // State for form
   const [title, setTitle] = useState("");
@@ -43,25 +44,16 @@ const QuizCreator = () => {
     const checkPermission = async () => {
       setCheckingAccess(true);
       
-      // Get current user details from Admin Service
-      const profile = await adminService.getCurrentAdminProfile();
-      const user = auth.currentUser;
-
-      if (user) {
-        // If profile exists (meaning they are in 'admins' collection)
-        if (profile) {
-           // Check if they have the specific 'createQuizzes' permission
-           if (profile.permissions && profile.permissions.createQuizzes) {
-             setHasPermission(true);
-           } else {
-             setHasPermission(false);
-             notify("You do not have permission to create quizzes.", "error");
-           }
+      if (userDetails) {
+        // Check if they have the specific 'createQuizzes' permission
+        if (userDetails.permissions && userDetails.permissions.createQuizzes) {
+          setHasPermission(true);
+        } else if (userDetails.role === 'superadmin') {
+          // Super admins have all permissions
+          setHasPermission(true);
         } else {
-           // If user is logged in but NOT in 'admins' collection (e.g. Super Admin created manually in Auth but not DB)
-           // You can choose to allow them or block them. For safety, we block default, 
-           // but you can set this to true if you are testing as Super Admin.
-           setHasPermission(true); 
+          setHasPermission(false);
+          notify("You do not have permission to create quizzes.", "error");
         }
       } else {
         setHasPermission(false);
@@ -71,7 +63,7 @@ const QuizCreator = () => {
     };
 
     checkPermission();
-  }, []);
+  }, [userDetails]);
 
   /* ---------------- ADD QUESTION ---------------- */
   const addQuestion = () => {

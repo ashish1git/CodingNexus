@@ -3,28 +3,8 @@ import {
   ArrowLeft, UserPlus, Shield, Trash2, Edit, Eye, EyeOff, 
   X, CheckCircle, AlertCircle, Loader2, Lock, User, Mail, ShieldCheck
 } from 'lucide-react';
-
-// ✅ 1. Import necessary Firebase modules
-import { initializeApp, deleteApp } from 'firebase/app';
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signOut 
-} from 'firebase/auth';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  updateDoc, 
-  Timestamp,
-  onSnapshot,
-  query,
-  where
-} from 'firebase/firestore';
-
-// ✅ 2. Import YOUR project's firebase config
-import { db, auth } from '../../services/firebase'; // Adjust path if needed
+import { adminService } from '../../services/adminService';
+import toast from 'react-hot-toast';
 
 const SubAdminManager = ({ onBack }) => {
   const [subAdmins, setSubAdmins] = useState([]);
@@ -62,26 +42,27 @@ const SubAdminManager = ({ onBack }) => {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // --- 3. Fixed: Fetch Sub-Admins from the correct 'admins' collection ---
+  // Fetch Sub-Admins from backend
   useEffect(() => {
-    setLoading(true);
+    const fetchSubAdmins = async () => {
+      setLoading(true);
+      try {
+        const response = await adminService.getAllSubAdmins();
+        if (response.success) {
+          setSubAdmins(response.subAdmins || []);
+        } else {
+          console.error('Failed to fetch sub-admins:', response.error);
+        }
+      } catch (error) {
+        console.error('Error fetching sub-admins:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Query the 'admins' collection for role == 'subadmin'
-    const q = query(collection(db, 'admins'), where('role', '==', 'subadmin'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setSubAdmins(list);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore error:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchSubAdmins();
   }, []);
 
-  // --- 4. Fixed: Create Sub-Admin Logic using Environment Variables ---
   const handleCreateSubAdmin = async (e) => {
     e.preventDefault();
     if (formData.password.length < 6) {
@@ -90,85 +71,59 @@ const SubAdminManager = ({ onBack }) => {
     }
 
     setProcessing(true);
-    let secondaryApp = null;
 
     try {
-      // ✅ Use Environment Variables (Same as adminService.js)
-      const secondaryConfig = {
-        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: import.meta.env.VITE_FIREBASE_APP_ID
-      };
-
-      if (!secondaryConfig.apiKey) throw new Error("API Key missing in .env");
-
-      // Initialize Secondary App
-      secondaryApp = initializeApp(secondaryConfig, "SecondaryApp");
-      const secondaryAuth = getAuth(secondaryApp);
-
-      // Create User in Auth
-      const cred = await createUserWithEmailAndPassword(
-        secondaryAuth,
-        formData.email,
-        formData.password
-      );
-
-      const subAdminUid = cred.user.uid;
-
-      // Sign out secondary immediately
-      await signOut(secondaryAuth);
-
-      // ✅ Save to the correct 'admins' collection in MAIN Firestore
-      await setDoc(doc(db, 'admins', subAdminUid), {
-        uid: subAdminUid,
+      const response = await adminService.createSubAdmin({
         name: formData.name,
         email: formData.email,
-        role: 'subadmin',
-        permissions: formData.permissions,
-        createdBy: auth.currentUser ? auth.currentUser.uid : 'system',
-        createdAt: Timestamp.now()
-      });
+        permissions: formData.permissions
+      }, formData.password);
 
-      notify('Sub-admin created successfully');
-      setShowCreateModal(false);
-      resetForm();
+      if (response.success) {
+        notify('Sub-admin created successfully');
+        setShowCreateModal(false);
+        resetForm();
+        // Refresh sub-admins list
+        const refreshResponse = await adminService.getAllSubAdmins();
+        if (refreshResponse.success) {
+          setSubAdmins(refreshResponse.subAdmins || []);
+        }
+      } else {
+        notify(response.error || 'Failed to create sub-admin', 'error');
+      }
     } catch (error) {
       console.error("Creation Error:", error);
-      const msg = error.code === 'auth/email-already-in-use' 
-        ? 'Email already in use' 
-        : error.message;
-      notify(msg, 'error');
+      notify(error.message || 'Failed to create sub-admin', 'error');
     } finally {
-      if (secondaryApp) {
-        await deleteApp(secondaryApp).catch(console.error);
-      }
       setProcessing(false);
     }
   };
 
-  // --- Logic: Update Permissions ---
   const handleUpdatePermissions = async (e) => {
     e.preventDefault();
     if (!selectedAdmin) return;
 
     try {
       setProcessing(true);
-      // ✅ Fixed collection path
-      const adminDocRef = doc(db, 'admins', selectedAdmin.id);
       
-      await updateDoc(adminDocRef, {
+      const response = await adminService.updateSubAdmin(selectedAdmin.id, {
         name: formData.name,
-        permissions: formData.permissions,
-        updatedAt: Timestamp.now()
+        permissions: formData.permissions
       });
 
-      notify('Permissions updated successfully');
-      setShowEditModal(false);
-      setSelectedAdmin(null);
-      resetForm();
+      if (response.success) {
+        notify('Permissions updated successfully');
+        setShowEditModal(false);
+        setSelectedAdmin(null);
+        resetForm();
+        // Refresh sub-admins list
+        const refreshResponse = await adminService.getAllSubAdmins();
+        if (refreshResponse.success) {
+          setSubAdmins(refreshResponse.subAdmins || []);
+        }
+      } else {
+        notify(response.error || 'Failed to update permissions', 'error');
+      }
     } catch (e) {
       console.error(e);
       notify('Failed to update permissions', 'error');
@@ -177,14 +132,21 @@ const SubAdminManager = ({ onBack }) => {
     }
   };
 
-  // --- Logic: Delete Sub-Admin ---
   const handleDeleteSubAdmin = async (adminId, name) => {
-    if (!confirm(`Are you sure you want to remove ${name} as a sub-admin?\n\nNote: This removes their database access, but the login account remains in Authentication.`)) return;
+    if (!confirm(`Are you sure you want to remove ${name} as a sub-admin?`)) return;
 
     try {
-      // ✅ Fixed collection path
-      await deleteDoc(doc(db, 'admins', adminId));
-      notify('Sub-admin removed from database');
+      const response = await adminService.deleteSubAdmin(adminId);
+      if (response.success) {
+        notify('Sub-admin removed successfully');
+        // Refresh sub-admins list
+        const refreshResponse = await adminService.getAllSubAdmins();
+        if (refreshResponse.success) {
+          setSubAdmins(refreshResponse.subAdmins || []);
+        }
+      } else {
+        notify(response.error || 'Failed to remove sub-admin', 'error');
+      }
     } catch (e) {
       console.error(e);
       notify('Failed to remove sub-admin', 'error');

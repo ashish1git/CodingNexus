@@ -1,0 +1,299 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User model - unified auth for students and admins
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  role              String    // 'student', 'admin', 'subadmin', 'superadmin'
+  moodleId          String?   @unique
+  isActive          Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  studentProfile    Student?
+  adminProfile      Admin?
+  quizAttempts      QuizAttempt[]
+  tickets           SupportTicket[]
+  attendanceRecords Attendance[]
+  competitionRegistrations CompetitionRegistration[]
+  competitionSubmissions CompetitionSubmission[]
+  problemSubmissions ProblemSubmission[]
+  
+  @@index([email])
+  @@index([moodleId])
+}
+
+// Student profile
+model Student {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  name            String
+  rollNo          String?
+  batch           String
+  phone           String?
+  profilePhotoUrl String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([batch])
+}
+
+// Admin profile
+model Admin {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  name        String
+  permissions String    @default("all") // JSON string or enum
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Notes/Resources
+model Note {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  fileUrl     String
+  batch       String    // 'All' or specific batch
+  subject     String?
+  uploadedBy  String
+  uploadedAt  DateTime  @default(now())
+  
+  @@index([batch])
+  @@index([uploadedAt])
+}
+
+// Announcements
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  message     String
+  batch       String    // 'All' or specific batch
+  priority    String    @default("normal") // 'low', 'normal', 'high'
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([batch])
+  @@index([createdAt])
+}
+
+// Quizzes
+model Quiz {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  batch       String    // 'All' or specific batch
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int       // in minutes
+  questions   Json      // Array of question objects
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  attempts    QuizAttempt[]
+  
+  @@index([batch])
+  @@index([startTime])
+}
+
+// Quiz attempts
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  quizId      String
+  userId      String
+  answers     Json      // User's answers
+  score       Float
+  maxScore    Float
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([quizId, userId]) // One attempt per user per quiz
+  @@index([userId])
+}
+
+// Attendance
+model Attendance {
+  id          String    @id @default(uuid())
+  userId      String
+  date        DateTime
+  status      String    // 'present', 'absent', 'late'
+  batch       String
+  markedBy    String
+  markedAt    DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date]) // One record per user per date
+  @@index([date])
+  @@index([batch])
+}
+
+// Support Tickets
+model SupportTicket {
+  id          String    @id @default(uuid())
+  userId      String
+  subject     String
+  message     String
+  status      String    @default("open") // 'open', 'in-progress', 'resolved', 'closed'
+  priority    String    @default("normal")
+  response    String?
+  respondedBy String?
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Competitions
+model Competition {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  category    String    @default("general") // 'general', 'algorithms', 'data-structures', etc.
+  difficulty  String    // 'easy', 'medium', 'hard'
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int       // in minutes
+  type        String    @default("individual") // 'individual', 'team'
+  prizePool   String?
+  maxParticipants Int?
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  problems    Problem[]
+  registrations CompetitionRegistration[]
+  submissions CompetitionSubmission[]
+  
+  @@index([startTime])
+  @@index([endTime])
+  @@index([isActive])
+}
+
+// Competition Problems
+model Problem {
+  id            String    @id @default(uuid())
+  competitionId String
+  title         String
+  description   String    @db.Text
+  difficulty    String    // 'easy', 'medium', 'hard'
+  points        Int
+  orderIndex    Int       // Order in competition
+  constraints   Json      // Array of constraint strings
+  examples      Json      // Array of {input, output, explanation}
+  testCases     Json      // Array of {input, output, hidden: boolean, points: number}
+  timeLimit     Int       @default(3000) // milliseconds
+  memoryLimit   Int       @default(256) // MB
+  
+  // Function-only submission fields
+  functionName  String    @default("solution") // e.g., "twoSum", "reverseList"
+  returnType    String    @default("int") // e.g., "int", "List<int>", "TreeNode"
+  parameters    Json?     // Array of {name: string, type: string} e.g., [{name: "nums", type: "int[]"}, {name: "target", type: "int"}]
+  starterCode   Json?     // {python: "def twoSum(...):", cpp: "class Solution {...}", java: "class Solution {...}"}
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  submissions   ProblemSubmission[]
+  
+  @@index([competitionId])
+  @@index([orderIndex])
+}
+
+// Competition Registration
+model CompetitionRegistration {
+  id            String    @id @default(uuid())
+  competitionId String
+  userId        String
+  registeredAt  DateTime  @default(now())
+  
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([competitionId, userId])
+  @@index([competitionId])
+  @@index([userId])
+}
+
+// Competition Final Submission (one per user per competition)
+model CompetitionSubmission {
+  id            String    @id @default(uuid())
+  competitionId String
+  userId        String
+  submittedAt   DateTime  @default(now())
+  totalScore    Int       @default(0)
+  totalTime     Int       @default(0) // Total execution time in ms
+  rank          Int?
+  status        String    @default("pending") // 'pending', 'judging', 'completed'
+  
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problemSubmissions ProblemSubmission[]
+  
+  @@unique([competitionId, userId]) // One final submission per user per competition
+  @@index([competitionId])
+  @@index([userId])
+  @@index([totalScore])
+}
+
+// Individual Problem Submissions
+model ProblemSubmission {
+  id                    String    @id @default(uuid())
+  competitionSubmissionId String
+  problemId             String
+  userId                String
+  code                  String    @db.Text
+  language              String    // 'python', 'cpp', 'java', 'javascript', 'c'
+  score                 Int       @default(0)
+  maxScore              Int
+  testsPassed           Int       @default(0)
+  totalTests            Int
+  executionTime         Int       @default(0) // in ms
+  memoryUsed            Int       @default(0) // in KB
+  status                String    @default("pending") // 'pending', 'judging', 'accepted', 'wrong-answer', 'tle', 'mle', 'runtime-error', 'compile-error'
+  errorMessage          String?   @db.Text
+  testResults           Json?     // Detailed results for each test case
+  submittedAt           DateTime  @default(now())
+  judgedAt              DateTime?
+  
+  competitionSubmission CompetitionSubmission @relation(fields: [competitionSubmissionId], references: [id], onDelete: Cascade)
+  problem               Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([competitionSubmissionId])
+  @@index([problemId])
+  @@index([userId])
+  @@index([status])
+}

@@ -1,10 +1,7 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../services/firebase';
+// src/context/AuthContext.jsx - PostgreSQL/JWT version
+import { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
-import toast from 'react-hot-toast';
+import { apiClient } from '../services/apiClient';
 
 const AuthContext = createContext();
 
@@ -20,168 +17,144 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const isFetchingRef = useRef(false);
-  const lastUserUidRef = useRef('');
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // Load user on mount if token exists
   useEffect(() => {
-    console.log('AuthContext useEffect running');
-    
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user?.uid);
-      
-      if (isFetchingRef.current || lastUserUidRef.current === user?.uid) {
-        console.log('Skipping duplicate fetch for user:', user?.uid);
-        return;
-      }
-      
-      isFetchingRef.current = true;
-      lastUserUidRef.current = user?.uid || '';
-      
-      setCurrentUser(user);
-      
-      if (user) {
+    const initAuth = async () => {
+      const token = apiClient.getToken();
+      const storedUser = authService.getStoredUser();
+
+      console.log('🔐 Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser });
+
+      if (token) {
+        // If we have token but no stored user, or need to verify token
         try {
-          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-          
-          if (adminDoc.exists()) {
-            const adminData = adminDoc.data();
-            console.log('Admin data found:', adminData);
-            setUserDetails({
-              uid: user.uid,
-              email: user.email,
-              ...adminData
-            });
+          const user = await authService.getCurrentUser();
+          if (user) {
+            console.log('✅ User authenticated:', user.email, user.role);
+            setCurrentUser(user);
+            setUserDetails(user);
           } else {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              console.log('User data found:', userData);
-              setUserDetails({
-                uid: user.uid,
-                email: user.email,
-                ...userData
-              });
-            } else {
-              console.log('No document found for user:', user.uid);
-              setUserDetails(null);
-              toast.error('User profile not found. Please contact administrator.');
-              await authService.logout();
-            }
+            // Token invalid, clear auth
+            console.log('❌ Token invalid, clearing auth');
+            apiClient.removeToken();
+            localStorage.removeItem('user');
+            setCurrentUser(null);
+            setUserDetails(null);
           }
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          console.error('❌ Auth init error:', error);
+          // Token might be expired or invalid
+          apiClient.removeToken();
+          localStorage.removeItem('user');
+          setCurrentUser(null);
           setUserDetails(null);
         }
-      } else {
+      } else if (storedUser) {
+        // Have stored user but no token - clear stale data
+        console.log('⚠️ Found stale user data, clearing');
+        localStorage.removeItem('user');
+        setCurrentUser(null);
         setUserDetails(null);
-        lastUserUidRef.current = '';
+      } else {
+        console.log('ℹ️ No authentication found');
       }
       
       setLoading(false);
-      isFetchingRef.current = false;
-    });
-
-    return () => {
-      console.log('AuthContext cleanup');
-      unsubscribe();
+      setInitialCheckDone(true);
     };
+
+    initAuth();
   }, []);
 
+  const login = async (email, password, isAdmin = false) => {
+    setLoading(true);
+    try {
+      const response = isAdmin 
+        ? await authService.loginAdmin(email, password)
+        : await authService.loginStudent(email, password);
+
+      if (response.success && response.user) {
+        setCurrentUser(response.user);
+        setUserDetails(response.user);
+        return { success: true };
+      }
+      return response;
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signup = async (email, password, userData) => {
+    setLoading(true);
     try {
-      const result = await authService.signupStudent(email, password, userData);
-      if (!result.success) {
-        return { success: false, error: result.error };
-      }
-      return { success: true };
+      const response = await authService.signupStudent(email, password, userData);
+      return response;
     } catch (error) {
-      console.error('Signup error in context:', error);
+      console.error('Signup error:', error);
       return { success: false, error: error.message };
-    }
-  };
-
-  const login = async (emailOrMoodleId, password) => {
-    try {
-      const result = await authService.loginStudent(emailOrMoodleId, password);
-      return result; // Return full result including needsActivation flag
-    } catch (error) {
-      console.error('Login error in context:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const activateAccount = async (email, password, moodleId) => {
-    try {
-      const result = await authService.activateStudentAccount(email, password, moodleId);
-      return result;
-    } catch (error) {
-      console.error('Activation error in context:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const loginAdmin = async (email, password) => {
-    try {
-      const result = await authService.loginAdmin(email, password);
-      if (!result.success) {
-        return { success: false, error: result.error };
-      }
-      return { success: true };
-    } catch (error) {
-      console.error('Admin login error in context:', error);
-      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
+    setLoading(true);
     try {
-      const result = await authService.logout();
+      await authService.logout();
       setCurrentUser(null);
       setUserDetails(null);
-      lastUserUidRef.current = '';
-      return result;
+      return { success: true };
     } catch (error) {
-      console.error('Logout error in context:', error);
+      console.error('Logout error:', error);
       return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
     }
   };
 
-  const resetPassword = async (email) => {
+  const refreshUser = async () => {
     try {
-      const result = await authService.resetPassword(email);
-      return result;
+      const user = await authService.getCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+        setUserDetails(user);
+      }
     } catch (error) {
-      console.error('Reset password error in context:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const changePassword = async (newPassword) => {
-    try {
-      const result = await authService.changePassword(newPassword);
-      return result;
-    } catch (error) {
-      console.error('Change password error in context:', error);
-      return { success: false, error: error.message };
+      console.error('Refresh user error:', error);
     }
   };
 
   const value = {
     currentUser,
     userDetails,
+    userData: userDetails, // Alias for consistency
     loading,
-    isStudent: userDetails?.role === 'student',
-    isAdmin: userDetails?.role === 'admin' || userDetails?.role === 'superadmin' || userDetails?.role === 'subadmin',
-    isSuperAdmin: userDetails?.role === 'superadmin',
-    signup,
     login,
-    activateAccount,
-    loginAdmin,
+    signup,
     logout,
-    resetPassword,
-    changePassword
+    refreshUser,
+    // Helper properties for compatibility
+    user: currentUser,
+    isAuthenticated: !!currentUser,
+    role: userDetails?.role || null
   };
+
+  // Show loading spinner only on initial load when we have a token to verify
+  if (!initialCheckDone) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>
@@ -190,4 +163,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export { AuthContext };
+export default AuthContext;

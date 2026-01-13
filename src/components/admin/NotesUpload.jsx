@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Upload, FileText, Trash2, Download, Search, Filter, ExternalLink, Eye } from 'lucide-react';
-import { collection, addDoc, getDocs, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
-import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { adminService } from '../../services/adminService';
 import { 
   uploadToCloudinary, 
   deleteFromCloudinary, 
@@ -44,24 +43,28 @@ const NotesUpload = () => {
   const fetchNotes = async () => {
     setLoading(true);
     try {
-      const notesQuery = query(collection(db, 'notes'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(notesQuery);
-      const notesList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
-      }));
-      setNotes(notesList);
+      const response = await adminService.getAllNotes();
+      if (response.success && response.notes) {
+        const notesList = response.notes.map(note => ({
+          ...note,
+          createdAt: new Date(note.createdAt)
+        }));
+        setNotes(notesList);
+      } else {
+        toast.error(response.error || 'Failed to load notes');
+        setNotes([]);
+      }
     } catch (error) {
       console.error('Error fetching notes:', error);
       toast.error('Failed to load notes');
+      setNotes([]);
     } finally {
       setLoading(false);
     }
   };
 
   const filterNotes = () => {
-    let filtered = [...notes];
+    let filtered = notes ? [...notes] : [];
 
     if (filterBatch !== 'All') {
       filtered = filtered.filter(n => n.batch === filterBatch || n.batch === 'All');
@@ -120,7 +123,7 @@ const handleUpload = async (e) => {
     toast.success('File uploaded successfully!', { id: 'upload' });
     toast.loading('Saving to database...', { id: 'save' });
 
-    // Save metadata to Firestore
+    // Save metadata via adminService
     const noteData = {
       title: formData.title.trim(),
       description: formData.description.trim(),
@@ -131,31 +134,30 @@ const handleUpload = async (e) => {
       displayName: cloudinaryResult.displayName, // User-friendly name
       fileSize: cloudinaryResult.bytes,
       fileFormat: cloudinaryResult.format,
-      resourceType: cloudinaryResult.resourceType,
-      uploadedBy: userDetails.name,
-      uploadedByEmail: userDetails.email,
-      uploadedById: userDetails.uid,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      resourceType: cloudinaryResult.resourceType
     };
 
-    await addDoc(collection(db, 'notes'), noteData);
-
-    toast.success('Note saved successfully!', { id: 'save' });
+    const response = await adminService.uploadNote(noteData);
     
-    // Reset form
-    setFormData({ 
-      title: '', 
-      description: '', 
-      batch: 'All', 
-      file: null 
-    });
-    
-    const fileInput = document.getElementById('file-input');
-    if (fileInput) fileInput.value = '';
-    
-    // Refresh notes list
-    fetchNotes();
+    if (response.success) {
+      toast.success('Note saved successfully!', { id: 'save' });
+      
+      // Reset form
+      setFormData({ 
+        title: '', 
+        description: '', 
+        batch: 'All', 
+        file: null 
+      });
+      
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) fileInput.value = '';
+      
+      // Refresh notes list
+      fetchNotes();
+    } else {
+      toast.error(response.error || 'Failed to save note', { id: 'save' });
+    }
     
   } catch (error) {
     console.error('Error uploading:', error);
@@ -179,11 +181,15 @@ const handleUpload = async (e) => {
         await deleteFromCloudinary(note.publicId, note.resourceType);
       }
 
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'notes', note.id));
+      // Delete from database via adminService
+      const response = await adminService.deleteNote(note.id);
       
-      toast.success('Note deleted successfully!', { id: 'delete' });
-      fetchNotes();
+      if (response.success) {
+        toast.success('Note deleted successfully!', { id: 'delete' });
+        fetchNotes();
+      } else {
+        toast.error(response.error || 'Failed to delete note', { id: 'delete' });
+      }
       
     } catch (error) {
       console.error('Error deleting:', error);
