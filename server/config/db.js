@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import prismaPkg from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+const { PrismaClient } = prismaPkg;
 import pg from 'pg';
 
 // Parse connection string to add SSL if it's a Render database

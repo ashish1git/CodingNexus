@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
@@ -19,6 +19,14 @@ const SubmissionEvaluator = () => {
   const [comments, setComments] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredSubmissions, setFilteredSubmissions] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [evaluationHistory, setEvaluationHistory] = useState([]);
+  const [showActivity, setShowActivity] = useState(false);
+  const [evaluatorActivity, setEvaluatorActivity] = useState([]);
+  const [viewMode, setViewMode] = useState('by-question'); // 'by-question' or 'by-student'
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [evaluatorNames, setEvaluatorNames] = useState({}); // Cache evaluator names
 
   useEffect(() => {
     fetchCompetitionData();
@@ -43,11 +51,14 @@ const SubmissionEvaluator = () => {
   }, [searchTerm, submissions]);
 
   useEffect(() => {
-    if (selectedProblemId) {
+    if (viewMode === 'by-question' && selectedProblemId) {
       fetchSubmissionsForProblem();
       setSearchTerm(''); // Reset search when changing problems
+    } else if (viewMode === 'by-student' && selectedStudentId) {
+      fetchSubmissionsByStudent(selectedStudentId);
+      setSearchTerm('');
     }
-  }, [selectedProblemId]);
+  }, [selectedProblemId, selectedStudentId, viewMode]);
 
   useEffect(() => {
     // Load saved evaluation for current submission
@@ -59,9 +70,21 @@ const SubmissionEvaluator = () => {
         setMarks(saved.marks);
         setComments(saved.comments);
       } else {
-        setMarks('');
-        setComments('');
+        // Check if submission has existing manual evaluation from DB
+        if (current.manualMarks !== null && current.manualMarks !== undefined) {
+          setMarks(current.manualMarks);
+          setComments(current.evaluatorComments || '');
+        } else {
+          setMarks('');
+          setComments('');
+        }
       }
+      // Fetch evaluator name if evaluated
+      if (current.evaluatedBy) {
+        fetchEvaluatorName(current.evaluatedBy);
+      }
+      // Reset history view when changing submissions
+      setShowHistory(false);
     }
   }, [currentIndex, filteredSubmissions]);
 
@@ -88,6 +111,9 @@ const SubmissionEvaluator = () => {
         setSelectedProblemId(problemsData[0].id);
       }
 
+      // Fetch students for by-student view
+      await fetchStudentsWithSubmissions();
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching competition:', error);
@@ -111,6 +137,126 @@ const SubmissionEvaluator = () => {
     } catch (error) {
       console.error('Error fetching submissions:', error);
       toast.error('Failed to load submissions');
+    }
+  };
+
+  const fetchEvaluationHistory = async (submissionId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${submissionId}/history`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      setEvaluationHistory(data);
+      setShowHistory(true);
+    } catch (error) {
+      console.error('Error fetching evaluation history:', error);
+      toast.error('Failed to load evaluation history');
+    }
+  };
+
+  const fetchEvaluatorActivity = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `http://localhost:5000/api/competitions/${competitionId}/evaluator-activity`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      
+      // Handle error responses
+      if (!res.ok || !Array.isArray(data)) {
+        console.error('Evaluator activity error:', data);
+        toast.error(data.error || 'Failed to load evaluator activity');
+        setEvaluatorActivity([]);
+        setShowActivity(false);
+        return;
+      }
+      
+      setEvaluatorActivity(data);
+      setShowActivity(true);
+    } catch (error) {
+      console.error('Error fetching evaluator activity:', error);
+      toast.error('Failed to load evaluator activity');
+      setEvaluatorActivity([]);
+      setShowActivity(false);
+    }
+  };
+
+  const fetchStudentsWithSubmissions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `http://localhost:5000/api/competitions/${competitionId}/submissions`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      
+      // Group by student
+      const studentsMap = new Map();
+      data.forEach(submission => {
+        const userId = submission.userId;
+        if (!studentsMap.has(userId)) {
+          studentsMap.set(userId, {
+            userId,
+            userName: submission.userName,
+            rollNo: submission.rollNo,
+            batch: submission.batch,
+            submissions: []
+          });
+        }
+        studentsMap.get(userId).submissions.push(...submission.problemSubmissions);
+      });
+      
+      setStudents(Array.from(studentsMap.values()));
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      toast.error('Failed to load students');
+    }
+  };
+
+  const fetchSubmissionsByStudent = async (studentId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `http://localhost:5000/api/competitions/${competitionId}/submissions`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      
+      // Find student's submissions
+      const studentData = data.find(s => s.userId === studentId);
+      if (studentData && studentData.problemSubmissions) {
+        setSubmissions(studentData.problemSubmissions);
+        setFilteredSubmissions(studentData.problemSubmissions);
+        setCurrentIndex(0);
+      }
+    } catch (error) {
+      console.error('Error fetching student submissions:', error);
+      toast.error('Failed to load student submissions');
+    }
+  };
+
+  const fetchEvaluatorName = async (userId) => {
+    if (!userId || evaluatorNames[userId]) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `http://localhost:5000/api/admin/users/${userId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      
+      if (data.adminProfile) {
+        setEvaluatorNames(prev => ({
+          ...prev,
+          [userId]: data.adminProfile.name
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching evaluator name:', error);
     }
   };
 
@@ -246,55 +392,224 @@ const SubmissionEvaluator = () => {
                 <p className="text-sm text-gray-500 mt-1">Submission Evaluation</p>
               </div>
             </div>
-            <button
-              onClick={exportEvaluations}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Export Results
-            </button>
+            <div className="flex items-center gap-3">
+              {/* View Mode Toggle */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => {
+                    setViewMode('by-question');
+                    setSelectedStudentId(null);
+                    if (problems.length > 0 && !selectedProblemId) {
+                      setSelectedProblemId(problems[0].id);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-md flex items-center gap-2 transition-colors ${
+                    viewMode === 'by-question' 
+                      ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                  By Question
+                </button>
+                <button
+                  onClick={() => {
+                    setViewMode('by-student');
+                    setSelectedProblemId(null);
+                    if (students.length > 0 && !selectedStudentId) {
+                      setSelectedStudentId(students[0].userId);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-md flex items-center gap-2 transition-colors ${
+                    viewMode === 'by-student' 
+                      ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  By Student
+                </button>
+              </div>
+              <button
+                onClick={fetchEvaluatorActivity}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Activity className="w-4 h-4" />
+                Evaluator Activity
+              </button>
+              <button
+                onClick={exportEvaluations}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Export Results
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Sidebar - Problems List */}
-          <div className="col-span-3">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-900">Problems</h2>
-              </div>
-              <div className="divide-y divide-gray-200">
-                {problems.map((problem, idx) => {
-                  const problemEvals = Object.keys(evaluations).filter(k => k.includes(problem.id)).length;
-                  const problemSubs = submissions.filter(s => s.problemId === problem.id).length;
-                  
-                  return (
-                    <button
-                      key={problem.id}
-                      onClick={() => setSelectedProblemId(problem.id)}
-                      className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
-                        selectedProblemId === problem.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''
-                      }`}
-                    >
+      {/* Evaluator Activity Modal */}
+      {showActivity && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Activity className="w-6 h-6 text-blue-600" />
+                Evaluator Activity Summary
+              </h2>
+              <button
+                onClick={() => setShowActivity(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
+              {evaluatorActivity.length === 0 ? (
+                <div className="p-12 text-center">
+                  <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No evaluation activity yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {evaluatorActivity.map((activity, idx) => (
+                    <div key={idx} className="p-6 hover:bg-gray-50">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">
-                            {idx + 1}. {problem.title}
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="font-semibold text-gray-900 text-lg">
+                              {activity.evaluatorName}
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                              {activity.evaluatorRole}
+                            </span>
                           </div>
-                          <div className="mt-1 text-xs text-gray-500">
-                            {problem.points} points
+                          <div className="grid grid-cols-4 gap-4 mt-3">
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Total Evaluations</div>
+                              <div className="text-2xl font-bold text-indigo-600">
+                                {activity.totalEvaluations}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">New</div>
+                              <div className="text-xl font-semibold text-green-600">
+                                {activity.creates}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Updates</div>
+                              <div className="text-xl font-semibold text-orange-600">
+                                {activity.updates}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Reviews</div>
+                              <div className="text-xl font-semibold text-blue-600">
+                                {activity.reviews}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <div className="text-xs text-gray-500 mb-1">Problems Evaluated</div>
+                            <div className="flex flex-wrap gap-2">
+                              {activity.problemsEvaluated.map((problem, pIdx) => (
+                                <span key={pIdx} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                  {problem}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            Last activity: {new Date(activity.lastActivity).toLocaleString()}
                           </div>
                         </div>
                       </div>
-                      {problemEvals > 0 && (
-                        <div className="mt-2 text-xs text-green-600 font-medium">
-                          ✓ {problemEvals} evaluated
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-12 gap-6">
+          {/* Sidebar - Problems or Students List */}
+          <div className="col-span-3">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-4 border-b border-gray-200">
+                <h2 className="font-semibold text-gray-900">
+                  {viewMode === 'by-question' ? 'Problems' : 'Students'}
+                </h2>
+              </div>
+              <div className="divide-y divide-gray-200 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {viewMode === 'by-question' ? (
+                  // Problems List
+                  problems.map((problem, idx) => {
+                    const problemEvals = Object.keys(evaluations).filter(k => k.includes(problem.id)).length;
+                    const problemSubs = submissions.filter(s => s.problemId === problem.id).length;
+                    
+                    return (
+                      <button
+                        key={problem.id}
+                        onClick={() => setSelectedProblemId(problem.id)}
+                        className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
+                          selectedProblemId === problem.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">
+                              {idx + 1}. {problem.title}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {problem.points} points
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
+                        {problemEvals > 0 && (
+                          <div className="mt-2 text-xs text-green-600 font-medium">
+                            ✓ {problemEvals} evaluated
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                ) : (
+                  // Students List
+                  students.map((student, idx) => {
+                    const evaluatedCount = student.submissions.filter(s => s.isEvaluated).length;
+                    const totalCount = student.submissions.length;
+                    
+                    return (
+                      <button
+                        key={student.userId}
+                        onClick={() => setSelectedStudentId(student.userId)}
+                        className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
+                          selectedStudentId === student.userId ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">
+                              {student.userName}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              Roll: {student.rollNo || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs">
+                          <span className={evaluatedCount === totalCount ? 'text-green-600' : 'text-orange-600'}>
+                            {evaluatedCount}/{totalCount} evaluated
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -379,10 +694,31 @@ const SubmissionEvaluator = () => {
                 </div>
 
                 {/* Student Info Card */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    {currentProblem?.title}
-                  </h3>
+                <div className={`rounded-lg shadow-sm border p-6 mb-4 ${
+                  currentSubmission.isEvaluated 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-white border-gray-200'
+                }`}>
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {currentProblem?.title}
+                    </h3>
+                    {currentSubmission.isEvaluated && (
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" />
+                          Evaluated
+                        </span>
+                        <button
+                          onClick={() => fetchEvaluationHistory(currentSubmission.id)}
+                          className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 text-xs font-medium flex items-center gap-1"
+                        >
+                          <History className="w-3 h-3" />
+                          View History
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Student Name</div>
@@ -427,7 +763,7 @@ const SubmissionEvaluator = () => {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Score</div>
+                      <div className="text-xs text-gray-500 mb-1">Marks Scored</div>
                       <div className="font-medium text-gray-900">
                         {currentSubmission.score} / {currentSubmission.maxScore}
                       </div>
@@ -445,7 +781,138 @@ const SubmissionEvaluator = () => {
                       </div>
                     </div>
                   </div>
+                  {currentSubmission.isEvaluated && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 bg-green-50 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <h4 className="font-semibold text-gray-900">Manual Evaluation</h4>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Manual Marks</div>
+                          <div className="text-2xl font-bold text-indigo-600">
+                            {currentSubmission.manualMarks} / 100
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Evaluated By</div>
+                          <div className="font-semibold text-gray-900 flex items-center gap-2">
+                            <User className="w-4 h-4 text-indigo-600" />
+                            {currentSubmission.evaluatedBy 
+                              ? (evaluatorNames[currentSubmission.evaluatedBy] || 'Loading...') 
+                              : 'N/A'}
+                          </div>
+                          {currentSubmission.evaluatedBy && !evaluatorNames[currentSubmission.evaluatedBy] && (
+                            <div className="text-xs text-gray-400 mt-1">Fetching name...</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Evaluated At</div>
+                          <div className="font-medium text-gray-900">
+                            {currentSubmission.evaluatedAt ? new Date(currentSubmission.evaluatedAt).toLocaleString() : 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                      {currentSubmission.evaluatorComments && (
+                        <div className="mt-3 p-3 bg-white rounded border border-gray-200">
+                          <div className="text-xs text-gray-500 mb-1">Evaluator Comments</div>
+                          <div className="text-sm text-gray-700">{currentSubmission.evaluatorComments}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Evaluation History Modal */}
+                {showHistory && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
+                      <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                          <History className="w-6 h-6 text-indigo-600" />
+                          Evaluation History
+                        </h2>
+                        <button
+                          onClick={() => setShowHistory(false)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <XCircle className="w-6 h-6" />
+                        </button>
+                      </div>
+                      <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
+                        {evaluationHistory.length === 0 ? (
+                          <div className="p-12 text-center">
+                            <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">No evaluation history found</p>
+                          </div>
+                        ) : (
+                          <div className="p-6 space-y-4">
+                            {evaluationHistory.map((hist, idx) => (
+                              <div key={hist.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                                      <User className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                      <div className="font-semibold text-gray-900">{hist.evaluatorName}</div>
+                                      <div className="text-xs text-gray-500">{hist.evaluatorRole}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      hist.action === 'create' ? 'bg-green-100 text-green-800' :
+                                      hist.action === 'update' ? 'bg-orange-100 text-orange-800' :
+                                      'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {hist.action.toUpperCase()}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {new Date(hist.createdAt).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mb-3">
+                                  <div>
+                                    <div className="text-xs text-gray-500 mb-1">Marks Given</div>
+                                    <div className="text-2xl font-bold text-indigo-600">
+                                      {hist.marks} / 100
+                                    </div>
+                                  </div>
+                                  {hist.previousMarks !== null && hist.previousMarks !== undefined && (
+                                    <div>
+                                      <div className="text-xs text-gray-500 mb-1">Previous Marks</div>
+                                      <div className="text-2xl font-bold text-gray-400">
+                                        {hist.previousMarks} / 100
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                {hist.comments && (
+                                  <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+                                    <div className="text-xs text-gray-500 mb-1">Comments</div>
+                                    <div className="text-sm text-gray-700">{hist.comments}</div>
+                                  </div>
+                                )}
+                                {hist.previousComments && hist.action === 'update' && (
+                                  <div className="mt-2 p-3 bg-gray-100 rounded border border-gray-300">
+                                    <div className="text-xs text-gray-500 mb-1">Previous Comments</div>
+                                    <div className="text-sm text-gray-600 italic">{hist.previousComments}</div>
+                                  </div>
+                                )}
+                                {hist.ipAddress && (
+                                  <div className="mt-2 text-xs text-gray-400">
+                                    IP: {hist.ipAddress}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Code Display */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">

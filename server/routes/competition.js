@@ -293,7 +293,12 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'
         status: ps.status,
         errorMessage: ps.errorMessage,
         testResults: ps.testResults,
-        judgedAt: ps.judgedAt
+        judgedAt: ps.judgedAt,
+        manualMarks: ps.manualMarks,
+        evaluatorComments: ps.evaluatorComments,
+        evaluatedBy: ps.evaluatedBy,
+        evaluatedAt: ps.evaluatedAt,
+        isEvaluated: ps.isEvaluated
       }))
     }));
 
@@ -883,11 +888,12 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
   }
 });
 
-// Save manual evaluation for a submission (Admin only)
+// Save manual evaluation for a submission (Admin only) - WITH TRACKING
 router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evaluate', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { submissionId } = req.params;
     const { marks, comments } = req.body;
+    const evaluatorId = req.user.id;
 
     if (marks === undefined || marks === null) {
       return res.status(400).json({ error: 'Marks are required' });
@@ -898,20 +904,61 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
       return res.status(400).json({ error: 'Marks must be between 0 and 100' });
     }
 
-    // Update the submission with manual evaluation
-    const submission = await prisma.problemSubmission.update({
+    // Get current submission state and evaluator info
+    const currentSubmission = await prisma.problemSubmission.findUnique({
       where: { id: submissionId },
-      data: {
-        score: Math.round(marksNum), // Convert percentage to score
-        status: 'accepted', // Mark as manually evaluated
-        errorMessage: comments || null // Store comments in errorMessage field
-      },
       include: {
         user: {
           include: {
             studentProfile: true
           }
         }
+      }
+    });
+
+    const evaluator = await prisma.user.findUnique({
+      where: { id: evaluatorId },
+      include: {
+        adminProfile: {
+          select: { name: true }
+        }
+      }
+    });
+
+    if (!currentSubmission || !evaluator) {
+      return res.status(404).json({ error: 'Submission or evaluator not found' });
+    }
+
+    const previousMarks = currentSubmission.manualMarks;
+    const previousComments = currentSubmission.evaluatorComments;
+    const isUpdate = currentSubmission.isEvaluated;
+
+    // Update the submission with manual evaluation
+    const submission = await prisma.problemSubmission.update({
+      where: { id: submissionId },
+      data: {
+        manualMarks: marksNum,
+        evaluatorComments: comments || null,
+        evaluatedBy: evaluatorId,
+        evaluatedAt: new Date(),
+        isEvaluated: true,
+        score: Math.round(marksNum) // Store marks as score too
+      }
+    });
+
+    // Create evaluation history record
+    await prisma.submissionEvaluation.create({
+      data: {
+        submissionId: submissionId,
+        evaluatorId: evaluatorId,
+        evaluatorName: evaluator.adminProfile?.name || evaluator.email,
+        evaluatorRole: evaluator.role,
+        marks: marksNum,
+        comments: comments || null,
+        action: isUpdate ? 'update' : 'create',
+        previousMarks: isUpdate ? previousMarks : null,
+        previousComments: isUpdate ? previousComments : null,
+        ipAddress: req.ip || req.connection.remoteAddress
       }
     });
 
@@ -932,12 +979,161 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
     }
 
     res.json({ 
-      message: 'Evaluation saved successfully',
-      submission 
+      message: isUpdate ? 'Evaluation updated successfully' : 'Evaluation saved successfully',
+      submission,
+      evaluatedBy: evaluator.adminProfile?.name || evaluator.email,
+      action: isUpdate ? 'update' : 'create'
     });
   } catch (error) {
     console.error('Error saving evaluation:', error);
     res.status(500).json({ error: 'Failed to save evaluation' });
+  }
+});
+
+// Get evaluation history for a submission (Admin only)
+router.get('/:competitionId/problems/:problemId/submissions/:submissionId/history', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    const history = await prisma.submissionEvaluation.findMany({
+      where: { submissionId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching evaluation history:', error);
+    res.status(500).json({ error: 'Failed to fetch evaluation history' });
+  }
+});
+
+// Get all evaluations for a competition (Admin only) - See who evaluated what
+router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+
+    const evaluations = await prisma.submissionEvaluation.findMany({
+      where: {
+        submission: {
+          problem: {
+            competitionId: competitionId
+          }
+        }
+      },
+      include: {
+        submission: {
+          include: {
+            user: {
+              include: {
+                studentProfile: {
+                  select: {
+                    name: true,
+                    rollNo: true
+                  }
+                }
+              }
+            },
+            problem: {
+              select: {
+                title: true,
+                competitionId: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedEvaluations = evaluations.map(ev => ({
+      id: ev.id,
+      evaluatorName: ev.evaluatorName,
+      evaluatorRole: ev.evaluatorRole,
+      studentName: ev.submission.user.studentProfile?.name || 'N/A',
+      rollNo: ev.submission.user.studentProfile?.rollNo || 'N/A',
+      problemTitle: ev.submission.problem.title,
+      marks: ev.marks,
+      comments: ev.comments,
+      action: ev.action,
+      previousMarks: ev.previousMarks,
+      createdAt: ev.createdAt,
+      ipAddress: ev.ipAddress
+    }));
+
+    res.json(formattedEvaluations);
+  } catch (error) {
+    console.error('Error fetching evaluations:', error);
+    res.status(500).json({ error: 'Failed to fetch evaluations' });
+  }
+});
+
+// Get evaluator activity summary (Admin only) - Who evaluated how many
+router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+
+    const evaluations = await prisma.submissionEvaluation.findMany({
+      where: {
+        submission: {
+          problem: {
+            competitionId: competitionId
+          }
+        }
+      },
+      include: {
+        submission: {
+          include: {
+            problem: {
+              select: {
+                title: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Group by evaluator
+    const activityMap = {};
+    evaluations.forEach(ev => {
+      if (!activityMap[ev.evaluatorId]) {
+        activityMap[ev.evaluatorId] = {
+          evaluatorId: ev.evaluatorId,
+          evaluatorName: ev.evaluatorName,
+          evaluatorRole: ev.evaluatorRole,
+          totalEvaluations: 0,
+          creates: 0,
+          updates: 0,
+          reviews: 0,
+          problemsEvaluated: new Set(),
+          lastActivity: ev.createdAt
+        };
+      }
+      
+      const activity = activityMap[ev.evaluatorId];
+      activity.totalEvaluations++;
+      
+      if (ev.action === 'create') activity.creates++;
+      else if (ev.action === 'update') activity.updates++;
+      else if (ev.action === 'review') activity.reviews++;
+      
+      activity.problemsEvaluated.add(ev.submission.problem.title);
+      
+      if (new Date(ev.createdAt) > new Date(activity.lastActivity)) {
+        activity.lastActivity = ev.createdAt;
+      }
+    });
+
+    // Convert to array and format
+    const activitySummary = Object.values(activityMap).map(activity => ({
+      ...activity,
+      problemsEvaluated: Array.from(activity.problemsEvaluated)
+    })).sort((a, b) => b.totalEvaluations - a.totalEvaluations);
+
+    res.json(activitySummary);
+  } catch (error) {
+    console.error('Error fetching evaluator activity:', error);
+    res.status(500).json({ error: 'Failed to fetch evaluator activity' });
   }
 });
 

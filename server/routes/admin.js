@@ -10,6 +10,42 @@ const router = express.Router();
 router.use(authenticate);
 router.use(authorizeRole('admin', 'subadmin', 'superadmin'));
 
+// ============ USER/ADMIN LOOKUP ============
+
+// Get user details by ID (for fetching evaluator names)
+router.get('/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        adminProfile: {
+          select: {
+            name: true,
+            permissions: true
+          }
+        },
+        studentProfile: {
+          select: {
+            name: true,
+            rollNo: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch user details' });
+  }
+});
+
 // ============ STUDENT MANAGEMENT ============
 
 // Create student (admin only) - auto-activated

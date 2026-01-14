@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import process from 'process';
-import { PrismaClient } from '@prisma/client';
+import prismaPkg from '@prisma/client';
+const { PrismaClient } = prismaPkg;
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
