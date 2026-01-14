@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users } from 'lucide-react';
+import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users, Edit } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
@@ -79,10 +79,6 @@ const SubmissionEvaluator = () => {
           setComments('');
         }
       }
-      // Fetch evaluator name if evaluated
-      if (current.evaluatedBy) {
-        fetchEvaluatorName(current.evaluatedBy);
-      }
       // Reset history view when changing submissions
       setShowHistory(false);
     }
@@ -134,6 +130,12 @@ const SubmissionEvaluator = () => {
       setFilteredSubmissions(data);
       setCurrentIndex(0);
       setSearchTerm('');
+      
+      // Batch fetch all unique evaluator names upfront
+      const uniqueEvaluatorIds = [...new Set(data.map(s => s.evaluatedBy).filter(Boolean))];
+      if (uniqueEvaluatorIds.length > 0) {
+        fetchMultipleEvaluatorNames(uniqueEvaluatorIds);
+      }
     } catch (error) {
       console.error('Error fetching submissions:', error);
       toast.error('Failed to load submissions');
@@ -260,6 +262,36 @@ const SubmissionEvaluator = () => {
     }
   };
 
+  // Batch fetch multiple evaluator names at once
+  const fetchMultipleEvaluatorNames = async (userIds) => {
+    const token = localStorage.getItem('token');
+    const uncachedIds = userIds.filter(id => !evaluatorNames[id]);
+    
+    if (uncachedIds.length === 0) return;
+    
+    try {
+      // Fetch all in parallel
+      const promises = uncachedIds.map(userId => 
+        fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.json())
+      );
+      
+      const results = await Promise.all(promises);
+      
+      const newNames = {};
+      results.forEach((data, index) => {
+        if (data.adminProfile) {
+          newNames[uncachedIds[index]] = data.adminProfile.name;
+        }
+      });
+      
+      setEvaluatorNames(prev => ({ ...prev, ...newNames }));
+    } catch (error) {
+      console.error('Error batch fetching evaluator names:', error);
+    }
+  };
+
   const saveEvaluation = async () => {
     const current = filteredSubmissions[currentIndex];
     if (!current) return;
@@ -297,6 +329,8 @@ const SubmissionEvaluator = () => {
         throw new Error('Failed to save evaluation');
       }
 
+      const responseData = await response.json();
+
       const key = `${current.userId}_${current.problemId}`;
       const newEvaluation = {
         marks: marksNum,
@@ -313,17 +347,38 @@ const SubmissionEvaluator = () => {
         [key]: newEvaluation
       }));
 
+      // Update the current submission in the list with new evaluation data
+      const updatedSubmissions = [...filteredSubmissions];
+      updatedSubmissions[currentIndex] = {
+        ...updatedSubmissions[currentIndex],
+        manualMarks: marksNum,
+        evaluatorComments: comments,
+        isEvaluated: true,
+        evaluatedBy: responseData.submission?.evaluatedBy || current.evaluatedBy,
+        evaluatedAt: new Date().toISOString()
+      };
+      setFilteredSubmissions(updatedSubmissions);
+      
+      // Also update the main submissions array
+      const mainSubmissionsUpdated = submissions.map(sub => 
+        sub.id === current.id 
+          ? { ...sub, manualMarks: marksNum, evaluatorComments: comments, isEvaluated: true, evaluatedBy: responseData.submission?.evaluatedBy || sub.evaluatedBy, evaluatedAt: new Date().toISOString() }
+          : sub
+      );
+      setSubmissions(mainSubmissionsUpdated);
+
       // Save to localStorage as backup
       const allEvals = { ...evaluations, [key]: newEvaluation };
       localStorage.setItem(`evaluations_${competitionId}`, JSON.stringify(allEvals));
 
-      toast.success('Evaluation saved to database!');
+      toast.success(responseData.message || 'Evaluation saved successfully!');
 
       // Move to next submission
       if (currentIndex < filteredSubmissions.length - 1) {
         setCurrentIndex(currentIndex + 1);
-      } else {
-        toast.success('All submissions for this problem evaluated!');
+      } else if (filteredSubmissions.length > 0) {
+        // Wrap to first submission
+        setCurrentIndex(0);
       }
     } catch (error) {
       console.error('Error saving evaluation:', error);
@@ -358,12 +413,18 @@ const SubmissionEvaluator = () => {
   const goToPrevious = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
+    } else if (filteredSubmissions.length > 0) {
+      // Wrap to last submission
+      setCurrentIndex(filteredSubmissions.length - 1);
     }
   };
 
   const goToNext = () => {
     if (currentIndex < filteredSubmissions.length - 1) {
       setCurrentIndex(currentIndex + 1);
+    } else if (filteredSubmissions.length > 0) {
+      // Wrap to first submission
+      setCurrentIndex(0);
     }
   };
 
@@ -669,8 +730,7 @@ const SubmissionEvaluator = () => {
                     <div className="flex items-center space-x-4">
                       <button
                         onClick={goToPrevious}
-                        disabled={currentIndex === 0}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 font-medium transition-colors"
                       >
                         <ChevronLeft className="w-4 h-4" />
                         Previous
@@ -680,8 +740,7 @@ const SubmissionEvaluator = () => {
                       </span>
                       <button
                         onClick={goToNext}
-                        disabled={currentIndex === filteredSubmissions.length - 1}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
                       >
                         Next
                         <ChevronRight className="w-4 h-4" />
@@ -777,7 +836,16 @@ const SubmissionEvaluator = () => {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Submitted</div>
                       <div className="font-medium text-gray-900">
-                        {new Date(currentSubmission.submittedAt).toLocaleString()}
+                        {currentSubmission.submittedAt 
+                          ? new Date(currentSubmission.submittedAt).toLocaleString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })
+                          : 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -941,7 +1009,32 @@ const SubmissionEvaluator = () => {
 
                 {/* Evaluation Form */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Evaluation</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-gray-900">Evaluation</h3>
+                    {currentSubmission.isEvaluated && (
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium flex items-center gap-1">
+                        <Edit className="w-3 h-3" />
+                        Updating Previous Evaluation
+                      </span>
+                    )}
+                  </div>
+                  {currentSubmission.isEvaluated && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Previous marks:</strong> {currentSubmission.manualMarks}/100
+                        {currentSubmission.evaluatedBy && evaluatorNames[currentSubmission.evaluatedBy] && (
+                          <span className="ml-2">
+                            by <strong>{evaluatorNames[currentSubmission.evaluatedBy]}</strong>
+                          </span>
+                        )}
+                      </p>
+                      {currentSubmission.evaluatorComments && (
+                        <p className="text-sm text-blue-700 mt-1">
+                          <strong>Previous comments:</strong> {currentSubmission.evaluatorComments}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -972,8 +1065,7 @@ const SubmissionEvaluator = () => {
                     <div className="flex space-x-3">
                       <button
                         onClick={goToPrevious}
-                        disabled={currentIndex === 0}
-                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2"
                       >
                         <ChevronLeft className="w-5 h-5" />
                         Back
@@ -987,8 +1079,7 @@ const SubmissionEvaluator = () => {
                       </button>
                       <button
                         onClick={goToNext}
-                        disabled={currentIndex === filteredSubmissions.length - 1}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                       >
                         Skip
                         <ChevronRight className="w-5 h-5" />

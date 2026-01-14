@@ -155,9 +155,12 @@ router.get('/:id/my-submission', authenticate, async (req, res) => {
         memoryUsed: ps.memoryUsed,
         status: ps.status,
         errorMessage: ps.errorMessage,
-        testResults: ps.testResults, // JSON with per-testcase details
         language: ps.language,
-        judgedAt: ps.judgedAt
+        code: ps.code,
+        judgedAt: ps.judgedAt,
+        manualMarks: ps.manualMarks,
+        evaluatorComments: ps.evaluatorComments,
+        isEvaluated: ps.isEvaluated
       }))
     };
 
@@ -850,6 +853,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
   try {
     const { competitionId, problemId } = req.params;
 
+    // Optimized query with minimal fields
     const submissions = await prisma.problemSubmission.findMany({
       where: {
         problemId: problemId,
@@ -857,9 +861,32 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
           competitionId: competitionId
         }
       },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        problemId: true,
+        competitionSubmissionId: true,
+        code: true,
+        language: true,
+        score: true,
+        maxScore: true,
+        testsPassed: true,
+        totalTests: true,
+        executionTime: true,
+        memoryUsed: true,
+        status: true,
+        errorMessage: true,
+        submittedAt: true,
+        manualMarks: true,
+        evaluatorComments: true,
+        evaluatedBy: true,
+        evaluatedAt: true,
+        isEvaluated: true,
         user: {
-          include: {
+          select: {
+            id: true,
+            email: true,
+            moodleId: true,
             studentProfile: {
               select: {
                 name: true,
@@ -876,19 +903,24 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
         }
       },
       orderBy: [
-        { user: { studentProfile: { name: 'asc' } } },
         { submittedAt: 'desc' }
       ]
     });
 
-    res.json(submissions);
+    // Ensure submittedAt is properly formatted
+    const formattedSubmissions = submissions.map(sub => ({
+      ...sub,
+      submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString()
+    }));
+
+    res.json(formattedSubmissions);
   } catch (error) {
     console.error('Error fetching submissions:', error);
     res.status(500).json({ error: 'Failed to fetch submissions' });
   }
 });
 
-// Save manual evaluation for a submission (Admin only) - WITH TRACKING
+// Save manual evaluation for a submission (Admin only) - OPTIMIZED WITH TRANSACTIONS
 router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evaluate', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { submissionId } = req.params;
@@ -904,69 +936,104 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
       return res.status(400).json({ error: 'Marks must be between 0 and 100' });
     }
 
-    // Get current submission state and evaluator info
-    const currentSubmission = await prisma.problemSubmission.findUnique({
-      where: { id: submissionId },
-      include: {
-        user: {
-          include: {
-            studentProfile: true
+    // Use transaction to combine multiple operations efficiently
+    const result = await prisma.$transaction(async (tx) => {
+      // Get submission with minimal fields for evaluation
+      const currentSubmission = await tx.problemSubmission.findUnique({
+        where: { id: submissionId },
+        select: {
+          id: true,
+          manualMarks: true,
+          evaluatorComments: true,
+          isEvaluated: true,
+          competitionSubmissionId: true
+        }
+      });
+
+      if (!currentSubmission) {
+        throw new Error('Submission not found');
+      }
+
+      // Get evaluator info for history record
+      const evaluator = await tx.user.findUnique({
+        where: { id: evaluatorId },
+        select: {
+          role: true,
+          email: true,
+          adminProfile: {
+            select: { name: true }
           }
         }
-      }
-    });
+      });
 
-    const evaluator = await prisma.user.findUnique({
-      where: { id: evaluatorId },
-      include: {
-        adminProfile: {
-          select: { name: true }
+      if (!evaluator) {
+        throw new Error('Evaluator not found');
+      }
+
+      const isUpdate = currentSubmission.isEvaluated;
+      const previousMarks = currentSubmission.manualMarks;
+      const previousComments = currentSubmission.evaluatorComments;
+      const evaluatorName = evaluator.adminProfile?.name || evaluator.email;
+
+      // Update submission
+      const submission = await tx.problemSubmission.update({
+        where: { id: submissionId },
+        data: {
+          manualMarks: marksNum,
+          evaluatorComments: comments || null,
+          evaluatedBy: evaluatorId,
+          evaluatedAt: new Date(),
+          isEvaluated: true,
+          score: Math.round(marksNum)
         }
-      }
+      });
+
+      // Create evaluation history record
+      await tx.submissionEvaluation.create({
+        data: {
+          submissionId: submissionId,
+          evaluatorId: evaluatorId,
+          evaluatorName: evaluatorName,
+          evaluatorRole: evaluator.role,
+          marks: marksNum,
+          comments: comments || null,
+          action: isUpdate ? 'update' : 'create',
+          previousMarks: isUpdate ? previousMarks : null,
+          previousComments: isUpdate ? previousComments : null,
+          ipAddress: req.ip || req.connection.remoteAddress
+        }
+      });
+
+      return { submission, isUpdate, evaluatorName };
     });
 
-    if (!currentSubmission || !evaluator) {
-      return res.status(404).json({ error: 'Submission or evaluator not found' });
-    }
-
-    const previousMarks = currentSubmission.manualMarks;
-    const previousComments = currentSubmission.evaluatorComments;
-    const isUpdate = currentSubmission.isEvaluated;
-
-    // Update the submission with manual evaluation
-    const submission = await prisma.problemSubmission.update({
-      where: { id: submissionId },
-      data: {
-        manualMarks: marksNum,
-        evaluatorComments: comments || null,
-        evaluatedBy: evaluatorId,
-        evaluatedAt: new Date(),
-        isEvaluated: true,
-        score: Math.round(marksNum) // Store marks as score too
-      }
+    // Update competition score asynchronously (non-blocking)
+    updateCompetitionScoreAsync(result.submission.competitionSubmissionId).catch(err => {
+      console.error('Error updating competition score:', err);
     });
 
-    // Create evaluation history record
-    await prisma.submissionEvaluation.create({
-      data: {
-        submissionId: submissionId,
-        evaluatorId: evaluatorId,
-        evaluatorName: evaluator.adminProfile?.name || evaluator.email,
-        evaluatorRole: evaluator.role,
-        marks: marksNum,
-        comments: comments || null,
-        action: isUpdate ? 'update' : 'create',
-        previousMarks: isUpdate ? previousMarks : null,
-        previousComments: isUpdate ? previousComments : null,
-        ipAddress: req.ip || req.connection.remoteAddress
-      }
+    res.json({ 
+      message: result.isUpdate ? 'Evaluation updated successfully' : 'Evaluation saved successfully',
+      submission: result.submission,
+      action: result.isUpdate ? 'update' : 'create',
+      evaluatedBy: result.evaluatorName
     });
+  } catch (error) {
+    console.error('Error saving evaluation:', error);
+    res.status(500).json({ error: 'Failed to save evaluation' });
+  }
+});
 
-    // Update the competition submission total score
+// Helper function to update competition score asynchronously
+async function updateCompetitionScoreAsync(competitionSubmissionId) {
+  try {
     const competitionSubmission = await prisma.competitionSubmission.findUnique({
-      where: { id: submission.competitionSubmissionId },
-      include: {
-        problemSubmissions: true
+      where: { id: competitionSubmissionId },
+      select: {
+        id: true,
+        problemSubmissions: {
+          select: { score: true }
+        }
       }
     });
 
@@ -977,18 +1044,10 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
         data: { totalScore }
       });
     }
-
-    res.json({ 
-      message: isUpdate ? 'Evaluation updated successfully' : 'Evaluation saved successfully',
-      submission,
-      evaluatedBy: evaluator.adminProfile?.name || evaluator.email,
-      action: isUpdate ? 'update' : 'create'
-    });
   } catch (error) {
-    console.error('Error saving evaluation:', error);
-    res.status(500).json({ error: 'Failed to save evaluation' });
+    console.error('Error in async score update:', error);
   }
-});
+}
 
 // Get evaluation history for a submission (Admin only)
 router.get('/:competitionId/problems/:problemId/submissions/:submissionId/history', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {

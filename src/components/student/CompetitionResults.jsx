@@ -32,6 +32,19 @@ export const CompetitionResults = () => {
       try {
         const subResponse = await competitionService.getMySubmission(id);
         console.log('My submission response:', subResponse);
+        console.log('Problems:', subResponse?.problems);
+        if (subResponse?.problems) {
+          subResponse.problems.forEach((p, i) => {
+            console.log(`Problem ${i}:`, {
+              title: p.problemTitle,
+              hasCode: !!p.code,
+              codeLength: p.code?.length || 0,
+              isEvaluated: p.isEvaluated,
+              manualMarks: p.manualMarks,
+              evaluatorComments: p.evaluatorComments
+            });
+          });
+        }
         setMySubmission(subResponse);
       } catch (error) {
         // No submission yet - this is okay
@@ -217,7 +230,7 @@ export const CompetitionResults = () => {
                 {/* Problem-wise Results */}
                 <div className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-900">Problem-wise Results</h2>
-                  {mySubmission.problems.map((problem, index) => (
+                  {mySubmission.problems && mySubmission.problems.map((problem, index) => (
                     <Card key={problem.problemId} className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
@@ -245,7 +258,7 @@ export const CompetitionResults = () => {
                       </div>
 
                       {/* Score and Stats */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 bg-gray-50 p-4 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 bg-gray-50 p-4 rounded-lg">
                         <div>
                           <p className="text-xs text-gray-600">Score</p>
                           <p className="text-lg font-bold text-gray-900">
@@ -253,9 +266,9 @@ export const CompetitionResults = () => {
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-600">Tests Passed</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {problem.testsPassed}/{problem.totalTests}
+                          <p className="text-xs text-gray-600">Status</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {problem.status}
                           </p>
                         </div>
                         <div>
@@ -265,13 +278,7 @@ export const CompetitionResults = () => {
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-600">Memory Used</p>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {formatMemory(problem.memoryUsed)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600">Judged At</p>
+                          <p className="text-xs text-gray-600">Submitted At</p>
                           <p className="text-xs text-gray-900">
                             {problem.judgedAt ? new Date(problem.judgedAt).toLocaleString() : 'Pending'}
                           </p>
@@ -288,71 +295,44 @@ export const CompetitionResults = () => {
                         </div>
                       )}
 
-                      {/* Test Case Results */}
-                      {problem.testResults && Array.isArray(problem.testResults) && problem.testResults.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-bold text-gray-900 mb-2">Test Case Results:</h4>
-                          <div className="space-y-2">
-                            {problem.testResults.map((test, testIdx) => (
-                              <div
-                                key={testIdx}
-                                className={`p-3 rounded-lg border ${
-                                  test.passed
-                                    ? 'bg-green-50 border-green-200'
-                                    : 'bg-red-50 border-red-200'
-                                }`}
-                              >
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium text-gray-900">
-                                    Test Case {test.testCase || testIdx + 1}
-                                  </span>
-                                  <span className={`text-sm font-bold ${test.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                    {test.passed ? '✅ Passed' : '❌ Failed'}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                                  <div>
-                                    <span className="font-medium text-gray-700">Status:</span>{' '}
-                                    <span className={getStatusColor(test.status)}>{test.status}</span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Time:</span>{' '}
-                                    {formatTime(test.time)}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Memory:</span>{' '}
-                                    {formatMemory(test.memory)}
-                                  </div>
-                                </div>
-                                {!test.passed && (
-                                  <div className="mt-2 space-y-1">
-                                    <div>
-                                      <span className="text-xs font-medium text-gray-700">Expected:</span>
-                                      <pre className="text-xs bg-white p-2 rounded mt-1 overflow-x-auto">
-                                        {test.expectedOutput}
-                                      </pre>
-                                    </div>
-                                    <div>
-                                      <span className="text-xs font-medium text-gray-700">Got:</span>
-                                      <pre className="text-xs bg-white p-2 rounded mt-1 overflow-x-auto">
-                                        {test.actualOutput}
-                                      </pre>
-                                    </div>
-                                    {test.stderr && (
-                                      <div>
-                                        <span className="text-xs font-medium text-gray-700">Error:</span>
-                                        <pre className="text-xs bg-white p-2 rounded mt-1 overflow-x-auto text-red-600">
-                                          {test.stderr}
-                                        </pre>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                      {/* Your Code */}
+                      <div className="mb-4">
+                        <h4 className="text-sm font-bold text-gray-900 mb-2">Your Code:</h4>
+                        {problem.code ? (
+                          <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs font-mono whitespace-pre-wrap break-words">
+                            {problem.code}
+                          </pre>
+                        ) : (
+                          <div className="bg-gray-100 p-4 rounded-lg text-gray-600 text-sm">
+                            No code available
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+
+                      {/* Evaluator Remarks/Comments */}
+                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="text-sm font-bold text-blue-900 mb-3">📋 Evaluator Review</h4>
+                        {problem.isEvaluated ? (
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-xs text-blue-700 font-medium">Marks Given:</p>
+                              <p className="text-2xl font-bold text-blue-900">{problem.manualMarks}/100</p>
+                            </div>
+                            {problem.evaluatorComments ? (
+                              <div>
+                                <p className="text-xs text-blue-700 font-medium">Remarks:</p>
+                                <p className="text-sm text-blue-800 mt-1 leading-relaxed">
+                                  {problem.evaluatorComments}
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-blue-600 italic">No remarks provided</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-blue-600 italic">Awaiting evaluator review...</p>
+                        )}
+                      </div>
                     </Card>
                   ))}
                 </div>
