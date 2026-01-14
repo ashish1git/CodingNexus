@@ -33,6 +33,10 @@
     @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors;
   }
 
+  .input-field::placeholder {
+    @apply text-gray-500;
+  }
+
   .input-error {
     @apply border-red-500 focus:ring-red-500;
   }
@@ -145,9 +149,57 @@
   .dark .input-field {
     @apply bg-gray-800 border-gray-700 text-gray-100;
   }
+
+  .dark .input-field::placeholder {
+    @apply text-gray-400;
+  }
 }
 
-/* Custom Scrollbar for entire app */
+/* Global Placeholder Styling */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
+
+/* Global Input Text Color */
+input,
+textarea,
+select {
+  color: #111827 !important;
+  caret-color: #111827 !important;
+}
+
+input::selection,
+textarea::selection {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+
+input:autofill,
+input:autofill:hover,
+input:autofill:focus,
+input:autofill:focus-visible {
+  -webkit-text-fill-color: #111827 !important;
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  color: #111827 !important;
+}
+
+/* Dark mode placeholders */
+.dark input::placeholder,
+.dark textarea::placeholder,
+.dark select::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+/* Dark mode input text */
+.dark input,
+.dark textarea,
+.dark select {
+  color: #f3f4f6;
+}
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

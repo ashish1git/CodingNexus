@@ -861,27 +861,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
           competitionId: competitionId
         }
       },
-      select: {
-        id: true,
-        userId: true,
-        problemId: true,
-        competitionSubmissionId: true,
-        code: true,
-        language: true,
-        score: true,
-        maxScore: true,
-        testsPassed: true,
-        totalTests: true,
-        executionTime: true,
-        memoryUsed: true,
-        status: true,
-        errorMessage: true,
-        submittedAt: true,
-        manualMarks: true,
-        evaluatorComments: true,
-        evaluatedBy: true,
-        evaluatedAt: true,
-        isEvaluated: true,
+      include: {
         user: {
           select: {
             id: true,
@@ -907,10 +887,11 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
       ]
     });
 
-    // Ensure submittedAt is properly formatted
+    // Ensure submittedAt is properly formatted and user data is present
     const formattedSubmissions = submissions.map(sub => ({
       ...sub,
-      submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString()
+      submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
+      user: sub.user || { id: null, email: 'Unknown', moodleId: 'N/A', studentProfile: { name: 'N/A', rollNo: 'N/A' } }
     }));
 
     res.json(formattedSubmissions);

@@ -1,5 +1,5 @@
 // src/components/auth/Login.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Code, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, currentUser, userDetails } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showActivation, setShowActivation] = useState(false);
@@ -16,6 +16,16 @@ const Login = () => {
     moodleId: '',
     password: ''
   });
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (currentUser) {
+      // Redirect to appropriate dashboard based on role
+      if (userDetails?.role === 'student') {
+        navigate('/student/dashboard', { replace: true });
+      }
+    }
+  }, [currentUser, userDetails, navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -114,7 +124,8 @@ const Login = () => {
               name="moodleId"
               value={formData.moodleId}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              style={{ color: '#111827' }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-gray-900"
               placeholder="Enter your Moodle ID"
               required
             />
@@ -132,7 +143,8 @@ const Login = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition pr-12"
+                style={{ color: '#111827' }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition pr-12 text-gray-900"
                 placeholder="Enter your password"
                 required
               />

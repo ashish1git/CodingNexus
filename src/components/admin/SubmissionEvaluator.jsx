@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users, Edit } from 'lucide-react';
+import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users, Edit, Loader } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
@@ -14,6 +14,9 @@ const SubmissionEvaluator = () => {
   const [submissions, setSubmissions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [savingEvaluation, setSavingEvaluation] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [evaluations, setEvaluations] = useState({});
   const [marks, setMarks] = useState('');
   const [comments, setComments] = useState('');
@@ -120,6 +123,7 @@ const SubmissionEvaluator = () => {
 
   const fetchSubmissionsForProblem = async () => {
     try {
+      setSubmissionsLoading(true);
       const token = localStorage.getItem('token');
       const res = await fetch(
         `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions`,
@@ -136,9 +140,11 @@ const SubmissionEvaluator = () => {
       if (uniqueEvaluatorIds.length > 0) {
         fetchMultipleEvaluatorNames(uniqueEvaluatorIds);
       }
+      setSubmissionsLoading(false);
     } catch (error) {
       console.error('Error fetching submissions:', error);
       toast.error('Failed to load submissions');
+      setSubmissionsLoading(false);
     }
   };
 
@@ -160,6 +166,7 @@ const SubmissionEvaluator = () => {
 
   const fetchEvaluatorActivity = async () => {
     try {
+      setActivityLoading(true);
       const token = localStorage.getItem('token');
       const res = await fetch(
         `http://localhost:5000/api/competitions/${competitionId}/evaluator-activity`,
@@ -172,17 +179,20 @@ const SubmissionEvaluator = () => {
         console.error('Evaluator activity error:', data);
         toast.error(data.error || 'Failed to load evaluator activity');
         setEvaluatorActivity([]);
+        setActivityLoading(false);
         setShowActivity(false);
         return;
       }
       
       setEvaluatorActivity(data);
       setShowActivity(true);
+      setActivityLoading(false);
     } catch (error) {
       console.error('Error fetching evaluator activity:', error);
       toast.error('Failed to load evaluator activity');
       setEvaluatorActivity([]);
       setShowActivity(false);
+      setActivityLoading(false);
     }
   };
 
@@ -309,6 +319,7 @@ const SubmissionEvaluator = () => {
 
     try {
       // Save to database
+      setSavingEvaluation(true);
       const token = localStorage.getItem('token');
       const response = await fetch(
         `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${current.id}/evaluate`,
@@ -383,6 +394,8 @@ const SubmissionEvaluator = () => {
     } catch (error) {
       console.error('Error saving evaluation:', error);
       toast.error('Failed to save evaluation to database');
+    } finally {
+      setSavingEvaluation(false);
     }
   };
 
@@ -432,9 +445,30 @@ const SubmissionEvaluator = () => {
 
   const currentSubmission = filteredSubmissions[currentIndex];
   const currentProblem = problems.find(p => p.id === selectedProblemId);
+  
+  // Count evaluations: both saved in session and already evaluated in DB (avoid double counting)
   const evaluatedCount = Object.keys(evaluations).filter(key => 
     key.includes(selectedProblemId)
+  ).length + submissions.filter(sub => 
+    sub.isEvaluated && !Object.keys(evaluations).includes(`${sub.userId}_${sub.problemId}`)
   ).length;
+
+  // Calculate total evaluations across all problems (avoid double counting)
+  const evaluationKeys = new Set();
+  
+  // Add all submissions that are marked as evaluated
+  submissions.forEach(sub => {
+    if (sub.isEvaluated) {
+      evaluationKeys.add(`${sub.userId}_${sub.problemId}`);
+    }
+  });
+  
+  // Add all evaluations from current session
+  Object.keys(evaluations).forEach(key => {
+    evaluationKeys.add(key);
+  });
+  
+  const totalEvaluatedCount = evaluationKeys.size;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -493,10 +527,20 @@ const SubmissionEvaluator = () => {
               </div>
               <button
                 onClick={fetchEvaluatorActivity}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                disabled={activityLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Activity className="w-4 h-4" />
-                Evaluator Activity
+                {activityLoading ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Activity className="w-4 h-4" />
+                    Evaluator Activity
+                  </>
+                )}
               </button>
               <button
                 onClick={exportEvaluations}
@@ -526,7 +570,14 @@ const SubmissionEvaluator = () => {
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
-              {evaluatorActivity.length === 0 ? (
+              {activityLoading ? (
+                <div className="p-12 text-center">
+                  <div className="flex justify-center mb-4">
+                    <Loader className="w-12 h-12 text-blue-600 animate-spin" />
+                  </div>
+                  <p className="text-gray-600">Loading evaluator activity...</p>
+                </div>
+              ) : evaluatorActivity.length === 0 ? (
                 <div className="p-12 text-center">
                   <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">No evaluation activity yet</p>
@@ -678,9 +729,12 @@ const SubmissionEvaluator = () => {
             <div className="mt-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <h3 className="font-semibold text-gray-900 mb-3">Overall Progress</h3>
               <div className="text-3xl font-bold text-indigo-600 mb-2">
-                {Object.keys(evaluations).length}
+                {totalEvaluatedCount}
               </div>
               <div className="text-sm text-gray-500">Total Evaluations</div>
+              <div className="text-xs text-gray-400 mt-2">
+                Total Submissions: {submissions.length}
+              </div>
             </div>
           </div>
 
@@ -712,7 +766,19 @@ const SubmissionEvaluator = () => {
               </div>
             </div>
 
-            {!currentSubmission ? (
+            {submissionsLoading ? (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                <div className="flex justify-center mb-4">
+                  <Loader className="w-12 h-12 text-indigo-600 animate-spin" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Loading submissions...
+                </h3>
+                <p className="text-gray-500">
+                  Please wait while we fetch the data
+                </p>
+              </div>
+            ) : !currentSubmission ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
                 <Code className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -782,25 +848,25 @@ const SubmissionEvaluator = () => {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Student Name</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.user?.studentProfile?.name || 'N/A'}
+                        {currentSubmission?.user?.studentProfile?.name || currentSubmission?.user?.email || 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Roll Number</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.user?.studentProfile?.rollNo || 'N/A'}
+                        {currentSubmission?.user?.studentProfile?.rollNo || currentSubmission?.user?.moodleId || 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Language</div>
                       <div className="font-medium text-gray-900 uppercase">
-                        {currentSubmission.language}
+                        {currentSubmission?.language}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Status</div>
                       <div className="flex items-center space-x-2">
-                        {currentSubmission.status === 'accepted' ? (
+                        {currentSubmission?.status === 'accepted' ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <CheckCircle className="w-3 h-3 mr-1" />
                             Accepted
@@ -808,7 +874,7 @@ const SubmissionEvaluator = () => {
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <XCircle className="w-3 h-3 mr-1" />
-                            {currentSubmission.status}
+                            {currentSubmission?.status}
                           </span>
                         )}
                       </div>
@@ -818,25 +884,25 @@ const SubmissionEvaluator = () => {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Tests Passed</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.testsPassed} / {currentSubmission.totalTests}
+                        {currentSubmission?.testsPassed} / {currentSubmission?.totalTests}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Marks Scored</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.score} / {currentSubmission.maxScore}
+                        {currentSubmission?.score} / {currentSubmission?.maxScore}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Execution Time</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.executionTime}ms
+                        {currentSubmission?.executionTime}ms
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Submitted</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission.submittedAt 
+                        {currentSubmission?.submittedAt 
                           ? new Date(currentSubmission.submittedAt).toLocaleString('en-US', {
                               year: 'numeric',
                               month: 'short',
@@ -1072,10 +1138,20 @@ const SubmissionEvaluator = () => {
                       </button>
                       <button
                         onClick={saveEvaluation}
-                        className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center shadow-md"
+                        disabled={savingEvaluation}
+                        className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Save className="w-5 h-5 mr-2" />
-                        Save & Continue
+                        {savingEvaluation ? (
+                          <>
+                            <Loader className="w-5 h-5 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-5 h-5 mr-2" />
+                            Save & Continue
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={goToNext}

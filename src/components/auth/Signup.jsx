@@ -1,5 +1,5 @@
 // src/components/auth/Signup.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Code, Eye, EyeOff, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { signup } = useAuth();
+  const { signup, currentUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,6 +20,13 @@ const Signup = () => {
     password: '',
     confirmPassword: ''
   });
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/student/dashboard', { replace: true });
+    }
+  }, [currentUser, navigate]);
 
   const handleChange = (e) => {
     setFormData({

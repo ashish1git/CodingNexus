@@ -78,6 +78,18 @@ export const AuthProvider = ({ children }) => {
       if (response.success && response.user) {
         setCurrentUser(response.user);
         setUserDetails(response.user);
+        
+        // Fetch fresh user data to ensure we have all details including student profile
+        try {
+          const freshUser = await authService.getCurrentUser();
+          if (freshUser) {
+            setCurrentUser(freshUser);
+            setUserDetails(freshUser);
+          }
+        } catch (error) {
+          console.warn('Could not fetch fresh user data, using login response:', error);
+        }
+        
         return { success: true };
       }
       return response;

@@ -1,5 +1,5 @@
 // src/components/auth/AdminLogin.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, currentUser, userDetails } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -15,6 +15,19 @@ const AdminLogin = () => {
     email: '',
     password: '',
   });
+
+  // Redirect if already authenticated as admin
+  useEffect(() => {
+    if (currentUser) {
+      // Redirect to appropriate dashboard based on role
+      if (userDetails?.role === 'superadmin' || userDetails?.role === 'admin' || userDetails?.role === 'subadmin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else {
+        // If student is logged in, redirect to student dashboard
+        navigate('/student/dashboard', { replace: true });
+      }
+    }
+  }, [currentUser, userDetails, navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -91,7 +104,8 @@ const AdminLogin = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              style={{ color: '#111827' }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-gray-900"
               placeholder="admin@codingnexus.com"
               required
             />
@@ -109,7 +123,8 @@ const AdminLogin = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition pr-12"
+                style={{ color: '#111827' }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition pr-12 text-gray-900"
                 placeholder="Enter your password"
                 required
               />
