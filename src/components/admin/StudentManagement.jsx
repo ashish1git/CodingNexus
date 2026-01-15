@@ -85,18 +85,15 @@ const StudentManagement = () => {
    const email = `${formData.moodleId}@codingnexus.com`;
 
    // Use the admin endpoint to create student (auto-activated)
-   const response = await apiClient.post('/admin/students', {
+   const data = await apiClient.post('/admin/students', {
      name: formData.name,
      rollNo: formData.rollNo,
      moodleId: formData.moodleId,
      phone: formData.mobile,
      batch: formData.batch,
-       email: email,
-       password: formData.password
-     })
+     email: email,
+     password: formData.password
    });
-
-   const data = await response.json();
 
    if (data.success) {
      const toastId = toast.success(
