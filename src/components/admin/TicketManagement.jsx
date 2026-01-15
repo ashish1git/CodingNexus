@@ -192,60 +192,41 @@ const TicketManagement = () => {
     setSubmitting(true);
 
     try {
-      const newResponse = {
-        from: 'admin',
-        name: userDetails.name,
-        message: replyText,
-        timestamp: new Date().toISOString()
-      };
-
-      // Update local state immediately for instant feedback
-      const updatedTickets = tickets.map(ticket => {
-        if (ticket.id === selectedTicket.id) {
-          return {
-            ...ticket,
-            responses: [...(ticket.responses || []), newResponse],
-            updatedAt: new Date(),
-            status: ticket.status === 'open' ? 'in-progress' : ticket.status
-          };
-        }
-        return ticket;
-      });
-      setTickets(updatedTickets);
-
-      // Update selected ticket
-      setSelectedTicket(prev => ({
-        ...prev,
-        responses: [...(prev.responses || []), newResponse],
-        updatedAt: new Date(),
-        status: prev.status === 'open' ? 'in-progress' : prev.status
-      }));
-
-      // Show success toast
-      toast.success('Reply sent successfully!', {
-        duration: 3000,
-        position: 'top-right'
-      });
-
-      // Clear reply text
-      setReplyText('');
-
-      // Update via adminService
+      // Send to server
       const response = await adminService.updateTicket(selectedTicket.id, {
         reply: replyText,
         status: selectedTicket.status === 'open' ? 'in-progress' : selectedTicket.status
       });
       
       if (!response.success) {
-        // Revert local state on error
-        fetchTickets();
         toast.error(response.error || 'Failed to send reply');
+        return;
+      }
+
+      toast.success('Reply sent successfully!');
+
+      // Clear reply text
+      setReplyText('');
+
+      // Refresh tickets to get updated data from database
+      const ticketsResponse = await adminService.getAllTickets();
+      if (ticketsResponse.success && ticketsResponse.tickets) {
+        const ticketsList = ticketsResponse.tickets.map(ticket => ({
+          ...ticket,
+          createdAt: new Date(ticket.createdAt),
+          updatedAt: ticket.updatedAt ? new Date(ticket.updatedAt) : null
+        }));
+        setTickets(ticketsList);
+        
+        // Update selected ticket with fresh data
+        const updated = ticketsList.find(t => t.id === selectedTicket.id);
+        if (updated) {
+          setSelectedTicket(updated);
+        }
       }
 
     } catch (error) {
       console.error('Error sending reply:', error);
-      // Revert local state on error
-      fetchTickets();
       toast.error('Failed to send reply');
     } finally {
       setSubmitting(false);
@@ -447,7 +428,7 @@ const TicketManagement = () => {
                       </span>
                     </div>
 
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{ticket.description}</p>
+                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{ticket.message}</p>
 
                     <div className="flex items-center gap-6 text-xs text-gray-500">
                       <span className="font-medium">{ticket.studentName}</span>
@@ -535,7 +516,7 @@ const TicketManagement = () => {
                       {selectedTicket.createdAt?.toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-gray-700 whitespace-pre-wrap">{selectedTicket.description}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedTicket.message}</p>
                 </div>
               </div>
 
@@ -554,7 +535,7 @@ const TicketManagement = () => {
                           {response.from === 'student' ? 'Student' : 'Admin'}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {response.timestamp?.toDate?.()?.toLocaleString() || 'Just now'}
+                          {new Date(response.timestamp).toLocaleString()}
                         </span>
                       </div>
                       <p className="text-gray-700 whitespace-pre-wrap">{response.message}</p>

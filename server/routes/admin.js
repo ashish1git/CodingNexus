@@ -453,7 +453,20 @@ router.get('/tickets', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, tickets });
+    const mappedTickets = tickets.map(ticket => ({
+      ...ticket,
+      studentName: ticket.user?.studentProfile?.name || 'Unknown',
+      studentRollNo: ticket.user?.studentProfile?.rollNo || 'N/A',
+      responses: ticket.response ? (() => {
+        try {
+          return JSON.parse(ticket.response);
+        } catch (e) {
+          return [];
+        }
+      })() : []
+    }));
+
+    res.json({ success: true, tickets: mappedTickets });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -462,19 +475,66 @@ router.get('/tickets', async (req, res) => {
 // Update ticket
 router.put('/tickets/:id', async (req, res) => {
   try {
-    const { status, response } = req.body;
-
-    await prisma.supportTicket.update({
-      where: { id: req.params.id },
-      data: {
-        status,
-        response,
-        respondedBy: req.user.id,
-        respondedAt: new Date()
-      }
+    const { status, reply } = req.body;
+    
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id }
     });
 
-    res.json({ success: true });
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    const updateData = {};
+    
+    if (status) {
+      updateData.status = status;
+    }
+    
+    if (reply && reply.trim()) {
+      let responses = [];
+      if (ticket.response) {
+        try {
+          responses = JSON.parse(ticket.response);
+        } catch (e) {
+          responses = [];
+        }
+      }
+      
+      responses.push({
+        from: 'admin',
+        name: req.user.adminProfile?.name || 'Admin',
+        timestamp: new Date().toISOString(),
+        message: reply.trim()
+      });
+      
+      updateData.response = JSON.stringify(responses);
+    }
+    
+    updateData.respondedBy = req.user.id;
+    updateData.respondedAt = new Date();
+
+    const updatedTicket = await prisma.supportTicket.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
+
+    // Parse responses for response
+    const responseData = updatedTicket.response ? (() => {
+      try {
+        return JSON.parse(updatedTicket.response);
+      } catch (e) {
+        return [];
+      }
+    })() : [];
+
+    res.json({ 
+      success: true, 
+      data: {
+        ...updatedTicket,
+        responses: responseData
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

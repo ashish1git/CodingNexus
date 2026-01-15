@@ -31,12 +31,26 @@ const SupportTicket = () => {
     }
   }, [currentUser]);
 
+  // Update selected ticket when tickets refresh
+  useEffect(() => {
+    if (selectedTicket && tickets.length > 0) {
+      const updated = tickets.find(t => t.id === selectedTicket.id);
+      if (updated) {
+        setSelectedTicket(updated);
+      }
+    }
+  }, [tickets]);
+
   const fetchTickets = async () => {
     if (!currentUser) return;
     try {
       const response = await studentService.getTickets();
       if (response.success) {
-        setTickets(response.data);
+        const ticketsWithResponses = response.data.map(ticket => ({
+          ...ticket,
+          responses: ticket.responses || (ticket.response ? JSON.parse(ticket.response) : [])
+        }));
+        setTickets(ticketsWithResponses);
       } else {
         throw new Error(response.error || 'Failed to fetch tickets');
       }
@@ -63,7 +77,7 @@ const SupportTicket = () => {
     try {
       const response = await studentService.createTicket({
         subject: formData.subject,
-        description: formData.description,
+        message: formData.description,
         priority: formData.priority
       });
       
@@ -78,45 +92,6 @@ const SupportTicket = () => {
     } catch (error) {
       console.error('Error creating ticket:', error);
       toast.error('Failed to create ticket');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAddReply = async (e) => {
-    e.preventDefault();
-    if (!replyText.trim()) return;
-    setSubmitting(true);
-    try {
-      const response = await studentService.addTicketReply(selectedTicket.id, replyText);
-      
-      if (response.success) {
-        toast.success('Reply added successfully!');
-        setReplyText('');
-        fetchTickets();
-        
-        // Update selected ticket locally
-        const updatedTicket = tickets.find(t => t.id === selectedTicket.id);
-        if (updatedTicket) {
-          setSelectedTicket({
-            ...updatedTicket,
-            responses: [
-              ...(updatedTicket.responses || []),
-              {
-                from: 'student',
-                name: userDetails.name,
-                message: replyText,
-                timestamp: new Date()
-              }
-            ]
-          });
-        }
-      } else {
-        throw new Error(response.error || 'Failed to add reply');
-      }
-    } catch (error) {
-      console.error('Error adding reply:', error);
-      toast.error('Failed to add reply');
     } finally {
       setSubmitting(false);
     }
@@ -264,9 +239,9 @@ const SupportTicket = () => {
                         {ticket.priority.toUpperCase()}
                       </span>
                     </div>
-                    <p className="text-slate-400 text-xs sm:text-sm mb-3 line-clamp-2">{ticket.description}</p>
+                    <p className="text-slate-400 text-xs sm:text-sm mb-3 line-clamp-2">{ticket.message}</p>
                     <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-slate-500">
-                      <span>Created: {ticket.createdAt?.toLocaleDateString()}</span>
+                      <span>Created: {new Date(ticket.createdAt).toLocaleDateString()}</span>
                       {ticket.responses && ticket.responses.length > 0 && (
                         <span className="flex items-center gap-1">
                           <MessageCircle className="w-4 h-4" />
@@ -413,17 +388,18 @@ const SupportTicket = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-semibold text-white">You</span>
                     <span className="text-xs text-slate-400">
-                      {selectedTicket.createdAt?.toLocaleString()}
+                      {new Date(selectedTicket.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-slate-300 text-sm">{selectedTicket.description}</p>
+                  <p className="text-slate-300 text-sm">{selectedTicket.message}</p>
                 </div>
               </div>
 
-              {/* Responses */}
-              {selectedTicket.responses && selectedTicket.responses.length > 0 && (
+              {/* Admin Responses Only */}
+              {selectedTicket.responses && selectedTicket.responses.filter(r => r.from === 'admin').length > 0 && (
                 <div className="space-y-4 mb-6">
-                  {selectedTicket.responses.map((response, index) => (
+                  <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Admin Responses</div>
+                  {selectedTicket.responses.filter(r => r.from === 'admin').map((response, index) => (
                     <div
                       key={index}
                       className={`rounded-lg p-4 ${
@@ -440,7 +416,7 @@ const SupportTicket = () => {
                           {response.from === 'student' ? 'You' : 'Admin'}
                         </span>
                         <span className="text-xs text-slate-400">
-                          {response.timestamp?.toDate?.()?.toLocaleString() || 'Just now'}
+                          {new Date(response.timestamp).toLocaleString()}
                         </span>
                       </div>
                       <p className="text-slate-300 text-sm">{response.message}</p>
@@ -449,27 +425,11 @@ const SupportTicket = () => {
                 </div>
               )}
 
-              {/* Reply Form */}
+              {/* Reply Form Disabled for Students */}
               {selectedTicket.status !== 'closed' && (
-                <form onSubmit={handleAddReply} className="mt-6 pt-6 border-t border-slate-700">
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Add Reply</label>
-                  <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    rows="3"
-                    className="w-full px-4 py-2 border border-slate-600 bg-slate-700 text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition resize-none"
-                    placeholder="Type your message..."
-                    required
-                  ></textarea>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="mt-3 flex items-center gap-2 px-4 sm:px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm font-medium"
-                  >
-                    <Send className="w-4 h-4" />
-                    {submitting ? 'Sending...' : 'Send Reply'}
-                  </button>
-                </form>
+                <div className="mt-6 pt-6 border-t border-slate-700 bg-slate-700/30 rounded-lg p-4">
+                  <p className="text-slate-400 text-sm">Replies are disabled for students. Only admins can respond to tickets.</p>
+                </div>
               )}
 
               {selectedTicket.status === 'closed' && (

@@ -230,7 +230,18 @@ router.get('/tickets', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, data: tickets });
+    const ticketsWithResponses = tickets.map(ticket => ({
+      ...ticket,
+      responses: ticket.response ? (() => {
+        try {
+          return JSON.parse(ticket.response);
+        } catch (e) {
+          return [];
+        }
+      })() : []
+    }));
+
+    res.json({ success: true, data: ticketsWithResponses });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
