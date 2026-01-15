@@ -5,6 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
 import Loading from '../shared/Loading';
+import apiClient from '../../services/apiClient';
 
 const SubmissionEvaluator = () => {
   const { competitionId } = useParams();
@@ -90,20 +91,13 @@ const SubmissionEvaluator = () => {
   const fetchCompetitionData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
       // Fetch competition details
-      const compRes = await fetch(`http://localhost:5000/api/admin/competitions/${competitionId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const compData = await compRes.json();
+      const compData = await apiClient.get(`/admin/competitions/${competitionId}`);
       setCompetition(compData);
 
       // Fetch problems
-      const problemsRes = await fetch(`http://localhost:5000/api/competitions/${competitionId}/problems`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const problemsData = await problemsRes.json();
+      const problemsData = await apiClient.get(`/competitions/${competitionId}/problems`);
       setProblems(problemsData);
       
       if (problemsData.length > 0) {
@@ -124,12 +118,7 @@ const SubmissionEvaluator = () => {
   const fetchSubmissionsForProblem = async () => {
     try {
       setSubmissionsLoading(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/competitions/${competitionId}/problems/${selectedProblemId}/submissions`);
       setSubmissions(data);
       setFilteredSubmissions(data);
       setCurrentIndex(0);
@@ -150,12 +139,7 @@ const SubmissionEvaluator = () => {
 
   const fetchEvaluationHistory = async (submissionId) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${submissionId}/history`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${submissionId}/history`);
       setEvaluationHistory(data);
       setShowHistory(true);
     } catch (error) {
@@ -167,15 +151,10 @@ const SubmissionEvaluator = () => {
   const fetchEvaluatorActivity = async () => {
     try {
       setActivityLoading(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/evaluator-activity`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/competitions/${competitionId}/evaluator-activity`);
       
       // Handle error responses
-      if (!res.ok || !Array.isArray(data)) {
+      if (!Array.isArray(data)) {
         console.error('Evaluator activity error:', data);
         toast.error(data.error || 'Failed to load evaluator activity');
         setEvaluatorActivity([]);
@@ -198,12 +177,7 @@ const SubmissionEvaluator = () => {
 
   const fetchStudentsWithSubmissions = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/submissions`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/competitions/${competitionId}/submissions`);
       
       // Group by student
       const studentsMap = new Map();
@@ -230,12 +204,7 @@ const SubmissionEvaluator = () => {
 
   const fetchSubmissionsByStudent = async (studentId) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/submissions`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/competitions/${competitionId}/submissions`);
       
       // Find student's submissions
       const studentData = data.find(s => s.userId === studentId);
@@ -254,12 +223,7 @@ const SubmissionEvaluator = () => {
     if (!userId || evaluatorNames[userId]) return;
     
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `http://localhost:5000/api/admin/users/${userId}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const data = await res.json();
+      const data = await apiClient.get(`/admin/users/${userId}`);
       
       if (data.adminProfile) {
         setEvaluatorNames(prev => ({
@@ -274,7 +238,6 @@ const SubmissionEvaluator = () => {
 
   // Batch fetch multiple evaluator names at once
   const fetchMultipleEvaluatorNames = async (userIds) => {
-    const token = localStorage.getItem('token');
     const uncachedIds = userIds.filter(id => !evaluatorNames[id]);
     
     if (uncachedIds.length === 0) return;
@@ -282,9 +245,7 @@ const SubmissionEvaluator = () => {
     try {
       // Fetch all in parallel
       const promises = uncachedIds.map(userId => 
-        fetch(`http://localhost:5000/api/admin/users/${userId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json())
+        apiClient.get(`/admin/users/${userId}`)
       );
       
       const results = await Promise.all(promises);
@@ -320,27 +281,13 @@ const SubmissionEvaluator = () => {
     try {
       // Save to database
       setSavingEvaluation(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `http://localhost:5000/api/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${current.id}/evaluate`,
+      const responseData = await apiClient.post(
+        `/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${current.id}/evaluate`,
         {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            marks: marksNum,
-            comments: comments
-          })
+          marks: marksNum,
+          comments: comments
         }
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to save evaluation');
-      }
-
-      const responseData = await response.json();
 
       const key = `${current.userId}_${current.problemId}`;
       const newEvaluation = {

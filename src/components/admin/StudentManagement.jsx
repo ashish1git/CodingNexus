@@ -1,4 +1,3 @@
-// src/components/admin/StudentManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -8,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import apiClient from '../../services/apiClient';
 
 const StudentManagement = () => {
   const { userDetails } = useAuth();
@@ -85,19 +85,12 @@ const StudentManagement = () => {
    const email = `${formData.moodleId}@codingnexus.com`;
 
    // Use the admin endpoint to create student (auto-activated)
-   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-   const response = await fetch(`${API_URL}/admin/students`, {
-     method: 'POST',
-     headers: {
-       'Content-Type': 'application/json',
-       'Authorization': `Bearer ${localStorage.getItem('token')}`
-     },
-     body: JSON.stringify({
-       name: formData.name,
-       rollNo: formData.rollNo,
-       moodleId: formData.moodleId,
-       phone: formData.mobile,
-       batch: formData.batch,
+   const response = await apiClient.post('/admin/students', {
+     name: formData.name,
+     rollNo: formData.rollNo,
+     moodleId: formData.moodleId,
+     phone: formData.mobile,
+     batch: formData.batch,
        email: email,
        password: formData.password
      })
