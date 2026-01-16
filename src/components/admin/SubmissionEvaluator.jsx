@@ -273,8 +273,8 @@ const SubmissionEvaluator = () => {
     }
 
     const marksNum = parseFloat(marks);
-    if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-      toast.error('Marks must be between 0 and 100');
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > 10) {
+      toast.error('Marks must be between 0 and 10');
       return;
     }
 
@@ -872,7 +872,7 @@ const SubmissionEvaluator = () => {
                         <div>
                           <div className="text-xs text-gray-500 mb-1">Manual Marks</div>
                           <div className="text-2xl font-bold text-indigo-600">
-                            {currentSubmission.manualMarks} / 100
+                            {currentSubmission.manualMarks} / 10
                           </div>
                         </div>
                         <div>
@@ -1034,7 +1034,7 @@ const SubmissionEvaluator = () => {
                   {currentSubmission.isEvaluated && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-800">
-                        <strong>Previous marks:</strong> {currentSubmission.manualMarks}/100
+                        <strong>Previous marks:</strong> {currentSubmission.manualMarks}/10
                         {currentSubmission.evaluatedBy && evaluatorNames[currentSubmission.evaluatedBy] && (
                           <span className="ml-2">
                             by <strong>{evaluatorNames[currentSubmission.evaluatedBy]}</strong>
@@ -1051,16 +1051,17 @@ const SubmissionEvaluator = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Marks (out of 100)
+                        Marks (out of 10)
                       </label>
                       <input
                         type="number"
                         min="0"
-                        max="100"
+                        max="10"
+                        step="0.5"
                         value={marks}
                         onChange={(e) => setMarks(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-400"
-                        placeholder="Enter marks (0-100)"
+                        placeholder="Enter marks (0-10)"
                       />
                     </div>
                     <div>

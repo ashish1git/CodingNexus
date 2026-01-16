@@ -6,6 +6,9 @@ import Card from '../shared/Card';
 import '../../styles/globals.css';
 
 export const CompetitionResults = () => {
+  // LEADERBOARD FEATURE FLAG: Set to false to disable leaderboard tab
+  const ENABLE_LEADERBOARD = false;
+  
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -168,16 +171,18 @@ export const CompetitionResults = () => {
             >
               My Results
             </button>
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-                activeTab === 'leaderboard'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Leaderboard
-            </button>
+            {ENABLE_LEADERBOARD && (
+              <button
+                onClick={() => setActiveTab('leaderboard')}
+                className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                  activeTab === 'leaderboard'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Leaderboard
+              </button>
+            )}
           </div>
         </div>
 
@@ -214,10 +219,10 @@ export const CompetitionResults = () => {
                       <p className="text-sm text-gray-600">Total Score</p>
                       <p className="text-2xl font-bold text-gray-900">{mySubmission.totalScore || 0}</p>
                     </div>
-                    <div>
+                    {/* <div>
                       <p className="text-sm text-gray-600">Total Time</p>
                       <p className="text-lg font-semibold text-gray-900">{formatTime(mySubmission.totalTime)}</p>
-                    </div>
+                    </div> */}
                     <div>
                       <p className="text-sm text-gray-600">Submitted At</p>
                       <p className="text-sm text-gray-900">
@@ -251,32 +256,34 @@ export const CompetitionResults = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(problem.status)}`}>
-                            {getStatusIcon(problem.status)} {problem.status}
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(problem.isEvaluated ? 'accepted' : problem.status)}`}>
+                            {getStatusIcon(problem.isEvaluated ? 'accepted' : problem.status)} {problem.isEvaluated ? 'accepted' : problem.status}
                           </span>
                         </div>
                       </div>
 
                       {/* Score and Stats */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 bg-gray-50 p-4 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 bg-gray-50 p-4 rounded-lg">
                         <div>
                           <p className="text-xs text-gray-600">Score</p>
                           <p className="text-lg font-bold text-gray-900">
-                            {problem.score}/{problem.maxScore}
+                            {problem.isEvaluated && problem.manualMarks !== null 
+                              ? `${problem.manualMarks}/10` 
+                              : `${problem.score}/10`}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-gray-600">Status</p>
                           <p className="text-sm font-semibold text-gray-900">
-                            {problem.status}
+                            {problem.isEvaluated ? 'accepted' : problem.status}
                           </p>
                         </div>
-                        <div>
+                        {/* <div>
                           <p className="text-xs text-gray-600">Execution Time</p>
                           <p className="text-sm font-semibold text-gray-900">
                             {formatTime(problem.executionTime)}
                           </p>
-                        </div>
+                        </div> */}
                         <div>
                           <p className="text-xs text-gray-600">Submitted At</p>
                           <p className="text-xs text-gray-900">
@@ -316,7 +323,7 @@ export const CompetitionResults = () => {
                           <div className="space-y-2">
                             <div>
                               <p className="text-xs text-blue-700 font-medium">Marks Given:</p>
-                              <p className="text-2xl font-bold text-blue-900">{problem.manualMarks}/100</p>
+                              <p className="text-2xl font-bold text-blue-900">{problem.manualMarks}/10</p>
                             </div>
                             {problem.evaluatorComments ? (
                               <div>
@@ -342,7 +349,7 @@ export const CompetitionResults = () => {
         )}
 
         {/* Leaderboard Tab */}
-        {activeTab === 'leaderboard' && (
+        {ENABLE_LEADERBOARD && activeTab === 'leaderboard' && (
           <Card className="p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Leaderboard</h2>
             {leaderboard.length === 0 ? (
@@ -364,12 +371,12 @@ export const CompetitionResults = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                         Score
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                         Problems Solved
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      </th> */}
+                      {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                         Time
-                      </th>
+                      </th> */}
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                         Submitted At
                       </th>
@@ -408,12 +415,12 @@ export const CompetitionResults = () => {
                             {entry.totalScore}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {entry.problemsSolved}/{entry.totalProblems}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        </td> */}
+                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {formatTime(entry.executionTime)}
-                        </td>
+                        </td> */}
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
                           {new Date(entry.submittedAt).toLocaleString()}
                         </td>

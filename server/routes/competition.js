@@ -215,7 +215,8 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       rollNo: sub.user.studentProfile?.rollNo,
       batch: sub.user.studentProfile?.batch,
       totalScore: sub.totalScore,
-      problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted').length,
+      // Count problems that are either accepted OR evaluated (have score > 0)
+      problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted' || p.score > 0).length,
       totalProblems: sub.problemSubmissions.length,
       executionTime: sub.totalTime,
       submittedAt: sub.submittedAt
