@@ -179,7 +179,12 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
     const submissions = await prisma.competitionSubmission.findMany({
       where: {
         competitionId: id,
-        status: 'completed'
+        status: 'completed',
+        user: {
+          email: {
+            notIn: ['23106064@student.mu.ac.in', '23106031@student.mu.ac.in']
+          }
+        }
       },
       include: {
         user: {

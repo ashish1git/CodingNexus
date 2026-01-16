@@ -7,7 +7,7 @@ import '../../styles/globals.css';
 
 export const CompetitionResults = () => {
   // LEADERBOARD FEATURE FLAG: Set to false to disable leaderboard tab
-  const ENABLE_LEADERBOARD = false;
+  const ENABLE_LEADERBOARD = true;
   
   const { id } = useParams();
   const navigate = useNavigate();
