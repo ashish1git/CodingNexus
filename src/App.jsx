@@ -39,6 +39,9 @@ import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 
+// Shared/Other components
+import ClubMembers from './components/shared/ClubMembers';
+
 function App() {
   return (
     <ThemeProvider>
@@ -68,6 +71,9 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
+              
+              {/* Club Members Page - Share this route directly with selected members */}
+              <Route path="/club-members" element={<ClubMembers />} />
 
               {/* Student Protected Routes */}
               <Route 
