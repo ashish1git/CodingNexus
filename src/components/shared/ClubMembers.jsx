@@ -63,6 +63,7 @@ const ClubMembers = () => {
       { name: 'Shruti Mishra', year: 'SE-B', branch: 'CSE-AIML' },
       { name: 'Yashwant injapuri ', year: 'SE-B', branch: 'CSE-AIML' },
       { name: 'Riya bachhar', year: 'SE-B', branch: 'CSE-AIML' },
+      { name: 'Akshat Mukawwar ', year: 'SE-A', branch: 'CSE-AIML' },
       // Add more learners here following the same format
       // { name: 'Your Name', year: 'Year', branch: 'Branch' },
     ],
