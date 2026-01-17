@@ -182,7 +182,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
         status: 'completed',
         user: {
           email: {
-            notIn: ['23106064@student.mu.ac.in', '23106031@student.mu.ac.in']
+            notIn: ['23106064@student.mu.ac.in', '23106031@student.mu.ac.in', '23106025@student.mu.ac.in']
           }
         }
       },

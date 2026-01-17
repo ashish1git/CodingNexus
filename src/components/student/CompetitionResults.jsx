@@ -58,7 +58,12 @@ export const CompetitionResults = () => {
       // Load leaderboard
       const lbResponse = await competitionService.getLeaderboard(id);
       console.log('Leaderboard response:', lbResponse);
-      setLeaderboard(Array.isArray(lbResponse) ? lbResponse : []);
+      // Filter out excluded students (additional safety layer)
+      const excludedRollNos = ['23106025', '23106064', '23106031'];
+      const filteredLeaderboard = Array.isArray(lbResponse) 
+        ? lbResponse.filter(entry => !excludedRollNos.includes(entry.rollNo))
+        : [];
+      setLeaderboard(filteredLeaderboard);
     } catch (error) {
       console.error('Error loading results:', error);
     } finally {
