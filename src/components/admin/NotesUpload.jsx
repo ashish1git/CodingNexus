@@ -117,7 +117,8 @@ const handleUpload = async (e) => {
     const cloudinaryResult = await uploadToCloudinary(
       formData.file, 
       'codingnexus/notes',
-      formData.title // Pass title as custom filename
+      formData.title, // Pass title as custom filename
+      'notes' // Upload type for notes preset
     );
     
     toast.success('File uploaded successfully!', { id: 'upload' });

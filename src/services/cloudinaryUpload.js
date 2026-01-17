@@ -3,7 +3,8 @@ import toast from 'react-hot-toast';
 
 // Get Cloudinary configuration (only use import.meta.env for Vite)
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET; // For profile photos
+const NOTES_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_NOTES_PRESET; // For notes files
 
 // Validate configuration
 export const validateCloudinaryConfig = () => {
@@ -27,6 +28,11 @@ export const validateCloudinaryConfig = () => {
 // Check if Cloudinary is configured
 export const isCloudinaryConfigured = () => {
   return !!CLOUD_NAME && !!UPLOAD_PRESET;
+};
+
+// Check if Cloudinary is configured for notes
+export const isCloudinaryNotesConfigured = () => {
+  return !!CLOUD_NAME && !!NOTES_UPLOAD_PRESET;
 };
 
 // Helper to determine if file is a PDF (can use image resource type)
@@ -61,22 +67,27 @@ const isDocumentFile = (file) => {
 };
 
 // Main upload function
-export const uploadToCloudinary = async (file, folder = 'codingnexus/notes', customFileName = null) => {
+export const uploadToCloudinary = async (file, folder = 'codingnexus/notes', customFileName = null, uploadType = 'photo') => {
   try {
     console.log('=== CLOUDINARY UPLOAD START ===');
     console.log('File:', {
       name: file.name,
       size: file.size,
       type: file.type,
-      customFileName: customFileName
+      customFileName: customFileName,
+      uploadType: uploadType
     });
 
     if (!CLOUD_NAME) {
       throw new Error('Cloudinary Cloud Name is not set in environment variables');
     }
     
-    if (!UPLOAD_PRESET) {
-      throw new Error('Cloudinary Upload Preset is not set in environment variables');
+    // Use appropriate preset based on upload type
+    const preset = uploadType === 'notes' ? NOTES_UPLOAD_PRESET : UPLOAD_PRESET;
+    
+    if (!preset) {
+      const presetName = uploadType === 'notes' ? 'VITE_CLOUDINARY_NOTES_PRESET' : 'VITE_CLOUDINARY_UPLOAD_PRESET';
+      throw new Error(`Cloudinary ${presetName} is not set in environment variables`);
     }
 
     // CRITICAL: Upload PDFs as "image" resource type so they support transformations
@@ -105,7 +116,7 @@ export const uploadToCloudinary = async (file, folder = 'codingnexus/notes', cus
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
+    formData.append('upload_preset', preset);
     formData.append('folder', folder);
     
     // Use custom filename if provided (for better readability)
