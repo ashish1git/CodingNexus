@@ -125,14 +125,23 @@ router.get('/students', async (req, res) => {
 
     res.json({ 
       success: true, 
-      students: students.map(u => ({
-        id: u.id,
-        email: u.email,
-        moodleId: u.moodleId,
-        isActive: u.isActive,
-        ...u.studentProfile,
-        createdAt: u.createdAt
-      }))
+      students: students.map(u => {
+        const student = u.studentProfile || {};
+        return {
+          id: u.id,
+          userId: u.id,
+          studentId: student.id,
+          email: u.email,
+          moodleId: u.moodleId,
+          isActive: u.isActive,
+          name: student.name,
+          rollNo: student.rollNo,
+          batch: student.batch,
+          phone: student.phone,
+          profilePhotoUrl: student.profilePhotoUrl,
+          createdAt: u.createdAt
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -153,12 +162,19 @@ router.put('/students/:id', async (req, res) => {
       });
     }
 
-    // Update profile
-    await prisma.student.update({
+    // Update or create student profile
+    await prisma.student.upsert({
       where: { userId: id },
-      data: {
+      update: {
         name,
         batch,
+        phone,
+        profilePhotoUrl
+      },
+      create: {
+        userId: id,
+        name: name || 'Student',
+        batch: batch || 'Basic',
         phone,
         profilePhotoUrl
       }
@@ -211,7 +227,16 @@ router.post('/notes', async (req, res) => {
   try {
     const { title, description, fileUrl, batch, subject } = req.body;
 
-    await prisma.note.create({
+    // Extract file format from URL or default to pdf
+    let fileFormat = 'pdf';
+    if (fileUrl && fileUrl.includes('.')) {
+      const match = fileUrl.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+      if (match) {
+        fileFormat = match[1].toLowerCase();
+      }
+    }
+
+    const note = await prisma.note.create({
       data: {
         title,
         description,
@@ -222,7 +247,15 @@ router.post('/notes', async (req, res) => {
       }
     });
 
-    res.json({ success: true });
+    // Return note with additional computed fields for frontend
+    res.json({ 
+      success: true,
+      note: {
+        ...note,
+        fileFormat,
+        fileName: title + '.' + fileFormat
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -234,7 +267,48 @@ router.get('/notes', async (req, res) => {
     const notes = await prisma.note.findMany({
       orderBy: { uploadedAt: 'desc' }
     });
-    res.json({ success: true, notes });
+    
+    // Get admin names for each note
+    const enrichedNotes = await Promise.all(notes.map(async (note) => {
+      let fileFormat = 'pdf';
+      if (note.fileUrl && note.fileUrl.includes('.')) {
+        const match = note.fileUrl.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+        if (match) {
+          fileFormat = match[1].toLowerCase();
+        }
+      }
+      
+      // Get admin details
+      let uploadedByName = 'Unknown';
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: note.uploadedBy },
+          select: {
+            email: true,
+            adminProfile: {
+              select: { name: true }
+            }
+          }
+        });
+        
+        if (user?.adminProfile?.name) {
+          uploadedByName = user.adminProfile.name;
+        } else if (user?.email) {
+          uploadedByName = user.email.split('@')[0];
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+      
+      return {
+        ...note,
+        fileFormat,
+        fileName: note.title + '.' + fileFormat,
+        uploadedByName
+      };
+    }));
+    
+    res.json({ success: true, notes: enrichedNotes });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -59,7 +59,7 @@ const ClubMembers = () => {
     learners: [
       { name: 'Maitreya bhatkhande', year: 'SE-A', branch: 'CSE-AIML' },
       { name: 'Siddhesh Kite', year: 'SE-B', branch: 'CSE-AIML' },
-      { name: 'Siddhi Jedhge', year: 'SE-A', branch: 'CSE-AIML' },
+      { name: 'Siddhi Jedhe', year: 'SE-A', branch: 'CSE-AIML' },
       { name: 'Shruti Mishra', year: 'SE-B', branch: 'CSE-AIML' },
       { name: 'Yashwant injapuri ', year: 'SE-B', branch: 'CSE-AIML' },
       { name: 'Riya bachhar', year: 'SE-B', branch: 'CSE-AIML' },

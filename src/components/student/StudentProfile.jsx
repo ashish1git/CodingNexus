@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -8,9 +8,9 @@ import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 
 const StudentProfile = () => {
-  const { userDetails, currentUser } = useAuth();
+  const { userDetails, currentUser, refreshUser } = useAuth();
   const [uploading, setUploading] = useState(false);
-  const [photoURL, setPhotoURL] = useState(userDetails?.photoURL || null);
+  const [photoURL, setPhotoURL] = useState(userDetails?.profilePhotoUrl || userDetails?.photoURL || null);
   const [showCropModal, setShowCropModal] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -20,7 +20,18 @@ const StudentProfile = () => {
   const canvasRef = useRef(null);
 
   const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const UPLOAD_PRESET = import.meta.env. VITE_CLOUDINARY_UPLOAD_PRESET;
+  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  // Sync photoURL with userDetails whenever it changes
+  useEffect(() => {
+    const newPhotoUrl = userDetails?.studentProfile?.profilePhotoUrl || userDetails?.profilePhotoUrl || userDetails?.photoURL || null;
+    setPhotoURL(newPhotoUrl);
+  }, [userDetails?.studentProfile?.profilePhotoUrl, userDetails?.profilePhotoUrl]);
+
+  // Refresh user data on mount to get latest profile info (in case admin updated it)
+  useEffect(() => {
+    refreshUser();
+  }, []);
 
   const validateFile = (file) => {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
@@ -104,24 +115,35 @@ const StudentProfile = () => {
       toast.loading('Uploading profile photo... ', { id: 'upload' });
 
       const formData = new FormData();
-      formData.append('file', blob, 'profile. jpg');
+      formData.append('file', blob, 'profile.jpg');
       formData.append('upload_preset', UPLOAD_PRESET);
-      formData.append('folder', 'codingnexus/profiles');
+
+      console.log('📤 Uploading with:', { CLOUD_NAME, UPLOAD_PRESET });
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
         { method: 'POST', body:  formData }
       );
 
-      if (! response.ok) throw new Error('Upload failed');
+      if (! response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Cloudinary error:', errorData);
+        throw new Error('Upload failed');
+      }
 
       const data = await response.json();
       const newPhotoUrl = data.secure_url;
 
       // Update profile photo using studentService
       await studentService.updateProfile({
-        photoURL: newPhotoUrl
+        profilePhotoUrl: newPhotoUrl
       });
+
+      // Refresh user data to reflect the new photo
+      await refreshUser();
+
+      console.log('📸 Profile photo update complete');
+      console.log('✅ Updated userDetails:', userDetails);
 
       setPhotoURL(newPhotoUrl);
       setShowCropModal(false);

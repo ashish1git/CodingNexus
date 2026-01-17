@@ -109,8 +109,17 @@ const NotesViewer = () => {
   };
 
   const handleDownload = (note) => {
-    if (note.fileURL) {
-      window.open(note.fileURL, '_blank');
+    const fileUrl = note.fileUrl || note.fileURL;
+    if (fileUrl) {
+      // Add fl_attachment for PDFs to force download
+      let downloadUrl = fileUrl;
+      if (fileUrl.includes('cloudinary.com') && fileUrl.includes('/image/upload/')) {
+        const parts = fileUrl.split('/upload/');
+        if (parts.length === 2) {
+          downloadUrl = `${parts[0]}/upload/fl_attachment/${parts[1]}`;
+        }
+      }
+      window.open(downloadUrl, '_blank');
       toast.success('Download started!');
     } else {
       toast.error('File not available');
@@ -285,9 +294,9 @@ const NotesViewer = () => {
                       <span>Download</span>
                     </button>
                     
-                    {note.fileURL && (
+                    {(note.fileUrl || note.fileURL) && (
                       <button
-                        onClick={() => window.open(note.fileURL, '_blank')}
+                        onClick={() => window.open(note.fileUrl || note.fileURL, '_blank')}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition text-xs sm:text-sm font-medium"
                         title="Preview"
                       >
@@ -299,10 +308,10 @@ const NotesViewer = () => {
                 </div>
 
                 {/* Footer */}
-                {note.uploadedBy && (
+                {(note.uploadedBy || note.uploadedByName) && (
                   <div className="px-4 sm:px-6 py-2 sm:py-3 bg-slate-700/50 border-t border-slate-700">
                     <p className="text-xs text-slate-400 truncate">
-                      Uploaded by <span className="font-medium text-slate-300">{note.uploadedBy}</span>
+                      Uploaded by <span className="font-medium text-slate-300">{note.uploadedByName || note.uploadedBy || 'Unknown'}</span>
                     </p>
                   </div>
                 )}

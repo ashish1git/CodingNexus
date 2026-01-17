@@ -128,10 +128,10 @@ const handleUpload = async (e) => {
       title: formData.title.trim(),
       description: formData.description.trim(),
       batch: formData.batch,
-      fileURL: cloudinaryResult.url,
+      fileUrl: cloudinaryResult.url,
       publicId: cloudinaryResult.publicId,
-      fileName: formData.file.name, // Original filename
-      displayName: cloudinaryResult.displayName, // User-friendly name
+      fileName: formData.file.name,
+      displayName: cloudinaryResult.displayName,
       fileSize: cloudinaryResult.bytes,
       fileFormat: cloudinaryResult.format,
       resourceType: cloudinaryResult.resourceType
@@ -199,35 +199,23 @@ const handleUpload = async (e) => {
 
   const handleDownload = async (note) => {
   console.log('📥 Download button clicked');
-  console.log('File URL:', note.fileURL);
-  console.log('Resource Type:', note.resourceType);
+  console.log('File URL:', note.fileUrl);
   
-  // Generate user-friendly filename from title
   const downloadFileName = getDownloadFileName(note.title, note.fileFormat);
   
   try {
-    // For PDFs (uploaded as image type) - use fl_attachment
-    if (note.fileURL.includes('/image/upload/')) {
-      const downloadUrl = getDownloadUrl(note.fileURL);
-      console.log('Download URL (PDF):', downloadUrl);
-      
-      // For PDFs, we need to fetch and rename
-      toast.loading('Preparing download...', { id: 'download' });
+    toast.loading('Preparing download...', { id: 'download' });
+    
+    // For Cloudinary files (PDFs uploaded as images)
+    if (note.fileUrl.includes('cloudinary.com')) {
+      const downloadUrl = getDownloadUrl(note.fileUrl);
+      console.log('Download URL:', downloadUrl);
       await downloadRawFile(downloadUrl, downloadFileName);
-      toast.success('Download complete!', { id: 'download' });
-    } 
-    // For raw files (DOCX, PPTX, etc.) - use fetch method
-    else if (note.fileURL.includes('/raw/upload/')) {
-      toast.loading('Preparing download...', { id: 'download' });
-      await downloadRawFile(note.fileURL, downloadFileName);
-      toast.success('Download complete!', { id: 'download' });
+    } else {
+      await downloadRawFile(note.fileUrl, downloadFileName);
     }
-    // For regular images
-    else {
-      toast.loading('Preparing download...', { id: 'download' });
-      await downloadRawFile(note.fileURL, downloadFileName);
-      toast.success('Download complete!', { id: 'download' });
-    }
+    
+    toast.success('Download complete!', { id: 'download' });
   } catch (error) {
     console.error('Download error:', error);
     toast.error('Download failed. Please try again.', { id: 'download' });
@@ -235,7 +223,7 @@ const handleUpload = async (e) => {
 };
 
   const handlePreview = (note) => {
-    const previewUrl = getPreviewUrl(note.fileURL);
+    const previewUrl = getPreviewUrl(note.fileUrl);
     window.open(previewUrl, '_blank');
   };
 
@@ -463,7 +451,7 @@ const handleUpload = async (e) => {
                         
                         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 mb-4">
                           <span>📎 {note.fileName}</span>
-                          <span>👤 {note.uploadedBy}</span>
+                          <span>👤 {note.uploadedByName || note.uploadedBy || 'Unknown'}</span>
                           <span>📅 {note.createdAt?.toLocaleDateString()}</span>
                         </div>
                         

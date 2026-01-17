@@ -134,7 +134,7 @@ const StudentManagement = () => {
     try {
       const response = await adminService.updateStudent(selectedStudent.id, {
         name: formData.name,
-        mobile: formData.mobile,
+        phone: formData.mobile,
         batch: formData.batch
       });
 
@@ -182,11 +182,11 @@ const StudentManagement = () => {
   const openEditModal = (student) => {
     setSelectedStudent(student);
     setFormData({
-      name: student.name,
-      rollNo: student.rollNo,
-      moodleId: student.moodleId,
-      mobile: student.mobile,
-      batch: student.batch,
+      name: student.name || '',
+      rollNo: student.rollNo || '',
+      moodleId: student.moodleId || '',
+      mobile: student.phone || student.mobile || '',
+      batch: student.batch || 'Basic',
       password: ''
     });
     setShowEditModal(true);
@@ -345,21 +345,21 @@ const StudentManagement = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          {student.photoURL ? (
+                          {student.profilePhotoUrl || student.photoURL ? (
                             <img
                               className="h-10 w-10 rounded-full object-cover"
-                              src={student.photoURL}
+                              src={student.profilePhotoUrl || student.photoURL}
                               alt=""
                             />
                           ) : (
                             <div className="h-10 w-10 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold">
-                              {student.name.charAt(0)}
+                              {(student.name || student.email || 'S')?.charAt(0)?.toUpperCase()}
                             </div>
                           )}
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                          <div className="text-sm text-gray-500">{student.email}</div>
+                          <div className="text-sm font-medium text-gray-900">{student.name || 'N/A'}</div>
+                          <div className="text-sm text-gray-500">{student.email || 'N/A'}</div>
                         </div>
                       </div>
                     </td>
@@ -422,21 +422,21 @@ const StudentManagement = () => {
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="flex-shrink-0">
-                    {student.photoURL ? (
+                    {student.profilePhotoUrl || student.photoURL ? (
                       <img
                         className="h-12 w-12 rounded-full object-cover"
-                        src={student.photoURL}
+                        src={student.profilePhotoUrl || student.photoURL}
                         alt=""
                       />
                     ) : (
                       <div className="h-12 w-12 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                        {student.name.charAt(0)}
+                        {(student.name || student.email || 'S')?.charAt(0)?.toUpperCase()}
                       </div>
                     )}
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">{student.name}</h3>
-                    <p className="text-xs text-gray-500">{student.email}</p>
+                    <h3 className="text-sm font-semibold text-gray-900">{student.name || 'N/A'}</h3>
+                    <p className="text-xs text-gray-500">{student.email || 'N/A'}</p>
                   </div>
                 </div>
                 <span className={`px-2 py-1 text-xs font-semibold rounded-full ${

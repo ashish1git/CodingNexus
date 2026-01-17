@@ -9,7 +9,7 @@ import { studentService } from '../../services/studentService';
 import toast from 'react-hot-toast';
 
 const StudentDashboard = () => {
-  const { userDetails, logout, currentUser } = useAuth();
+  const { userDetails, logout, currentUser, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [stats, setStats] = useState({
@@ -54,6 +54,8 @@ const StudentDashboard = () => {
   };
 
   useEffect(() => {
+    // Refresh user data on mount to get latest profile info (in case admin updated it)
+    refreshUser();
     fetchDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userDetails, currentUser]);
@@ -212,9 +214,9 @@ const StudentDashboard = () => {
               onClick={() => setIsSidebarOpen(false)}
             >
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden ring-2 ring-indigo-500/50 border border-indigo-400/30">
-                {userDetails?.photoURL ? (
+                {userDetails?.studentProfile?.profilePhotoUrl || userDetails?.photoURL ? (
                   <img
-                    src={userDetails.photoURL}
+                    src={userDetails?.studentProfile?.profilePhotoUrl || userDetails?.photoURL}
                     alt="Profile"
                     className="w-full h-full object-cover"
                     onError={(e) => {
