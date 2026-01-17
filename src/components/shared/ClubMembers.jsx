@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Users, Code, Palette, Briefcase, BookOpen, Sparkles, Award, Star, Zap } from 'lucide-react';
+import { Users, Code, Palette, Briefcase, BookOpen, Sparkles, Award, Star, Zap, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Club Members Page - Static page for displaying appointed club members
@@ -14,6 +15,7 @@ const ClubMembers = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const [confettiPieces, setConfettiPieces] = useState([]);
   const animatedCards = useRef({}); // Track which cards have already been animated
+  const navigate = useNavigate();
 
   // Welcome screen auto-dismiss
   useEffect(() => {
@@ -213,6 +215,14 @@ const ClubMembers = () => {
       {/* Main Content */}
       <div className="relative z-10 py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => navigate('/')}
+            className="mb-8 inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg hover:shadow-xl hover:bg-white transition-all duration-300 transform hover:scale-105 active:scale-95"
+          >
+            <ArrowLeft className="w-5 h-5 text-blue-600" />
+            <span className="text-gray-700 font-semibold">Back to Home</span>
+          </button>
           {/* Header Section with animation */}
           <div className="text-center mb-8 sm:mb-12 lg:mb-16 animate-fade-in-up">
             <div className="inline-block mb-6">
