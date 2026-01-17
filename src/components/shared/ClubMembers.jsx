@@ -70,7 +70,7 @@ const ClubMembers = () => {
 
     // Design Team - Responsible for UI/UX, graphics, and visual content
     design: [
-      { name: 'Akansha Kanojiya', role: 'Graphic Designer', specialization: 'Posters & Social Media' },
+      { name: 'Akansha Kannojiya', role: 'Graphic Designer', specialization: 'Posters & Social Media' },
       // Add more design team members here
       // { name: 'Your Name', role: 'Your Role', specialization: 'Your Area' },
     ],
