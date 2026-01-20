@@ -140,10 +140,30 @@ const StudentManagement = () => {
 
       if (response.success) {
         toast.success('Student updated successfully!');
+        
+        // Update local state immediately if backend returned the updated student
+        if (response.student) {
+          setStudents(prevStudents =>
+            prevStudents.map(s =>
+              s.id === selectedStudent.id
+                ? {
+                    ...s,
+                    name: response.student.name || s.name,
+                    batch: response.student.batch || s.batch,
+                    phone: response.student.phone || s.phone,
+                    mobile: response.student.phone || s.mobile
+                  }
+                : s
+            )
+          );
+        } else {
+          // Fallback: refetch if no student data in response
+          await fetchStudents();
+        }
+        
         setShowEditModal(false);
         resetForm();
         setSelectedStudent(null);
-        fetchStudents();
       } else {
         toast.error(response.error || 'Failed to update student');
       }
