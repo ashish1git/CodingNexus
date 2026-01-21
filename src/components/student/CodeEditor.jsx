@@ -1,7 +1,7 @@
 // src/components/student/CodeEditor.jsx
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, Play, X } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
 
@@ -279,7 +279,16 @@ int main(){
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-lg flex flex-col">
             <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
               <span className="text-sm font-semibold text-slate-300">Standard Input</span>
-              <span className="text-xs text-slate-500">stdin</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">stdin</span>
+                <button
+                  onClick={() => setInput('')}
+                  className="p-1 hover:bg-slate-700/50 rounded transition-colors"
+                  title="Clear input"
+                >
+                  <X className="w-3.5 h-3.5 text-slate-400 hover:text-red-400" />
+                </button>
+              </div>
             </div>
             <textarea
               className="code-editor-input flex-1 bg-black p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
@@ -294,7 +303,16 @@ int main(){
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-lg flex flex-col">
             <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
               <span className="text-sm font-semibold text-slate-300">Output</span>
-              <span className="text-xs text-slate-500">stdout</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">stdout</span>
+                <button
+                  onClick={() => setOutput('')}
+                  className="p-1 hover:bg-slate-700/50 rounded transition-colors"
+                  title="Clear output"
+                >
+                  <X className="w-3.5 h-3.5 text-slate-400 hover:text-red-400" />
+                </button>
+              </div>
             </div>
             <pre className="flex-1 bg-slate-900/50 text-slate-200 p-3 text-sm font-mono overflow-auto">
               {output || <span className="text-slate-500">Run code to see output</span>}
