@@ -171,6 +171,13 @@ select {
   caret-color: #111827 !important;
 }
 
+/* Code Editor Input Override */
+.code-editor-input {
+  color: #67e8f9 !important;
+  caret-color: #67e8f9 !important;
+  -webkit-text-fill-color: #67e8f9 !important;
+}
+
 input::selection,
 textarea::selection {
   background-color: #3b82f6 !important;

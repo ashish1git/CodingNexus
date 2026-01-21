@@ -282,10 +282,11 @@ int main(){
               <span className="text-xs text-slate-500">stdin</span>
             </div>
             <textarea
-              className="flex-1 bg-slate-900/50 text-white p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none placeholder:text-slate-500"
+              className="code-editor-input flex-1 bg-black p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
               placeholder="Enter input here..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              style={{ color: '#67e8f9', WebkitTextFillColor: '#67e8f9' }}
             />
           </div>
 
