@@ -154,7 +154,7 @@ router.put('/students/:id', async (req, res) => {
     const { id } = req.params;
     const { name, batch, phone, profilePhotoUrl, isActive } = req.body;
 
-    // Update user if isActive is provided
+    // Update user
     if (isActive !== undefined) {
       await prisma.user.update({
         where: { id },
@@ -163,13 +163,13 @@ router.put('/students/:id', async (req, res) => {
     }
 
     // Update or create student profile
-    const updatedStudent = await prisma.student.upsert({
+    await prisma.student.upsert({
       where: { userId: id },
       update: {
-        ...(name && { name }),
-        ...(batch && { batch }),
-        ...(phone && { phone }),
-        ...(profilePhotoUrl && { profilePhotoUrl })
+        name,
+        batch,
+        phone,
+        profilePhotoUrl
       },
       create: {
         userId: id,
@@ -180,28 +180,7 @@ router.put('/students/:id', async (req, res) => {
       }
     });
 
-    // Return updated data
-    const user = await prisma.user.findUnique({
-      where: { id },
-      include: { studentProfile: true }
-    });
-
-    res.json({ 
-      success: true,
-      student: {
-        id: user.id,
-        userId: user.id,
-        email: user.email,
-        moodleId: user.moodleId,
-        isActive: user.isActive,
-        name: user.studentProfile?.name,
-        rollNo: user.studentProfile?.rollNo,
-        batch: user.studentProfile?.batch,
-        phone: user.studentProfile?.phone,
-        profilePhotoUrl: user.studentProfile?.profilePhotoUrl,
-        createdAt: user.createdAt
-      }
-    });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -83,8 +83,8 @@ function registerJavaSnippets(monaco) {
 const CodeEditor = () => {
   const editorRef = useRef(null);
 
-  const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState(getDefaultCode('javascript'));
+  const [language, setLanguage] = useState('java');
+  const [code, setCode] = useState(getDefaultCode('java'));
   const [output, setOutput] = useState('');
   const [input, setInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -172,88 +172,133 @@ int main(){
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden">
 
-      {/* ===== NAVBAR (FIXED & COMPACT) ===== */}
-      <div className="bg-gray-800 border-b border-gray-700 h-14 flex items-center">
-        <div className="max-w-7xl mx-auto w-full px-4 grid grid-cols-3 items-center">
+      {/* ===== NAVBAR (SLEEK & PROFESSIONAL) ===== */}
+      <div className="bg-slate-800/90 backdrop-blur-sm border-b border-slate-700/50 shadow-lg z-50">
+        <div className="max-w-[1920px] mx-auto px-6 h-14 flex items-center justify-between">
           
-          {/* Left */}
-          <Link to="/student/dashboard" className="flex items-center gap-2 text-gray-300 hover:text-white">
-            <ArrowLeft size={18} />
-            Back
+          {/* Left - Back Button */}
+          <Link 
+            to="/student/dashboard" 
+            className="flex items-center gap-2 text-slate-300 hover:text-indigo-400 transition-colors font-medium"
+          >
+            <ArrowLeft size={20} />
+            <span className="hidden sm:inline">Back</span>
           </Link>
 
-          {/* Center */}
-          <div className="text-center font-bold text-lg">
-            <span className="text-blue-500">Coding Nexus</span>{' '}
-            <span className="text-white">Online Code Compiler</span>
+          {/* Center - Title */}
+          <div className="text-center">
+            <h1 className="font-bold text-lg sm:text-xl">
+              <span className="bg-gradient-to-r from-indigo-400 to-blue-500 bg-clip-text text-transparent">
+                Coding Nexus
+              </span>
+              <span className="text-slate-200 ml-2 hidden md:inline">Online Code Compiler</span>
+            </h1>
           </div>
 
-          {/* Right (empty for balance) */}
-          <div></div>
+          {/* Right - Language Selector */}
+          <div className="flex items-center gap-2">
+            {languages.map(l => (
+              <button
+                key={l.value}
+                onClick={() => handleLanguageChange(l.value)}
+                className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-all duration-200 ${
+                  language === l.value 
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                {l.icon}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {/* ================================== */}
 
-      <div className="max-w-7xl mx-auto p-6 grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-gray-800 rounded-lg overflow-hidden">
-          <div className="p-4 flex justify-between bg-gray-900 border-b">
-            <div className="flex gap-2">
-              {languages.map(l => (
-                <button
-                  key={l.value}
-                  onClick={() => handleLanguageChange(l.value)}
-                  className={`px-3 py-1 rounded ${
-                    language === l.value ? 'bg-indigo-600' : 'bg-gray-700'
-                  }`}
-                >
-                  {l.icon}
-                </button>
-              ))}
+      {/* Main Content - Fixed Height Calculation */}
+      <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 max-w-[1920px] mx-auto w-full overflow-hidden">
+        
+        {/* Top Section - Editor */}
+        <div className="h-[calc(100%-12rem)] bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-2xl flex flex-col">
+          
+          {/* Editor Header */}
+          <div className="px-4 py-3 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              </div>
+              <span className="text-sm text-slate-400 font-mono">
+                {language === 'javascript' ? 'script.js' : 
+                 language === 'python' ? 'script.py' : 
+                 language === 'java' ? 'Main.java' : 
+                 language === 'cpp' ? 'main.cpp' : 'main.c'}
+              </span>
             </div>
 
             <button
               onClick={runCode}
               disabled={isRunning}
-              className="bg-green-600 px-4 py-2 rounded"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 px-6 py-2 rounded-lg font-semibold text-sm shadow-lg transition-all duration-200 flex items-center gap-2"
             >
-              <Play className="inline w-4 h-4 mr-1" />
-              Run
+              <Play className="w-4 h-4" />
+              {isRunning ? 'Running...' : 'Run'}
             </button>
           </div>
 
-          <Editor
-            height="480px"
-            theme="vs-dark"
-            language={language}
-            value={code}
-            onChange={(v) => setCode(v || '')}
-            onMount={handleEditorMount}
-            options={{
-              fontSize: 14,
-              minimap: { enabled: false },
-              quickSuggestions: true,
-              suggestOnTriggerCharacters: true
-            }}
-          />
-
-          <div className="p-4 bg-gray-900 border-t">
-            <textarea
-              rows="3"
-              className="w-full bg-gray-800 border border-gray-700 p-2 rounded"
-              placeholder="Standard Input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+          {/* Code Editor - Takes remaining height */}
+          <div className="flex-1 overflow-hidden">
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language={language}
+              value={code}
+              onChange={(v) => setCode(v || '')}
+              onMount={handleEditorMount}
+              options={{
+                fontSize: 15,
+                minimap: { enabled: true },
+                scrollBeyondLastLine: false,
+                quickSuggestions: true,
+                suggestOnTriggerCharacters: true,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                lineHeight: 24,
+                padding: { top: 16, bottom: 16 }
+              }}
             />
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-lg">
-          <div className="p-4 bg-gray-900 border-b">Output</div>
-          <pre className="p-4 h-[300px] overflow-auto text-sm">
-            {output || 'Run code to see output'}
-          </pre>
+        {/* Bottom Section - Input & Output */}
+        <div className="h-44 grid grid-cols-1 lg:grid-cols-2 gap-3 flex-shrink-0">
+          
+          {/* Input Section */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-lg flex flex-col">
+            <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
+              <span className="text-sm font-semibold text-slate-300">Standard Input</span>
+              <span className="text-xs text-slate-500">stdin</span>
+            </div>
+            <textarea
+              className="flex-1 bg-slate-900/50 text-white p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none placeholder:text-slate-500"
+              placeholder="Enter input here..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+            />
+          </div>
+
+          {/* Output Section */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-lg flex flex-col">
+            <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
+              <span className="text-sm font-semibold text-slate-300">Output</span>
+              <span className="text-xs text-slate-500">stdout</span>
+            </div>
+            <pre className="flex-1 bg-slate-900/50 text-slate-200 p-3 text-sm font-mono overflow-auto">
+              {output || <span className="text-slate-500">Run code to see output</span>}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
