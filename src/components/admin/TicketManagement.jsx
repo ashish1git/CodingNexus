@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, MessageCircle, Send, Clock, CheckCircle, AlertCircle, 
-  Search, Filter, X 
+  Search, Filter, X, ShieldAlert 
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import toast, { Toaster } from 'react-hot-toast';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 
 const TicketManagement = () => {
   const { userDetails } = useAuth();
@@ -21,6 +22,10 @@ const TicketManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+
+  // Check permissions
+  const canViewTickets = hasPermission(userDetails, 'viewTickets');
+  const canRespondTickets = hasPermission(userDetails, 'respondTickets');
 
   useEffect(() => {
     fetchTickets();
@@ -184,6 +189,11 @@ const TicketManagement = () => {
   const handleReply = async (e) => {
     e.preventDefault();
     
+    if (!canRespondTickets) {
+      toast.error(getPermissionDeniedMessage('respondTickets'));
+      return;
+    }
+    
     if (!replyText.trim()) {
       toast.error('Please enter a reply');
       return;
@@ -279,17 +289,8 @@ const TicketManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Add Toaster component at the root */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            maxWidth: '500px',
-          },
-        }}
-      />
-
+      <Toaster position="top-right" />
+      
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -307,6 +308,40 @@ const TicketManagement = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Access Denied Screen */}
+        {!canViewTickets ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to view support tickets. Contact your administrator to request access.
+              </p>
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+        {canViewTickets && !canRespondTickets && (
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-yellow-800 mb-1">View-Only Access</h3>
+              <p className="text-sm text-yellow-700">
+                You can view tickets but cannot respond to them.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -456,6 +491,8 @@ const TicketManagement = () => {
                 : 'No support tickets yet'}
             </p>
           </div>
+        )}
+          </>
         )}
       </div>
 

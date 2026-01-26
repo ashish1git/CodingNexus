@@ -86,7 +86,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const menuItems = userDetails?.role === 'superadmin' ? [
+  // Show all menu items, but components will show access denied if no permission
+  const menuItems = [
     { icon: <Users />, label: 'Students', path: '/admin/students' },
     { icon: <BookOpen />, label: 'Notes', path: '/admin/notes' },
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
@@ -94,15 +95,7 @@ const AdminDashboard = () => {
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
     { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
-    { icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }
-  ] : [
-    { icon: <Users />, label: 'Students', path: '/admin/students' },
-    { icon: <BookOpen />, label: 'Notes', path: '/admin/notes' },
-    { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
-    { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
-    { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
-    { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
-    { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' }
+    ...(userDetails?.role === 'superadmin' ? [{ icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }] : [])
   ];
 
   return (

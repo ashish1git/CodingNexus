@@ -1,10 +1,11 @@
 // src/components/admin/AnnouncementManager.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Bell, Edit, Trash2, Search } from 'lucide-react';
+import { ArrowLeft, Plus, Bell, Edit, Trash2, Search, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 
 const AnnouncementManager = () => {
   const { userDetails } = useAuth();
@@ -20,6 +21,9 @@ const AnnouncementManager = () => {
     content: '',
     batch: 'All'
   });
+
+  // Check permissions
+  const canManageAnnouncements = hasPermission(userDetails, 'manageAnnouncements');
 
   useEffect(() => {
     fetchAnnouncements();
@@ -67,6 +71,11 @@ const AnnouncementManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!canManageAnnouncements) {
+      toast.error(getPermissionDeniedMessage('manageAnnouncements'));
+      return;
+    }
 
     try {
       if (editMode && selectedAnnouncement) {
@@ -120,6 +129,11 @@ const AnnouncementManager = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!canManageAnnouncements) {
+      toast.error(getPermissionDeniedMessage('manageAnnouncements'));
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this announcement?')) {
       return;
     }
@@ -163,18 +177,42 @@ const AnnouncementManager = () => {
               <span>Back to Dashboard</span>
             </Link>
             <h1 className="text-2xl font-bold text-gray-800">Announcements</h1>
-            <button
-              onClick={openCreateModal}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              <Plus className="w-5 h-5" />
-              New Announcement
-            </button>
+            {canManageAnnouncements && (
+              <button
+                onClick={openCreateModal}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <Plus className="w-5 h-5" />
+                New Announcement
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Access Denied Screen */}
+        {!canManageAnnouncements ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to manage announcements. Contact your administrator to request access.
+              </p>
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Search */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="relative">
@@ -288,6 +326,8 @@ const AnnouncementManager = () => {
               Create Announcement
             </button>
           </div>
+        )}
+          </>
         )}
       </div>
 

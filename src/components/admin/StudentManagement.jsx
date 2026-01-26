@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Search, UserPlus, Edit, Trash2, Filter, 
-  Download, Phone, X
+  Download, Phone, X, ShieldAlert
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import apiClient from '../../services/apiClient';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 
 const StudentManagement = () => {
   const { userDetails } = useAuth();
@@ -27,6 +28,9 @@ const StudentManagement = () => {
     batch: 'Basic',
     password: ''
   });
+
+  // Check permissions
+  const canManageStudents = hasPermission(userDetails, 'manageStudents');
 
   useEffect(() => {
     fetchStudents();
@@ -73,8 +77,8 @@ const StudentManagement = () => {
   const handleAddStudent = async (e) => {
   e.preventDefault();
   
-  if (!userDetails || userDetails.role !== 'superadmin') {
-   toast.error('Only Super Admin can add students manually');
+  if (!canManageStudents) {
+   toast.error(getPermissionDeniedMessage('manageStudents'));
    return;
   }
 
@@ -127,6 +131,11 @@ const StudentManagement = () => {
   const handleEditStudent = async (e) => {
     e.preventDefault();
     
+    if (!canManageStudents) {
+      toast.error(getPermissionDeniedMessage('manageStudents'));
+      return;
+    }
+    
     if (!selectedStudent) return;
 
     setLoading(true);
@@ -176,8 +185,8 @@ const StudentManagement = () => {
   };
 
   const handleDeleteStudent = async (studentId) => {
-    if (userDetails?.role !== 'superadmin') {
-      toast.error('Only Super Admin can delete students');
+    if (!canManageStudents) {
+      toast.error(getPermissionDeniedMessage('manageStudents'));
       return;
     }
 
@@ -259,6 +268,28 @@ const StudentManagement = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Access Denied Screen */}
+        {!canManageStudents ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to manage students. Contact your administrator to request access.
+              </p>
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Filters and Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex flex-col gap-4">
@@ -300,7 +331,7 @@ const StudentManagement = () => {
                 <Download className="w-4 h-4" />
                 Export CSV
               </button>
-              {userDetails?.role === 'superadmin' && (
+              {canManageStudents && (
                 <button
                   onClick={() => setShowAddModal(true)}
                   className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
@@ -513,7 +544,8 @@ const StudentManagement = () => {
             </div>
           )}
         </div>
-      </div>
+        </>
+        )}
 
       {/* Add Student Modal */}
       {showAddModal && (
@@ -676,6 +708,7 @@ const StudentManagement = () => {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 };

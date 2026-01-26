@@ -709,18 +709,24 @@ router.get('/subadmins', async (req, res) => {
       }
     });
 
+    // Filter out users without admin profiles
+    const validAdmins = admins.filter(u => u.adminProfile);
+
     res.json({ 
       success: true, 
-      data: admins.map(u => ({
+      subAdmins: validAdmins.map(u => ({
         id: u.id,
+        userId: u.id,
+        adminId: u.adminProfile.id,
         email: u.email,
-        ...u.adminProfile,
-        permissions: u.adminProfile?.permissions ? 
+        name: u.adminProfile.name,
+        permissions: u.adminProfile.permissions ? 
           (u.adminProfile.permissions === 'all' ? 'all' : JSON.parse(u.adminProfile.permissions)) 
           : 'all'
       }))
     });
   } catch (error) {
+    console.error('Get subadmins error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -766,17 +772,50 @@ router.post('/subadmins', async (req, res) => {
 router.put('/subadmins/:id', async (req, res) => {
   try {
     const { name, permissions } = req.body;
+    const userId = req.params.id;
 
-    await prisma.admin.update({
-      where: { userId: req.params.id },
+    console.log('Update request for user:', userId, 'with permissions:', permissions);
+
+    // First, verify the user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { adminProfile: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+
+    if (user.role !== 'subadmin') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User is not a sub-admin' 
+      });
+    }
+
+    if (!user.adminProfile) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Admin profile not found. Please contact support.' 
+      });
+    }
+
+    // Update the admin profile
+    const updated = await prisma.admin.update({
+      where: { userId },
       data: { 
         name, 
         permissions: typeof permissions === 'object' ? JSON.stringify(permissions) : permissions 
       }
     });
 
+    console.log('Successfully updated admin:', updated.id);
     res.json({ success: true });
   } catch (error) {
+    console.error('Update sub-admin error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -784,11 +823,36 @@ router.put('/subadmins/:id', async (req, res) => {
 // Delete sub-admin
 router.delete('/subadmins/:id', async (req, res) => {
   try {
-    await prisma.user.delete({
-      where: { id: req.params.id }
+    const { id } = req.params;
+    
+    // Check if user exists and is a subadmin
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { adminProfile: true }
     });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Sub-admin not found' 
+      });
+    }
+
+    if (user.role !== 'subadmin') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User is not a sub-admin' 
+      });
+    }
+
+    // Delete user (cascade will delete adminProfile)
+    await prisma.user.delete({
+      where: { id }
+    });
+
     res.json({ success: true });
   } catch (error) {
+    console.error('Delete sub-admin error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

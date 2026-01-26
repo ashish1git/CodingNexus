@@ -1,9 +1,10 @@
 // src/components/admin/AttendanceManager.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, UserCheck, Save, Calendar, Download, Search, Filter } from 'lucide-react';
+import { ArrowLeft, UserCheck, Save, Calendar, Download, Search, Filter, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 import toast from 'react-hot-toast';
 
 const AttendanceManager = () => {
@@ -17,6 +18,9 @@ const AttendanceManager = () => {
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+
+  // Check permissions
+  const canMarkAttendance = hasPermission(userDetails, 'markAttendance');
 
   useEffect(() => {
     fetchStudents();
@@ -316,6 +320,28 @@ const AttendanceManager = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Access Denied Screen */}
+        {!canMarkAttendance ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to mark attendance. Contact your administrator to request access.
+              </p>
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -548,6 +574,8 @@ const AttendanceManager = () => {
               )}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

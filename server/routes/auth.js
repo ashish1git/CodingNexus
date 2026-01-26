@@ -170,6 +170,17 @@ router.post('/login/admin', async (req, res) => {
 
     const token = generateToken(user.id, user.role);
 
+    // Parse permissions if it's a JSON string
+    let permissions = user.adminProfile?.permissions || 'all';
+    if (typeof permissions === 'string' && permissions !== 'all') {
+      try {
+        permissions = JSON.parse(permissions);
+      } catch (e) {
+        console.error('Failed to parse permissions:', e);
+        permissions = 'all';
+      }
+    }
+
     res.json({
       success: true,
       token,
@@ -182,7 +193,7 @@ router.post('/login/admin', async (req, res) => {
         adminProfile: user.adminProfile,
         // Add commonly accessed fields
         name: user.adminProfile?.name,
-        permissions: user.adminProfile?.permissions
+        permissions: permissions
       }
     });
   } catch (error) {
@@ -267,13 +278,6 @@ router.get('/me', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    console.log('🔍 /auth/me - User found:', {
-      id: user.id,
-      email: user.email,
-      hasStudentProfile: !!user.studentProfile,
-      batch: user.studentProfile?.batch
-    });
-
     // Structure response similar to login - flattened for easy access
     const userData = {
       id: user.id,
@@ -296,11 +300,21 @@ router.get('/me', authenticate, async (req, res) => {
       }),
       ...(user.adminProfile && {
         name: user.adminProfile.name,
-        permissions: user.adminProfile.permissions
+        permissions: (() => {
+          const perms = user.adminProfile.permissions;
+          if (!perms || perms === 'all') return 'all';
+          if (typeof perms === 'string') {
+            try {
+              return JSON.parse(perms);
+            } catch (e) {
+              console.error('Failed to parse permissions:', e);
+              return 'all';
+            }
+          }
+          return perms;
+        })()
       })
     };
-
-    console.log('📤 /auth/me - Sending userData:', JSON.stringify(userData, null, 2));
 
     res.json({ success: true, user: userData });
   } catch (error) {

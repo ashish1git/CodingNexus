@@ -1,9 +1,10 @@
 // src/components/admin/NotesUpload.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Upload, FileText, Trash2, Download, Search, Filter, ExternalLink, Eye } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, Trash2, Download, Search, Filter, ExternalLink, Eye, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 import { 
   uploadToCloudinary, 
   deleteFromCloudinary, 
@@ -31,6 +32,9 @@ const NotesUpload = () => {
     batch: 'All',
     file: null
   });
+
+  // Check permissions
+  const canManageNotes = hasPermission(userDetails, 'manageNotes');
 
   useEffect(() => {
     fetchNotes();
@@ -97,6 +101,11 @@ const NotesUpload = () => {
 
 const handleUpload = async (e) => {
   e.preventDefault();
+
+  if (!canManageNotes) {
+    toast.error(getPermissionDeniedMessage('manageNotes'));
+    return;
+  }
 
   if (!formData.file) {
     toast.error('Please select a file');
@@ -170,6 +179,11 @@ const handleUpload = async (e) => {
 };
 
   const handleDelete = async (note) => {
+    if (!canManageNotes) {
+      toast.error(getPermissionDeniedMessage('manageNotes'));
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to delete "${note.title}"?`)) {
       return;
     }
@@ -271,6 +285,28 @@ const handleUpload = async (e) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Access Denied Screen */}
+        {!canManageNotes ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to manage notes. Contact your administrator to request access.
+              </p>
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Upload Form */}
           <div className="lg:col-span-1">
@@ -345,13 +381,18 @@ const handleUpload = async (e) => {
 
                 <button
                   type="submit"
-                  disabled={uploading}
+                  disabled={uploading || !canManageNotes}
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                 >
                   {uploading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Uploading...
+                    </>
+                  ) : !canManageNotes ? (
+                    <>
+                      <ShieldAlert className="w-5 h-5" />
+                      No Permission
                     </>
                   ) : (
                     <>
@@ -503,6 +544,8 @@ const handleUpload = async (e) => {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

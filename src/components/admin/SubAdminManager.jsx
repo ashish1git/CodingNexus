@@ -25,6 +25,7 @@ const SubAdminManager = ({ onBack }) => {
     manageAnnouncements: true,
     markAttendance: true,
     createQuizzes: true,
+    manageCompetitions: true,
     viewTickets: true,
     respondTickets: true
   };
@@ -105,6 +106,13 @@ const SubAdminManager = ({ onBack }) => {
 
     try {
       setProcessing(true);
+      
+      console.log('Updating sub-admin:', {
+        id: selectedAdmin.id,
+        userId: selectedAdmin.userId,
+        name: formData.name,
+        permissions: formData.permissions
+      });
       
       const response = await adminService.updateSubAdmin(selectedAdmin.id, {
         name: formData.name,

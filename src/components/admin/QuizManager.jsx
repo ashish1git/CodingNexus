@@ -17,18 +17,25 @@ import {
   Search,
   Filter,
   FileText,
-  ClipboardList
+  ClipboardList,
+  ShieldAlert
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
 import toast from 'react-hot-toast';
 
 const QuizManager = () => {
+  const { userDetails } = useAuth();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBatch, setFilterBatch] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Check permissions
+  const canCreateQuizzes = hasPermission(userDetails, 'createQuizzes');
 
   useEffect(() => {
     fetchQuizzes();
@@ -172,12 +179,36 @@ const QuizManager = () => {
           </div>
           <button
             onClick={() => navigate('/admin/quiz/create')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            disabled={!canCreateQuizzes}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-5 h-5" />
             Create New Quiz
           </button>
         </div>
+
+        {/* Access Denied Screen */}
+        {!canCreateQuizzes ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md">
+              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+              <p className="text-gray-600 mb-6">
+                You don't have permission to manage quizzes. Contact your administrator to request access.
+              </p>
+              <button
+                onClick={() => navigate('/admin/dashboard')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -367,6 +398,8 @@ const QuizManager = () => {
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
