@@ -461,8 +461,8 @@ router.post('/quizzes', async (req, res) => {
         title,
         description,
         batch,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
+        startTime: startTime ? new Date(startTime) : undefined,
+        endTime: endTime ? new Date(endTime) : undefined,
         duration,
         questions,
         createdBy: req.user.id
@@ -567,13 +567,17 @@ router.put('/quizzes/:id', async (req, res) => {
   try {
     const { startTime, endTime, ...rest } = req.body;
     
+    const updateData = { ...rest };
+    if (startTime) {
+      updateData.startTime = new Date(startTime);
+    }
+    if (endTime) {
+      updateData.endTime = new Date(endTime);
+    }
+
     await prisma.quiz.update({
       where: { id: req.params.id },
-      data: {
-        ...rest,
-        ...(startTime && { startTime: new Date(startTime) }),
-        ...(endTime && { endTime: new Date(endTime) })
-      }
+      data: updateData
     });
 
     res.json({ success: true });

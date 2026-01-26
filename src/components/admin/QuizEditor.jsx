@@ -41,6 +41,16 @@ const QuizEditor = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  // --- Utility: Convert local datetime to ISO string (preserves local time as UTC equivalent) ---
+  const convertLocalToISO = (localDatetimeString) => {
+    if (!localDatetimeString) return null;
+    // localDatetimeString format: "2026-01-26T14:30"
+    // Parse it as local time and convert to ISO string
+    const date = new Date(localDatetimeString);
+    // This creates a date assuming local timezone, we'll send it as-is to backend
+    return date.toISOString();
+  };
+
   // --- 1. CHECK PERMISSIONS ON LOAD ---
   useEffect(() => {
     const checkPermission = async () => {
@@ -186,8 +196,8 @@ const QuizEditor = () => {
       const result = await adminService.updateQuiz(id, {
         title,
         batch,
-        startTime, 
-        endTime,
+        startTime: convertLocalToISO(startTime),
+        endTime: convertLocalToISO(endTime),
         duration: parseInt(duration),
         questions,
       });
