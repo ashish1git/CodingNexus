@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { 
   ArrowLeft, Plus, Trash2, Save, Clock, BookOpen, Code, CheckCircle, AlertCircle, Loader2, Shield 
 } from "lucide-react";
-// Import the service and auth
 import { adminService } from "../../services/adminService";
 import { useAuth } from "../../context/AuthContext";
 
-const QuizCreator = () => {
+const QuizEditor = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const { userDetails } = useAuth();
 
   // State for form
@@ -20,6 +20,7 @@ const QuizCreator = () => {
   
   // State for logic
   const [loading, setLoading] = useState(false);
+  const [fetchingQuiz, setFetchingQuiz] = useState(true);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [hasPermission, setHasPermission] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -46,15 +47,13 @@ const QuizCreator = () => {
       setCheckingAccess(true);
       
       if (userDetails) {
-        // Check if they have the specific 'createQuizzes' permission
         if (userDetails.permissions && userDetails.permissions.createQuizzes) {
           setHasPermission(true);
         } else if (userDetails.role === 'superadmin') {
-          // Super admins have all permissions
           setHasPermission(true);
         } else {
           setHasPermission(false);
-          notify("You do not have permission to create quizzes.", "error");
+          notify("You do not have permission to edit quizzes.", "error");
         }
       } else {
         setHasPermission(false);
@@ -64,7 +63,70 @@ const QuizCreator = () => {
     };
 
     checkPermission();
-  }, [userDetails?.id, userDetails?.role]); // Only check when user ID changes
+  }, [userDetails?.id, userDetails?.role]); // Only check when user ID changes to ensure permission is accurate
+
+  // --- 2. FETCH EXISTING QUIZ DATA ---
+  useEffect(() => {
+    const fetchQuiz = async () => {
+      if (!id) return;
+      
+      setFetchingQuiz(true);
+      try {
+        const response = await adminService.getQuizById(id);
+        
+        if (response.success && response.quiz) {
+          const quiz = response.quiz;
+          
+          setTitle(quiz.title || "");
+          setBatch(quiz.batch || "Basic");
+          setDuration(quiz.duration || 60);
+          
+          // Format datetime for input
+          if (quiz.startTime) {
+            const start = new Date(quiz.startTime);
+            setStartTime(formatDateTimeLocal(start));
+          }
+          if (quiz.endTime) {
+            const end = new Date(quiz.endTime);
+            setEndTime(formatDateTimeLocal(end));
+          }
+          
+          // Set questions with proper defaults
+          if (Array.isArray(quiz.questions) && quiz.questions.length > 0) {
+            const formattedQuestions = quiz.questions.map(q => ({
+              type: q.type || 'mcq',
+              question: q.question || '',
+              options: q.options || { A: '', B: '', C: '', D: '' },
+              correctAnswer: q.correctAnswer || 'A',
+              codeSnippet: q.codeSnippet || ''
+            }));
+            setQuestions(formattedQuestions);
+          }
+          
+          notify("Quiz loaded successfully", "success");
+        } else {
+          notify("Failed to load quiz", "error");
+        }
+      } catch (error) {
+        console.error("Error fetching quiz:", error);
+        notify("Failed to load quiz: " + error.message, "error");
+      } finally {
+        setFetchingQuiz(false);
+      }
+    };
+
+    fetchQuiz();
+  }, [id]);
+
+  // Format date to datetime-local input format
+  const formatDateTimeLocal = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
 
   /* ---------------- ADD QUESTION ---------------- */
   const addQuestion = () => {
@@ -99,7 +161,7 @@ const QuizCreator = () => {
     setQuestions(updated);
   };
 
-  /* ---------------- SUBMIT QUIZ ---------------- */
+  /* ---------------- UPDATE QUIZ ---------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -121,8 +183,7 @@ const QuizCreator = () => {
     setLoading(true);
 
     try {
-      // Use AdminService to create the quiz
-      const result = await adminService.createQuiz({
+      const result = await adminService.updateQuiz(id, {
         title,
         batch,
         startTime, 
@@ -132,18 +193,18 @@ const QuizCreator = () => {
       });
 
       if (result.success) {
-        notify("Quiz Created Successfully!");
+        notify("Quiz Updated Successfully!");
         setTimeout(() => navigate('/admin/quiz'), 1500);
       } else {
-        notify("Failed to create quiz: " + result.error, "error");
+        notify("Failed to update quiz: " + result.error, "error");
       }
     } catch (error) {
-      console.error("Error creating quiz:", error);
+      console.error("Error updating quiz:", error);
       if (error.message === 'Invalid token' || error.message === 'No token provided') {
         notify("Session expired. Please log in again.", "error");
         setTimeout(() => navigate('/admin/login'), 2000);
       } else {
-        notify("Failed to create quiz: " + error.message, "error");
+        notify("Failed to update quiz: " + error.message, "error");
       }
     } finally {
       setLoading(false);
@@ -159,7 +220,7 @@ const QuizCreator = () => {
             <Shield className="w-8 h-8 text-red-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-500 mb-6">You do not have permission to create quizzes.</p>
+          <p className="text-gray-500 mb-6">You do not have permission to edit quizzes.</p>
           <button 
             onClick={() => navigate(-1)}
             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
@@ -167,6 +228,16 @@ const QuizCreator = () => {
             Go Back
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // --- LOADING VIEW ---
+  if (fetchingQuiz) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+        <p className="text-gray-600">Loading quiz...</p>
       </div>
     );
   }
@@ -194,7 +265,7 @@ const QuizCreator = () => {
             >
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
-            <h2 className="text-2xl font-bold text-gray-900">Create New Quiz</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Edit Quiz</h2>
           </div>
         </div>
 
@@ -386,11 +457,11 @@ const QuizCreator = () => {
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> Publishing...
+                  <Loader2 className="w-5 h-5 animate-spin" /> Updating...
                 </>
               ) : (
                 <>
-                  <Save className="w-5 h-5" /> Publish Quiz
+                  <Save className="w-5 h-5" /> Update Quiz
                 </>
               )}
             </button>
@@ -401,4 +472,4 @@ const QuizCreator = () => {
   );
 };
 
-export default QuizCreator;
+export default QuizEditor;

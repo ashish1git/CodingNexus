@@ -27,7 +27,7 @@ const NotesViewer = () => {
       setError('Your account does not have a batch assigned. Please contact admin.');
       setLoading(false);
     }
-  }, [userDetails]);
+  }, []); // Run once on mount
 
   useEffect(() => {
     filterAndSortNotes();

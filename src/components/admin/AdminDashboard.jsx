@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import dataCache from '../../utils/dataCache';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
@@ -28,8 +29,17 @@ const AdminDashboard = () => {
   }, []);
 
   const fetchDashboardData = async () => {
+    const userId = userDetails?.id || userDetails?.userId;
+    
+    // Try to load cached data first for instant display
+    const cachedData = dataCache.get('admin_dashboard', userId);
+    if (cachedData) {
+      console.log('📦 Loading cached admin dashboard data...');
+      setStats(cachedData);
+    }
+    
     try {
-      // Fetch all data in parallel using adminService
+      // Fetch fresh data in background
       const [studentsRes, notesRes, quizzesRes, ticketsRes] = await Promise.all([
         adminService.getAllStudents(),
         adminService.getAllNotes(),
@@ -42,17 +52,27 @@ const AdminDashboard = () => {
       const quizzes = quizzesRes.success ? (quizzesRes.quizzes || []) : [];
       const tickets = ticketsRes.success ? (ticketsRes.tickets || []) : [];
 
-      setStats({
+      const newStats = {
         totalStudents: students.length,
         basicBatch: students.filter(s => s.batch === 'Basic').length,
         advancedBatch: students.filter(s => s.batch === 'Advanced').length,
         totalNotes: notes.length,
         totalQuizzes: quizzes.length,
         pendingTickets: tickets.filter(t => t.status === 'open').length
-      });
+      };
+      
+      setStats(newStats);
+      
+      // Cache the fresh data
+      dataCache.set('admin_dashboard', userId, newStats);
+      console.log('✅ Admin dashboard data refreshed and cached');
+      
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to load dashboard data');
+      // Don't show error if we have cached data
+      if (!cachedData) {
+        toast.error('Failed to load dashboard data');
+      }
     }
   };
 

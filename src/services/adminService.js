@@ -217,6 +217,28 @@ export const adminService = {
     }
   },
 
+  async getQuizById(quizId) {
+    try {
+      const response = await apiClient.get(`/admin/quizzes/${quizId}`);
+      return response;
+    } catch (error) {
+      console.error('Get quiz by ID error:', error);
+      toast.error(error.message || 'Failed to fetch quiz details');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getQuizSubmissions(quizId) {
+    try {
+      const response = await apiClient.get(`/admin/quizzes/${quizId}/submissions`);
+      return response;
+    } catch (error) {
+      console.error('Get quiz submissions error:', error);
+      toast.error(error.message || 'Failed to fetch quiz submissions');
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ SUPPORT TICKET MANAGEMENT ============
   
   async getAllTickets() {

@@ -24,12 +24,8 @@ const SupportTicket = () => {
   useEffect(() => {
     if (currentUser) {
       fetchTickets();
-      const interval = setInterval(() => {
-        fetchTickets();
-      }, 30000);
-      return () => clearInterval(interval);
     }
-  }, [currentUser]);
+  }, []); // Removed polling to reduce server load - users can manually refresh
 
   // Update selected ticket when tickets refresh
   useEffect(() => {

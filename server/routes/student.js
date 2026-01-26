@@ -39,9 +39,18 @@ router.get('/notes', async (req, res) => {
 // Get quizzes for student's batch
 router.get('/quizzes', async (req, res) => {
   try {
+    console.log('📚 Fetching quizzes for user:', req.user.id);
+    
     const student = await prisma.student.findUnique({
       where: { userId: req.user.id }
     });
+
+    if (!student) {
+      console.log('❌ Student profile not found for user:', req.user.id);
+      return res.status(404).json({ success: false, error: 'Student profile not found' });
+    }
+
+    console.log('👤 Student batch:', student.batch);
 
     const quizzes = await prisma.quiz.findMany({
       where: {
@@ -54,8 +63,12 @@ router.get('/quizzes', async (req, res) => {
       orderBy: { startTime: 'desc' }
     });
 
+    console.log(`✅ Found ${quizzes.length} quizzes for batch "${student.batch}"`);
+    quizzes.forEach(q => console.log(`  - ${q.title} (${q.batch})`));
+
     res.json({ success: true, data: quizzes });
   } catch (error) {
+    console.error('❌ Error fetching quizzes:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -83,6 +96,8 @@ router.post('/quizzes/:id/attempt', async (req, res) => {
     const { answers, score, maxScore } = req.body;
     const quizId = req.params.id;
 
+    console.log('📝 Submitting quiz attempt:', { quizId, userId: req.user.id, score, maxScore });
+
     // Check if already attempted
     const existing = await prisma.quizAttempt.findUnique({
       where: {
@@ -94,6 +109,7 @@ router.post('/quizzes/:id/attempt', async (req, res) => {
     });
 
     if (existing) {
+      console.log('⚠️ Quiz already attempted by user');
       return res.status(400).json({ 
         success: false, 
         error: 'Quiz already attempted' 
@@ -111,8 +127,11 @@ router.post('/quizzes/:id/attempt', async (req, res) => {
       }
     });
 
+    console.log('✅ Quiz attempt submitted successfully:', attempt.id);
+
     res.json({ success: true, data: attempt });
   } catch (error) {
+    console.error('❌ Quiz submission error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -120,6 +139,8 @@ router.post('/quizzes/:id/attempt', async (req, res) => {
 // Get quiz attempt
 router.get('/quizzes/:id/attempt', async (req, res) => {
   try {
+    console.log('📋 Fetching quiz attempt:', { quizId: req.params.id, userId: req.user.id });
+    
     const attempt = await prisma.quizAttempt.findUnique({
       where: {
         quizId_userId: {
@@ -129,8 +150,15 @@ router.get('/quizzes/:id/attempt', async (req, res) => {
       }
     });
 
+    if (!attempt) {
+      console.log('❌ No attempt found');
+      return res.json({ success: false, data: null });
+    }
+
+    console.log('✅ Attempt found:', { score: attempt.score, maxScore: attempt.maxScore });
     res.json({ success: true, data: attempt });
   } catch (error) {
+    console.error('❌ Error fetching attempt:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

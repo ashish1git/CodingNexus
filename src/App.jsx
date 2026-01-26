@@ -34,6 +34,10 @@ import NotesUpload from './components/admin/NotesUpload';
 import AnnouncementManager from './components/admin/AnnouncementManager';
 import AttendanceManager from './components/admin/AttendanceManager';
 import QuizCreator from './components/admin/QuizCreator';
+import QuizManager from './components/admin/QuizManager';
+import QuizEditor from './components/admin/QuizEditor';
+import QuizDetailViewer from './components/admin/QuizDetailViewer';
+import QuizSubmissionsViewer from './components/admin/QuizSubmissionsViewer';
 import TicketManagement from './components/admin/TicketManagement';
 import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
@@ -219,7 +223,39 @@ function App() {
                 path="/admin/quiz" 
                 element={
                   <ProtectedRoute adminOnly>
+                    <QuizManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/quiz/create" 
+                element={
+                  <ProtectedRoute adminOnly>
                     <QuizCreator />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/quiz/edit/:id" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <QuizEditor />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/quiz/details/:id" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <QuizDetailViewer />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/quiz/submissions/:id" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <QuizSubmissionsViewer />
                   </ProtectedRoute>
                 } 
               />

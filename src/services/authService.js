@@ -45,8 +45,28 @@ export const authService = {
 
       if (response.success && response.token) {
         apiClient.setToken(response.token);
+        
+        console.log('🔐 Login response user:', response.user);
+        console.log('📦 Profile data:', response.user.profile);
+        
+        // Structure user data properly - merge profile into user object
+        const userData = {
+          ...response.user,
+          studentProfile: response.user.profile,
+          // Also add batch and other profile fields directly for easy access
+          ...(response.user.profile && {
+            batch: response.user.profile.batch,
+            name: response.user.profile.name,
+            phone: response.user.profile.phone,
+            rollNo: response.user.profile.rollNo
+          })
+        };
+        
+        console.log('💾 Storing user data:', userData);
+        console.log('✅ Batch:', userData.batch);
+        
         // Store user data in localStorage for AuthContext
-        localStorage.setItem('user', JSON.stringify(response.user));
+        localStorage.setItem('user', JSON.stringify(userData));
         toast.success('Login successful!');
       }
 
@@ -68,7 +88,19 @@ export const authService = {
 
       if (response.success && response.token) {
         apiClient.setToken(response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        
+        // Structure user data properly - merge profile into user object
+        const userData = {
+          ...response.user,
+          adminProfile: response.user.profile,
+          // Also add admin profile fields directly for easy access
+          ...(response.user.profile && {
+            name: response.user.profile.name,
+            permissions: response.user.profile.permissions
+          })
+        };
+        
+        localStorage.setItem('user', JSON.stringify(userData));
         toast.success('Admin login successful!');
       }
       // Return the API response (it should include `user` and `role` when successful)
@@ -97,9 +129,26 @@ export const authService = {
   getCurrentUser: async () => {
     try {
       const response = await apiClient.get('/auth/me');
-      if (response.success) {
-        localStorage.setItem('user', JSON.stringify(response.user));
-        return response.user;
+      if (response.success && response.user) {
+        // Normalize the response - handle both old nested and new flattened structure
+        const userData = {
+          ...response.user,
+          // Ensure batch/name are at root level (backward compatibility)
+          batch: response.user.batch || response.user.studentProfile?.batch || response.user.profile?.batch,
+          name: response.user.name || response.user.studentProfile?.name || response.user.adminProfile?.name || response.user.profile?.name,
+          phone: response.user.phone || response.user.studentProfile?.phone || response.user.profile?.phone,
+          rollNo: response.user.rollNo || response.user.studentProfile?.rollNo || response.user.profile?.rollNo
+        };
+        
+        console.log('📥 Current user fetched:', {
+          email: userData.email,
+          role: userData.role,
+          batch: userData.batch,
+          name: userData.name
+        });
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        return userData;
       }
       return null;
     } catch (error) {

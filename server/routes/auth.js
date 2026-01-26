@@ -130,7 +130,12 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        profile: user.studentProfile
+        isActive: user.isActive,
+        profile: user.studentProfile,
+        studentProfile: user.studentProfile,
+        // Add commonly accessed fields
+        batch: user.studentProfile?.batch,
+        name: user.studentProfile?.name
       }
     });
   } catch (error) {
@@ -172,7 +177,12 @@ router.post('/login/admin', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        profile: user.adminProfile
+        isActive: user.isActive,
+        profile: user.adminProfile,
+        adminProfile: user.adminProfile,
+        // Add commonly accessed fields
+        name: user.adminProfile?.name,
+        permissions: user.adminProfile?.permissions
       }
     });
   } catch (error) {
@@ -241,7 +251,13 @@ router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        moodleId: true,
+        isActive: true,
+        createdAt: true,
         studentProfile: true,
         adminProfile: true
       }
@@ -251,7 +267,42 @@ router.get('/me', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    res.json({ success: true, user });
+    console.log('🔍 /auth/me - User found:', {
+      id: user.id,
+      email: user.email,
+      hasStudentProfile: !!user.studentProfile,
+      batch: user.studentProfile?.batch
+    });
+
+    // Structure response similar to login - flattened for easy access
+    const userData = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      moodleId: user.moodleId,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      // Keep nested profiles for backward compatibility
+      profile: user.studentProfile || user.adminProfile,
+      studentProfile: user.studentProfile,
+      adminProfile: user.adminProfile,
+      // Add profile data directly at root level for easy access
+      ...(user.studentProfile && {
+        batch: user.studentProfile.batch,
+        name: user.studentProfile.name,
+        phone: user.studentProfile.phone,
+        rollNo: user.studentProfile.rollNo,
+        profilePhotoUrl: user.studentProfile.profilePhotoUrl
+      }),
+      ...(user.adminProfile && {
+        name: user.adminProfile.name,
+        permissions: user.adminProfile.permissions
+      })
+    };
+
+    console.log('📤 /auth/me - Sending userData:', JSON.stringify(userData, null, 2));
+
+    res.json({ success: true, user: userData });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ success: false, error: error.message });

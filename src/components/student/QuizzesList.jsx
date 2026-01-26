@@ -17,12 +17,70 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { studentService } from '../../services/studentService';
+import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const QuizList = () => {
   const navigate = useNavigate();
   const { currentUser, userDetails } = useAuth();
+  const [refreshAttempted, setRefreshAttempted] = useState(false); // Prevent infinite refresh loops
+  
+  // Debug: Log user details on component mount ONCE
+  useEffect(() => {
+    console.log('🔍 QuizList - User Details:', {
+      hasCurrentUser: !!currentUser,
+      hasUserDetails: !!userDetails,
+      batch: userDetails?.batch,
+      name: userDetails?.name,
+      email: userDetails?.email,
+      role: userDetails?.role
+    });
+    
+    // If user is logged in but batch is missing, clear cache and force refresh (ONCE only)
+    if (currentUser && userDetails && !userDetails.batch && !refreshAttempted) {
+      console.log('⚠️ Batch missing! Clearing cache and fetching fresh data...');
+      setRefreshAttempted(true); // Mark that we've attempted refresh to prevent loops
+      
+      // Clear localStorage and fetch fresh
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Keep token but clear user data
+        localStorage.removeItem('user');
+        
+        // Fetch fresh data
+        authService.getCurrentUser().then(freshUser => {
+          if (freshUser && freshUser.batch) {
+            console.log('✅ Fresh user data loaded with batch:', freshUser.batch);
+            toast.success(`Loaded profile for ${freshUser.name} (${freshUser.batch})`);
+            // Force page reload to update context
+            setTimeout(() => window.location.reload(), 500);
+          } else {
+            console.error('❌ Fresh user data still missing batch:', freshUser);
+            toast.error('Your profile is missing batch information. Please contact admin.');
+          }
+        }).catch(err => {
+          console.error('❌ Failed to fetch fresh user:', err);
+          toast.error('Failed to load profile. Please try logging in again.');
+        });
+      }
+    }
+  }, []); // Run once on mount only to prevent infinite loops
+
+  // Function to refresh user data
+  const refreshUserData = async () => {
+    try {
+      const freshUser = await authService.getCurrentUser();
+      if (freshUser && freshUser.batch) {
+        console.log('✅ User data refreshed with batch:', freshUser.batch);
+        // The AuthContext should update automatically
+        window.location.reload(); // Force reload to get updated context
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh user data:', error);
+    }
+  };
+  
   const [quizzes, setQuizzes] = useState([]);
   const [quizAttempts, setQuizAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,53 +88,96 @@ const QuizList = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState('upcoming');
 
-  // Fetch Quiz Attempts
+  // Refresh data when component becomes visible (e.g., after completing a quiz or switching tabs)
   useEffect(() => {
-    if (!currentUser?.uid) return;
-
-    const fetchQuizAttempts = async () => {
-      try {
-        const response = await studentService.getQuizAttempts();
-        if (response.success) {
-          const attempts = response.data.map(attempt => ({
-            ...attempt,
-            submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt) : new Date()
-          }));
-          setQuizAttempts(attempts);
-          console.log('Quiz attempts loaded:', attempts.length);
-        }
-      } catch (error) {
-        console.error("Error fetching quiz attempts:", error);
-        toast.error("Failed to load quiz attempts");
+    const handleVisibilityChange = () => {
+      if (!document.hidden && currentUser && userDetails?.batch) {
+        console.log('🔄 Page visible again, refreshing data...');
+        fetchQuizAttempts();
+        // Refetch quizzes to get latest status
+        const fetchQuizzes = async () => {
+          try {
+            const response = await studentService.getQuizzes();
+            if (response.success) {
+              const list = response.data.map(quiz => ({
+                ...quiz,
+                startTime: quiz.startTime ? new Date(quiz.startTime) : new Date(),
+                endTime: quiz.endTime ? new Date(quiz.endTime) : new Date()
+              }));
+              const filteredByBatch = list.filter(quiz => {
+                const quizBatch = quiz.batch?.trim();
+                const studentBatch = userDetails.batch?.trim();
+                const isForAllBatches = quizBatch?.toLowerCase() === 'all';
+                const isForStudentBatch = quizBatch === studentBatch;
+                return isForAllBatches || isForStudentBatch;
+              });
+              const sortedList = filteredByBatch.sort((a, b) => b.startTime - a.startTime);
+              setQuizzes(sortedList);
+            }
+          } catch (error) {
+            console.error('❌ Error refreshing quizzes:', error);
+          }
+        };
+        fetchQuizzes();
       }
     };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []); // Run once on mount to avoid re-registering event listener
+
+  // Fetch Quiz Attempts
+  const fetchQuizAttempts = async () => {
+    if (!currentUser) {
+      console.log('⚠️ No user logged in, cannot fetch quiz attempts');
+      return;
+    }
+
+    try {
+      const response = await studentService.getQuizAttempts();
+      if (response.success) {
+        const attempts = response.data.map(attempt => ({
+          ...attempt,
+          submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt) : new Date()
+        }));
+        setQuizAttempts(attempts);
+        console.log('✅ Quiz attempts loaded:', attempts.length);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching quiz attempts:", error);
+      toast.error("Failed to load quiz attempts");
+    }
+  };
+
+  // Fetch Quiz Attempts on mount (no polling to reduce server load)
+  useEffect(() => {
     fetchQuizAttempts();
-    
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchQuizAttempts, 30000);
-    return () => clearInterval(interval);
-  }, [currentUser]);
+  }, []);
 
   // Fetch Quizzes
   useEffect(() => {
     if (!currentUser || !userDetails?.batch) {
+      console.log('⚠️ Cannot fetch quizzes:', { hasUser: !!currentUser, hasBatch: !!userDetails?.batch });
       setLoading(false);
       return;
     }
 
-    console.log('Fetching quizzes for batch:', userDetails.batch);
+    console.log('📚 Fetching quizzes for batch:', userDetails.batch);
     
     const fetchQuizzes = async () => {
       setLoading(true);
       try {
         const response = await studentService.getQuizzes();
+        console.log('📥 Quiz fetch response:', { success: response.success, count: response.data?.length });
+        
         if (response.success) {
           const list = response.data.map(quiz => ({
             ...quiz,
             startTime: quiz.startTime ? new Date(quiz.startTime) : new Date(),
             endTime: quiz.endTime ? new Date(quiz.endTime) : new Date()
           }));
+
+          console.log('📋 Total quizzes received:', list.length);
 
           // Filter quizzes for student's batch
           const filteredByBatch = list.filter(quiz => {
@@ -90,16 +191,18 @@ const QuizList = () => {
             return isForAllBatches || isForStudentBatch;
           });
           
-          console.log('Total quizzes from API:', list.length);
-          console.log('Filtered for batch', userDetails.batch, ':', filteredByBatch.length);
+          console.log(`✅ Filtered quizzes for "${userDetails.batch}":`, filteredByBatch.length);
           
           // Sort by start time (newest first)
           const sortedList = filteredByBatch.sort((a, b) => b.startTime - a.startTime);
           
           setQuizzes(sortedList);
+        } else {
+          console.error('❌ Failed to fetch quizzes:', response.error);
+          toast.error(response.error || "Failed to load quizzes");
         }
       } catch (error) {
-        console.error("Error fetching quizzes:", error);
+        console.error("❌ Error fetching quizzes:", error);
         toast.error("Failed to load quizzes");
       } finally {
         setLoading(false);
@@ -107,11 +210,7 @@ const QuizList = () => {
     };
 
     fetchQuizzes();
-    
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchQuizzes, 30000);
-    return () => clearInterval(interval);
-  }, [currentUser, userDetails]);
+  }, []); // Run once on mount (no polling to reduce server load)
 
   const getQuizStatus = (quiz) => {
     const now = new Date();
@@ -121,7 +220,17 @@ const QuizList = () => {
   };
 
   const getQuizAttempt = (quizId) => {
-    return quizAttempts.find(attempt => attempt.quizId === quizId);
+    const attempt = quizAttempts.find(attempt => attempt.quizId === quizId);
+    if (!attempt) return null;
+    
+    // Calculate derived fields if not present
+    return {
+      ...attempt,
+      totalQuestions: attempt.maxScore || 0,
+      percentage: attempt.maxScore > 0 
+        ? Math.round((attempt.score / attempt.maxScore) * 100) 
+        : 0
+    };
   };
 
   const handleQuizClick = (quiz) => {
@@ -162,20 +271,34 @@ const QuizList = () => {
   }, [quizzes, quizAttempts]);
 
   const filteredQuizzes = useMemo(() => {
-    const filtered = quizzes.filter(quiz => {
-      const matchesSearch = quiz.title?.toLowerCase().includes(searchTerm.toLowerCase());
-      const status = getQuizStatus(quiz);
-      const attempt = getQuizAttempt(quiz.id);
+    let filtered = [];
+    
+    if (viewMode === 'attempted') {
+      // For attempted view, show all quizzes that have attempts
+      const attemptedQuizIds = new Set(quizAttempts.map(a => a.quizId));
       
-      if (viewMode === 'attempted') {
-        // Show only quizzes that have been attempted
-        return matchesSearch && attempt;
-      } else {
-        // Show only quizzes that haven't been attempted
+      // Filter quizzes that have been attempted
+      filtered = quizzes.filter(quiz => {
+        const matchesSearch = quiz.title?.toLowerCase().includes(searchTerm.toLowerCase());
+        const hasAttempt = attemptedQuizIds.has(quiz.id);
+        return matchesSearch && hasAttempt;
+      });
+      
+      console.log('📊 Attempted quizzes filter:', {
+        totalQuizzes: quizzes.length,
+        totalAttempts: quizAttempts.length,
+        attemptedQuizIds: Array.from(attemptedQuizIds),
+        matchedQuizzes: filtered.length
+      });
+    } else {
+      // For upcoming view, show ALL quizzes (including attempted ones) but mark them differently
+      filtered = quizzes.filter(quiz => {
+        const matchesSearch = quiz.title?.toLowerCase().includes(searchTerm.toLowerCase());
+        const status = getQuizStatus(quiz);
         const matchesFilter = filterStatus === 'all' || filterStatus === status;
-        return matchesSearch && matchesFilter && !attempt;
-      }
-    });
+        return matchesSearch && matchesFilter;
+      });
+    }
 
     console.log('Filtered quizzes:', {
       viewMode,
@@ -198,6 +321,26 @@ const QuizList = () => {
     );
   }
 
+  // Show message if not logged in
+  if (!currentUser || !userDetails) {
+    console.log('🔴 Not logged in or no user details:', { currentUser: !!currentUser, userDetails: !!userDetails });
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 text-center max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Not Logged In</h2>
+          <p className="text-slate-300 mb-6">You need to log in as a student to view quizzes.</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pb-20">
       {/* Header */}
@@ -213,9 +356,48 @@ const QuizList = () => {
               </button>
               <div>
                 <h1 className="text-xl font-bold text-white">Quizzes</h1>
-                <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest">{userDetails.batch} Batch</p>
+                <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest">{userDetails?.batch || 'Unknown'} Batch</p>
               </div>
             </div>
+            <button
+              onClick={() => {
+                fetchQuizAttempts();
+                // Refetch quizzes
+                const refreshQuizzes = async () => {
+                  setLoading(true);
+                  try {
+                    const response = await studentService.getQuizzes();
+                    if (response.success) {
+                      const list = response.data.map(quiz => ({
+                        ...quiz,
+                        startTime: quiz.startTime ? new Date(quiz.startTime) : new Date(),
+                        endTime: quiz.endTime ? new Date(quiz.endTime) : new Date()
+                      }));
+                      const filteredByBatch = list.filter(quiz => {
+                        const quizBatch = quiz.batch?.trim();
+                        const studentBatch = userDetails.batch?.trim();
+                        const isForAllBatches = quizBatch?.toLowerCase() === 'all';
+                        const isForStudentBatch = quizBatch === studentBatch;
+                        return isForAllBatches || isForStudentBatch;
+                      });
+                      const sortedList = filteredByBatch.sort((a, b) => b.startTime - a.startTime);
+                      setQuizzes(sortedList);
+                      toast.success('Quizzes refreshed!');
+                    }
+                  } catch (error) {
+                    console.error('❌ Error refreshing:', error);
+                    toast.error('Failed to refresh');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                refreshQuizzes();
+              }}
+              className="p-2 hover:bg-slate-700 rounded-lg transition text-slate-300 hover:text-indigo-400"
+              title="Refresh quizzes"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -320,6 +502,18 @@ const QuizList = () => {
                             }`}>
                               {attempt ? 'Completed' : status}
                             </span>
+                            {/* Show "Already Attempted" badge for active quizzes that have been attempted */}
+                            {!attempt && status === 'active' && getQuizAttempt(quiz.id) && (
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-orange-900/50 text-orange-300 border border-orange-700/50">
+                                ✓ Already Attempted
+                              </span>
+                            )}
+                            {/* Show "Live - Attempt Again" for truly active quizzes without attempt */}
+                            {!attempt && status === 'active' && !getQuizAttempt(quiz.id) && (
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-green-900/50 text-green-300 border border-green-700/50 animate-pulse">
+                                🔴 Live Now
+                              </span>
+                            )}
                             <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-indigo-900/50 text-indigo-300 border border-indigo-700/50">
                               {quiz.batch}
                             </span>
@@ -372,6 +566,20 @@ const QuizList = () => {
                           View Results
                           <ChevronRight className="w-4 h-4" />
                         </button>
+                      ) : getQuizAttempt(quiz.id) ? (
+                        // Show for already attempted quizzes that are still active
+                        <button 
+                          className="w-full md:w-auto px-6 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast.info("You've already attempted this quiz. Click to view results.");
+                            handleQuizClick(quiz);
+                          }}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Already Attempted
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                       ) : status === 'active' ? (
                         <button className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
                           <FileText className="w-4 h-4" />
@@ -409,7 +617,7 @@ const QuizList = () => {
                 ? "You haven't attempted any quizzes yet." 
                 : searchTerm 
                   ? "No quizzes match your search criteria."
-                  : `There are no ${filterStatus !== 'all' ? filterStatus : ''} quizzes for ${userDetails.batch} batch at the moment.`}
+                  : `There are no ${filterStatus !== 'all' ? filterStatus : ''} quizzes for ${userDetails?.batch || 'your'} batch at the moment.`}
             </p>
           </div>
         )}

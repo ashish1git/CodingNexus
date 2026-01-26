@@ -447,8 +447,16 @@ router.get('/attendance/:date', async (req, res) => {
 router.post('/quizzes', async (req, res) => {
   try {
     const { title, description, batch, startTime, endTime, duration, questions } = req.body;
+    
+    console.log('📝 Creating quiz:', {
+      title,
+      batch,
+      duration,
+      questionsCount: Array.isArray(questions) ? questions.length : 0,
+      createdBy: req.user.id
+    });
 
-    await prisma.quiz.create({
+    const quiz = await prisma.quiz.create({
       data: {
         title,
         description,
@@ -461,8 +469,11 @@ router.post('/quizzes', async (req, res) => {
       }
     });
 
-    res.json({ success: true });
+    console.log('✅ Quiz created successfully:', quiz.id);
+
+    res.json({ success: true, quiz });
   } catch (error) {
+    console.error('❌ Quiz creation error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -475,6 +486,78 @@ router.get('/quizzes', async (req, res) => {
     });
     res.json({ success: true, quizzes });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get quiz submissions (all student attempts for a quiz) - MUST BE BEFORE :id route
+router.get('/quizzes/:id/submissions', async (req, res) => {
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      include: {
+        attempts: {
+          include: {
+            user: {
+              include: {
+                studentProfile: true
+              }
+            }
+          },
+          orderBy: { submittedAt: 'desc' }
+        }
+      }
+    });
+
+    if (!quiz) {
+      return res.status(404).json({ success: false, error: 'Quiz not found' });
+    }
+
+    const submissions = quiz.attempts.map(attempt => ({
+      id: attempt.id,
+      studentName: attempt.user?.studentProfile?.name || 'Unknown',
+      studentRollNo: attempt.user?.studentProfile?.rollNo || 'N/A',
+      studentEmail: attempt.user?.email,
+      studentBatch: attempt.user?.studentProfile?.batch || 'Unknown',
+      answers: attempt.answers,
+      score: attempt.score,
+      maxScore: attempt.maxScore,
+      percentage: ((attempt.score / attempt.maxScore) * 100).toFixed(2),
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt
+    }));
+
+    res.json({ 
+      success: true, 
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        questions: quiz.questions,
+        duration: quiz.duration,
+        batch: quiz.batch
+      },
+      submissions 
+    });
+  } catch (error) {
+    console.error('❌ Get quiz submissions error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single quiz by ID - MUST BE AFTER submissions route
+router.get('/quizzes/:id', async (req, res) => {
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id }
+    });
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, error: 'Quiz not found' });
+    }
+    
+    res.json({ success: true, quiz });
+  } catch (error) {
+    console.error('❌ Get quiz error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

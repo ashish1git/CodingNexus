@@ -133,18 +133,19 @@ const QuizAttempt = () => {
       const result = calculateScore();
       const attemptData = {
         quizId,
-        studentId: currentUser.uid,
-        studentName: userDetails.name,
-        studentRollNo: userDetails.rollNo,
         answers,
         score: result.score,
-        totalQuestions: result.total,
-        percentage: result.percentage,
+        maxScore: result.total,
       };
 
-      await studentService.submitQuiz(attemptData);
-      toast.success(`Submitted! Score: ${result.score}/${result.total}`);
-      navigate("/student/dashboard");
+      const submitResponse = await studentService.submitQuizAttempt(quizId, attemptData);
+      
+      if (submitResponse.success) {
+        toast.success(`Submitted! Score: ${result.score}/${result.total}`);
+        navigate(`/student/quiz/results/${quizId}`);
+      } else {
+        toast.error(submitResponse.error || 'Failed to submit quiz');
+      }
     } catch (error) {
       console.error("Submission error:", error);
       toast.error("Submission failed");

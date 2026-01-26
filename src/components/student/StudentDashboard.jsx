@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
+import dataCache from '../../utils/dataCache';
 import toast from 'react-hot-toast';
 
 const StudentDashboard = () => {
@@ -58,13 +59,24 @@ const StudentDashboard = () => {
     refreshUser();
     fetchDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userDetails, currentUser]);
+  }, []); // Run once on mount
 
   const fetchDashboardData = async () => {
     if (!userDetails || !currentUser) return;
     
+    const userId = currentUser.uid || currentUser.id || userDetails.id;
+    
+    // Try to load cached data first for instant display
+    const cachedData = dataCache.get('dashboard', userId);
+    if (cachedData) {
+      console.log('📦 Loading cached dashboard data...');
+      setStats(cachedData.stats);
+      setUpcomingQuizzes(cachedData.upcomingQuizzes);
+      setRecentAnnouncements(cachedData.recentAnnouncements);
+    }
+    
     try {
-      // Fetch all dashboard data in parallel using studentService
+      // Fetch fresh data in background
       const [notesRes, attendanceRes, quizzesRes, attemptsRes, announcementsRes] = await Promise.all([
         studentService.getNotes(),
         studentService.getAttendance(),
@@ -119,20 +131,33 @@ const StudentDashboard = () => {
         : [];
 
       // Update state
-      setStats({
+      const newStats = {
         totalNotes: totalNotesCount,
         attendance: attendancePercentage,
         attendancePercentage,
         quizzesAttempted: quizzesAttemptedCount,
         pendingQuizzes: upcomingQuizzesList.length
-      });
+      };
       
+      setStats(newStats);
       setUpcomingQuizzes(upcomingQuizzesList);
       setRecentAnnouncements(announcements);
 
+      // Cache the fresh data
+      dataCache.set('dashboard', userId, {
+        stats: newStats,
+        upcomingQuizzes: upcomingQuizzesList,
+        recentAnnouncements: announcements
+      });
+      
+      console.log('✅ Dashboard data refreshed and cached');
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to load dashboard data');
+      // Don't show error if we have cached data
+      if (!cachedData) {
+        toast.error('Failed to load dashboard data');
+      }
     }
   };
 
@@ -321,9 +346,17 @@ const StudentDashboard = () => {
 
               {/* Upcoming Quizzes */}
               <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-4 sm:p-6 hover:border-slate-600 transition">
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                  <h2 className="text-lg sm:text-xl font-bold text-white">Upcoming Quizzes</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Upcoming Quizzes</h2>
+                  </div>
+                  <Link
+                    to="/student/quiz/list"
+                    className="text-xs sm:text-sm text-purple-400 hover:text-purple-300 font-medium transition"
+                  >
+                    View All →
+                  </Link>
                 </div>
                 <div className="space-y-3 sm:space-y-4">
                   {upcomingQuizzes.length > 0 ? (

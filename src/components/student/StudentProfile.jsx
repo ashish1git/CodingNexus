@@ -18,6 +18,14 @@ const StudentProfile = () => {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
+  
+  // Progress stats
+  const [stats, setStats] = useState({
+    attendance: 0,
+    quizzesAttempted: 0,
+    averageScore: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -31,7 +39,66 @@ const StudentProfile = () => {
   // Refresh user data on mount to get latest profile info (in case admin updated it)
   useEffect(() => {
     refreshUser();
+    fetchProgressStats();
+    
+    // Refresh stats when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchProgressStats();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
+
+  const fetchProgressStats = async () => {
+    if (!currentUser) return;
+    
+    setLoadingStats(true);
+    try {
+      const [attendanceRes, attemptsRes] = await Promise.all([
+        studentService.getAttendance(),
+        studentService.getQuizAttempts()
+      ]);
+
+      // Calculate attendance percentage
+      let attendancePercentage = 0;
+      if (attendanceRes.success && attendanceRes.data.length > 0) {
+        const records = attendanceRes.data;
+        const totalClasses = records.length;
+        const presentClasses = records.filter(r => r.isPresent).length;
+        attendancePercentage = Math.round((presentClasses / totalClasses) * 100);
+      }
+
+      // Calculate quiz stats
+      let quizzesCount = 0;
+      let avgScore = 0;
+      if (attemptsRes.success && attemptsRes.data.length > 0) {
+        const attempts = attemptsRes.data;
+        quizzesCount = attempts.length;
+        
+        // Calculate average score
+        const totalScore = attempts.reduce((sum, attempt) => {
+          const percentage = attempt.maxScore > 0 
+            ? (attempt.score / attempt.maxScore) * 100 
+            : 0;
+          return sum + percentage;
+        }, 0);
+        avgScore = quizzesCount > 0 ? Math.round(totalScore / quizzesCount) : 0;
+      }
+
+      setStats({
+        attendance: attendancePercentage,
+        quizzesAttempted: quizzesCount,
+        averageScore: avgScore
+      });
+    } catch (error) {
+      console.error('Error fetching progress stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   const validateFile = (file) => {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
@@ -270,20 +337,26 @@ const StudentProfile = () => {
             {/* Stats Section */}
             <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg border border-slate-600/50">
               <h2 className="text-base sm:text-lg font-bold text-white mb-4">Your Progress</h2>
-              <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                <div className="text-center p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
-                  <p className="text-2xl sm: text-3xl font-bold text-indigo-400">{attendance}%</p>
-                  <p className="text-xs sm:text-sm text-slate-400 mt-1">Attendance</p>
+              {loadingStats ? (
+                <div className="flex justify-center py-8">
+                  <Loader className="w-8 h-8 text-indigo-400 animate-spin" />
                 </div>
-                <div className="text-center p-3 sm: p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
-                  <p className="text-2xl sm:text-3xl font-bold text-purple-400">0</p>
-                  <p className="text-xs sm:text-sm text-slate-400 mt-1">Quizzes</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                  <div className="text-center p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
+                    <p className="text-2xl sm:text-3xl font-bold text-indigo-400">{stats.attendance}%</p>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">Attendance</p>
+                  </div>
+                  <div className="text-center p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
+                    <p className="text-2xl sm:text-3xl font-bold text-purple-400">{stats.quizzesAttempted}</p>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">Quizzes</p>
+                  </div>
+                  <div className="text-center p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
+                    <p className="text-2xl sm:text-3xl font-bold text-pink-400">{stats.averageScore}%</p>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">Avg. Score</p>
+                  </div>
                 </div>
-                <div className="text-center p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
-                  <p className="text-2xl sm:text-3xl font-bold text-pink-400">0</p>
-                  <p className="text-xs sm: text-sm text-slate-400 mt-1">Avg. Score</p>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Help Text */}

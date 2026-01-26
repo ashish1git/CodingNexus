@@ -23,6 +23,11 @@ class ApiClient {
     const url = `${this.baseURL}${endpoint}`;
     const token = this.getToken();
 
+    // Debug: Log token status
+    if (!token && endpoint !== '/auth/login' && endpoint !== '/auth/signup' && endpoint !== '/auth/login/admin') {
+      console.warn('⚠️ No token found for authenticated request to:', endpoint);
+    }
+
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -46,6 +51,20 @@ class ApiClient {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle 401 specifically - token issues
+        if (response.status === 401) {
+          console.error('🔒 Authentication failed:', data.error);
+          // If token is invalid, clear it
+          if (data.error === 'Invalid token' || data.error === 'No token provided') {
+            this.removeToken();
+            localStorage.removeItem('user');
+            // Optionally redirect to login
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/admin/login') {
+              console.log('🔄 Redirecting to login due to invalid token...');
+              // You could trigger a redirect here or dispatch an event
+            }
+          }
+        }
         throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
 

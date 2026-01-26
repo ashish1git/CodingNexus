@@ -28,8 +28,12 @@ const QuizResults = () => {
   const [questionsWithAnswers, setQuestionsWithAnswers] = useState([]);
 
   useEffect(() => {
-    if (quizId && currentUser?.uid) {
+    if (quizId && currentUser) {
+      console.log('📊 Loading quiz results for:', { quizId, userId: currentUser.id });
       fetchQuizResults();
+    } else {
+      console.log('⚠️ Missing data:', { hasQuizId: !!quizId, hasUser: !!currentUser });
+      setLoading(false);
     }
   }, [quizId, currentUser]);
 
@@ -38,13 +42,16 @@ const QuizResults = () => {
       setLoading(true);
       setError(null);
       
-      console.log('Fetching quiz results for:', { quizId, userId: currentUser.uid });
+      console.log('🔍 Fetching quiz results for:', quizId);
       
       // Get quiz data and attempt using studentService
       const [quizResponse, attemptResponse] = await Promise.all([
         studentService.getQuizById(quizId),
         studentService.getQuizAttempt(quizId)
       ]);
+      
+      console.log('📥 Quiz response:', quizResponse);
+      console.log('📥 Attempt response:', attemptResponse);
       
       if (!quizResponse.success) {
         throw new Error('Quiz not found');
@@ -62,12 +69,17 @@ const QuizResults = () => {
       
       const studentAttempt = {
         ...attemptResponse.data,
-        submittedAt: new Date(attemptResponse.data.submittedAt)
+        submittedAt: attemptResponse.data.submittedAt ? new Date(attemptResponse.data.submittedAt) : new Date(),
+        // Calculate derived fields
+        totalQuestions: attemptResponse.data.maxScore || 0,
+        percentage: attemptResponse.data.maxScore > 0 
+          ? Math.round((attemptResponse.data.score / attemptResponse.data.maxScore) * 100) 
+          : 0
       };
       
-      console.log('Attempt data:', {
+      console.log('✅ Attempt data:', {
         score: studentAttempt.score,
-        total: studentAttempt.totalQuestions,
+        maxScore: studentAttempt.maxScore,
         answers: studentAttempt.answers
       });
       
@@ -88,11 +100,10 @@ const QuizResults = () => {
       setAttempt(studentAttempt);
       setQuestionsWithAnswers(qa);
       
-      console.log('Results loaded successfully');
-      toast.success('Quiz results loaded');
+      console.log('✅ Results loaded successfully');
       
     } catch (error) {
-      console.error('Error fetching quiz results:', error);
+      console.error('❌ Error fetching quiz results:', error);
       setError(error.message || 'Failed to load quiz results');
       toast.error(error.message || 'Failed to load quiz results');
     } finally {
@@ -141,7 +152,7 @@ const QuizResults = () => {
           <p className="text-slate-300 mb-4">{error || 'Quiz results not found'}</p>
           <p className="text-sm text-slate-400 mb-6">
             Quiz ID: {quizId}<br/>
-            User ID: {currentUser?.uid?.substring(0, 8)}...
+            {currentUser?.id && `User ID: ${currentUser.id.substring(0, 8)}...`}
           </p>
           <div className="flex flex-col gap-3">
             <button

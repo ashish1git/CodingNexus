@@ -31,7 +31,7 @@ const Navbar = () => {
     // Notifications will be added when backend API is ready
     setNotifications([]);
     setUnreadCount(0);
-  }, [currentUser]);
+  }, []); // Run once on mount
 
   const handleLogout = async () => {
     await logout();

@@ -76,19 +76,29 @@ export const AuthProvider = ({ children }) => {
         : await authService.loginStudent(email, password);
 
       if (response.success && response.user) {
-        setCurrentUser(response.user);
-        setUserDetails(response.user);
+        // Get the user from localStorage (which has been structured by authService)
+        const storedUser = authService.getStoredUser();
         
-        // Fetch fresh user data to ensure we have all details including student profile
-        try {
-          const freshUser = await authService.getCurrentUser();
-          if (freshUser) {
-            setCurrentUser(freshUser);
-            setUserDetails(freshUser);
-          }
-        } catch (error) {
-          console.warn('Could not fetch fresh user data, using login response:', error);
+        // Set user immediately from stored data
+        if (storedUser) {
+          console.log('✅ User logged in:', storedUser.email, storedUser.role);
+          setCurrentUser(storedUser);
+          setUserDetails(storedUser);
         }
+        
+        // Fetch fresh user data in background to ensure we have complete profile
+        setTimeout(async () => {
+          try {
+            const freshUser = await authService.getCurrentUser();
+            if (freshUser) {
+              console.log('🔄 Updated with fresh user data');
+              setCurrentUser(freshUser);
+              setUserDetails(freshUser);
+            }
+          } catch (error) {
+            console.warn('Could not fetch fresh user data:', error);
+          }
+        }, 100);
         
         return { success: true };
       }
