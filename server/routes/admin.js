@@ -154,6 +154,9 @@ router.put('/students/:id', async (req, res) => {
     const { id } = req.params;
     const { name, batch, phone, profilePhotoUrl, isActive } = req.body;
 
+    console.log('🔧 UPDATE REQUEST for student:', id);
+    console.log('📦 Request body:', { name, batch, phone, profilePhotoUrl, isActive });
+
     // Update user
     if (isActive !== undefined) {
       await prisma.user.update({
@@ -162,15 +165,47 @@ router.put('/students/:id', async (req, res) => {
       });
     }
 
+    // Build update object with only defined fields
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (batch !== undefined) updateData.batch = batch;
+    if (phone !== undefined) updateData.phone = phone;
+    if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = profilePhotoUrl;
+    
+    console.log('🎯 Update data for Prisma:', updateData);
+
+    // Only perform update if there's data to update
+    if (Object.keys(updateData).length === 0) {
+      console.log('⚠️ No fields to update, skipping Prisma upsert');
+      // Still fetch and return current state
+      const currentUser = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          studentProfile: true
+        }
+      });
+      
+      return res.json({ 
+        success: true,
+        student: {
+          id: currentUser.id,
+          userId: currentUser.id,
+          email: currentUser.email,
+          moodleId: currentUser.moodleId,
+          isActive: currentUser.isActive,
+          name: currentUser.studentProfile?.name,
+          rollNo: currentUser.studentProfile?.rollNo,
+          batch: currentUser.studentProfile?.batch,
+          phone: currentUser.studentProfile?.phone,
+          profilePhotoUrl: currentUser.studentProfile?.profilePhotoUrl
+        }
+      });
+    }
+
     // Update or create student profile
-    await prisma.student.upsert({
+    const studentProfile = await prisma.student.upsert({
       where: { userId: id },
-      update: {
-        name,
-        batch,
-        phone,
-        profilePhotoUrl
-      },
+      update: updateData,
       create: {
         userId: id,
         name: name || 'Student',
@@ -179,8 +214,38 @@ router.put('/students/:id', async (req, res) => {
         profilePhotoUrl
       }
     });
+    
+    console.log('💾 Prisma upsert result:', studentProfile);
 
-    res.json({ success: true });
+    // Fetch the complete updated user with student profile
+    const updatedUser = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        studentProfile: true
+      }
+    });
+    
+    console.log('✅ Final updated user:', updatedUser);
+    console.log('🎯 Final batch value:', updatedUser.studentProfile?.batch);
+
+    const responseData = { 
+      success: true,
+      student: {
+        id: updatedUser.id,
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        moodleId: updatedUser.moodleId,
+        isActive: updatedUser.isActive,
+        name: updatedUser.studentProfile?.name,
+        rollNo: updatedUser.studentProfile?.rollNo,
+        batch: updatedUser.studentProfile?.batch,
+        phone: updatedUser.studentProfile?.phone,
+        profilePhotoUrl: updatedUser.studentProfile?.profilePhotoUrl
+      }
+    };
+    
+    console.log('📤 Sending response:', responseData);
+    res.json(responseData);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -817,7 +882,26 @@ router.put('/subadmins/:id', async (req, res) => {
     });
 
     console.log('Successfully updated admin:', updated.id);
-    res.json({ success: true });
+    
+    // Return the updated sub-admin with properly formatted data
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { adminProfile: true }
+    });
+    
+    res.json({ 
+      success: true,
+      subAdmin: {
+        id: updatedUser.id,
+        userId: updatedUser.id,
+        adminId: updatedUser.adminProfile.id,
+        email: updatedUser.email,
+        name: updatedUser.adminProfile.name,
+        permissions: updatedUser.adminProfile.permissions ? 
+          (updatedUser.adminProfile.permissions === 'all' ? 'all' : JSON.parse(updatedUser.adminProfile.permissions)) 
+          : 'all'
+      }
+    });
   } catch (error) {
     console.error('Update sub-admin error:', error);
     res.status(500).json({ success: false, error: error.message });

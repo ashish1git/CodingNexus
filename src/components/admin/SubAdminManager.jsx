@@ -121,14 +121,32 @@ const SubAdminManager = ({ onBack }) => {
 
       if (response.success) {
         notify('Permissions updated successfully');
+        
+        // Update local state immediately with the returned data
+        if (response.subAdmin) {
+          console.log('📥 Updated sub-admin data from backend:', response.subAdmin);
+          setSubAdmins(prevAdmins =>
+            prevAdmins.map(admin =>
+              admin.id === selectedAdmin.id
+                ? {
+                    ...admin,
+                    name: response.subAdmin.name,
+                    permissions: response.subAdmin.permissions
+                  }
+                : admin
+            )
+          );
+        } else {
+          // Fallback: refetch if no data in response
+          const refreshResponse = await adminService.getAllSubAdmins();
+          if (refreshResponse.success) {
+            setSubAdmins(refreshResponse.subAdmins || []);
+          }
+        }
+        
         setShowEditModal(false);
         setSelectedAdmin(null);
         resetForm();
-        // Refresh sub-admins list
-        const refreshResponse = await adminService.getAllSubAdmins();
-        if (refreshResponse.success) {
-          setSubAdmins(refreshResponse.subAdmins || []);
-        }
       } else {
         notify(response.error || 'Failed to update permissions', 'error');
       }

@@ -141,13 +141,26 @@ const StudentManagement = () => {
     setLoading(true);
 
     try {
-      const response = await adminService.updateStudent(selectedStudent.id, {
+      const updateData = {
         name: formData.name,
         phone: formData.mobile,
         batch: formData.batch
-      });
+      };
+      
+      console.log('📤 Sending update for student:', selectedStudent.id);
+      console.log('📦 Update data:', updateData);
+      console.log('🎯 Current batch:', selectedStudent.batch, '→ New batch:', formData.batch);
+      
+      const response = await adminService.updateStudent(selectedStudent.id, updateData);
 
       if (response.success) {
+        console.log('✅ Update response:', response);
+        
+        if (response.student) {
+          console.log('📥 Updated student data from backend:', response.student);
+          console.log('🔄 Batch updated to:', response.student.batch);
+        }
+        
         toast.success('Student updated successfully!');
         
         // Update local state immediately if backend returned the updated student
@@ -157,10 +170,10 @@ const StudentManagement = () => {
               s.id === selectedStudent.id
                 ? {
                     ...s,
-                    name: response.student.name || s.name,
-                    batch: response.student.batch || s.batch,
-                    phone: response.student.phone || s.phone,
-                    mobile: response.student.phone || s.mobile
+                    name: response.student.name,
+                    batch: response.student.batch,
+                    phone: response.student.phone,
+                    mobile: response.student.phone
                   }
                 : s
             )
@@ -210,12 +223,20 @@ const StudentManagement = () => {
 
   const openEditModal = (student) => {
     setSelectedStudent(student);
+    
+    // Normalize batch value to ensure it's either "Basic" or "Advanced"
+    let batchValue = student.batch || 'Basic';
+    if (batchValue !== 'Basic' && batchValue !== 'Advanced') {
+      console.log(`⚠️ Invalid batch value "${batchValue}" found, defaulting to "Basic"`);
+      batchValue = 'Basic';
+    }
+    
     setFormData({
       name: student.name || '',
       rollNo: student.rollNo || '',
       moodleId: student.moodleId || '',
       mobile: student.phone || student.mobile || '',
-      batch: student.batch || 'Basic',
+      batch: batchValue,
       password: ''
     });
     setShowEditModal(true);
@@ -674,11 +695,13 @@ const StudentManagement = () => {
                 value={formData.mobile}
                 onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                 className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
               />
               <select
                 value={formData.batch}
-                onChange={(e) => setFormData({ ...formData, batch: e.target.value })}
+                onChange={(e) => {
+                  console.log('🔄 [EDIT] Batch dropdown changed to:', e.target.value);
+                  setFormData({ ...formData, batch: e.target.value });
+                }}
                 className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="Basic">Basic Batch</option>
