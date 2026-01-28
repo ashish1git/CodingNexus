@@ -24,3 +24,37 @@ dist-ssr
 *.sw?
 
 /src/generated/prisma
+
+# Environment variables (excluding .env for private repo)
+.env.local
+.env.development
+.env.test
+*.env.backup
+!.env
+!.env.production.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Build artifacts
+build/
+*.tgz
+
+# PM2
+.pm2/
+logs/
+
+# SSL certificates (if any)
+ssl/
+*.pem
+*.key
+*.crt
+
+# Backup files
+*.backup
+*.bak

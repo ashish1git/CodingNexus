@@ -10,7 +10,7 @@ import contestRoutes from './routes/contest.js';
 import prisma from './config/db.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 21000;
 
 // Test database connection on startup (don't await - run async)
 testDatabaseConnection();
