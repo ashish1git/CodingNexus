@@ -893,6 +893,70 @@ router.delete('/attendance/session/:id', async (req, res) => {
   }
 });
 
+// Delete attendance record (for manual attendance)
+router.delete('/attendance/manual/:userId/:date', async (req, res) => {
+  try {
+    const { userId, date } = req.params;
+    const normalizedDate = new Date(date + 'T00:00:00.000Z');
+
+    await prisma.attendance.delete({
+      where: {
+        userId_date: {
+          userId,
+          date: normalizedDate
+        }
+      }
+    });
+
+    res.json({ success: true, message: 'Attendance record deleted successfully' });
+  } catch (error) {
+    console.error('Delete attendance error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete attendance record from session
+router.delete('/attendance/record/:sessionId/:userId', async (req, res) => {
+  try {
+    const { sessionId, userId } = req.params;
+
+    await prisma.attendanceRecord.delete({
+      where: {
+        sessionId_userId: {
+          sessionId,
+          userId
+        }
+      }
+    });
+
+    // Update session stats
+    const allRecords = await prisma.attendanceRecord.findMany({
+      where: { sessionId }
+    });
+
+    const stats = {
+      presentCount: allRecords.filter(r => r.status === 'present').length,
+      lateCount: allRecords.filter(r => r.status === 'late').length,
+      absentCount: allRecords.filter(r => r.status === 'absent').length,
+      totalStudents: allRecords.length
+    };
+
+    stats.attendanceRate = stats.totalStudents > 0 
+      ? (stats.presentCount + stats.lateCount) / stats.totalStudents * 100 
+      : 0;
+
+    await prisma.attendanceSession.update({
+      where: { id: sessionId },
+      data: stats
+    });
+
+    res.json({ success: true, message: 'Attendance record deleted successfully' });
+  } catch (error) {
+    console.error('Delete attendance record error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Get attendance analytics with batch comparison
 router.get('/attendance/analytics', async (req, res) => {
   try {

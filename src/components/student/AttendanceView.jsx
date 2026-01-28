@@ -434,7 +434,7 @@ export default function AttendanceView() {
               <ul className="space-y-2 text-sm text-amber-700">
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 mt-0.5 text-amber-600" />
-                  <span>Maintain 75%+ attendance to be in good standing</span>
+                  <span>Maintain 75%+ attendance to be in good standing, ok</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Shield className="w-4 h-4 mt-0.5 text-amber-600" />

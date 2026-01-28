@@ -24,9 +24,10 @@ const AttendanceManager = () => {
   const [selectedBatch, setSelectedBatch] = useState('Basic');
   const [attendance, setAttendance] = useState({});
   const [manualAttendance, setManualAttendance] = useState({}); // For manual attendance mode
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]); // Auto-fetch current date
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('11:00');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [manualSearchTerm, setManualSearchTerm] = useState('');
@@ -41,8 +42,11 @@ const AttendanceManager = () => {
   const [adminLocation, setAdminLocation] = useState(null);
   const [maxDistance, setMaxDistance] = useState(100);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [codeValidity, setCodeValidity] = useState(30); // minutes
+  const [codeValidity, setCodeValidity] = useState(5); // minutes
   const [markingAttendance, setMarkingAttendance] = useState(null); // Track which student is being marked
+  const [selectedStudents, setSelectedStudents] = useState([]); // For bulk delete
+  const [showHistory, setShowHistory] = useState(false); // Show attendance history
+  const [historyRecords, setHistoryRecords] = useState([]); // Historical attendance records
 
   const canMarkAttendance = hasPermission(userDetails, 'markAttendance');
   
@@ -218,6 +222,124 @@ const AttendanceManager = () => {
       toast.error('Failed to mark attendance: ' + error.message);
     } finally {
       setMarkingAttendance(null);
+    }
+  };
+
+  // Delete manual attendance record
+  const deleteManualAttendance = async (userId) => {
+    const student = allStudents.find(s => s.userId === userId);
+    if (!window.confirm(`Delete attendance record for ${student?.name}?`)) {
+      return;
+    }
+
+    try {
+      const response = await adminService.deleteAttendanceRecord(null, userId, date, true);
+      if (response.success) {
+        setManualAttendance(prev => {
+          const updated = { ...prev };
+          delete updated[userId];
+          return updated;
+        });
+        toast.success('Attendance record deleted');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Failed to delete record');
+    }
+  };
+
+  // Delete attendance from session
+  const deleteSessionAttendance = async (userId) => {
+    if (!currentSession) return;
+    
+    const student = students.find(s => s.userId === userId);
+    if (!window.confirm(`Delete attendance record for ${student?.name}?`)) {
+      return;
+    }
+
+    try {
+      const response = await adminService.deleteAttendanceRecord(currentSession.id, userId);
+      if (response.success) {
+        // Refresh session to get updated records
+        fetchSessions();
+        toast.success('Attendance record deleted');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Failed to delete record');
+    }
+  };
+
+  // Bulk delete manual attendance for selected students
+  const bulkDeleteAttendance = async () => {
+    if (selectedStudents.length === 0) {
+      toast.error('No students selected');
+      return;
+    }
+
+    if (!window.confirm(`Delete attendance for ${selectedStudents.length} student(s) on ${date}?`)) {
+      return;
+    }
+
+    try {
+      const deletePromises = selectedStudents.map(userId => 
+        adminService.deleteAttendanceRecord(null, userId, date, true)
+      );
+      
+      const results = await Promise.all(deletePromises);
+      const successCount = results.filter(r => r.success).length;
+      
+      if (successCount > 0) {
+        // Update local state
+        setManualAttendance(prev => {
+          const updated = { ...prev };
+          selectedStudents.forEach(userId => delete updated[userId]);
+          return updated;
+        });
+        setSelectedStudents([]);
+        toast.success(`Deleted ${successCount} attendance record(s)`);
+      }
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      toast.error('Failed to delete records');
+    }
+  };
+
+  // Toggle student selection for bulk operations
+  const toggleStudentSelection = (userId) => {
+    setSelectedStudents(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  // Select all students with attendance on current date
+  const selectAllWithAttendance = () => {
+    const studentsWithAttendance = allStudents
+      .filter(s => s.batch === selectedBatch && manualAttendance[s.userId])
+      .map(s => s.userId);
+    setSelectedStudents(studentsWithAttendance);
+  };
+
+  // Load attendance history for date range
+  const loadAttendanceHistory = async (startDate, endDate) => {
+    try {
+      setLoading(true);
+      const response = await adminService.getManualAttendance({ 
+        batch: selectedBatch,
+        startDate: startDate || date,
+        endDate: endDate || date
+      });
+      
+      if (response.success) {
+        setHistoryRecords(response.records || []);
+      }
+    } catch (error) {
+      console.error('Load history error:', error);
+      toast.error('Failed to load attendance history');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1248,6 +1370,18 @@ const AttendanceManager = () => {
                               >
                                 Absent
                               </button>
+                              <button
+                                onClick={() => deleteSessionAttendance(student.userId)}
+                                disabled={!record}
+                                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                  record 
+                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                                    : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                                }`}
+                                title={record ? 'Delete attendance record' : 'No record to delete'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         );
@@ -1370,20 +1504,55 @@ const AttendanceManager = () => {
                   <p className="text-gray-500 mt-1">Search by name or Moodle ID and mark attendance with time tracking</p>
                   <div className="flex items-center gap-2 mt-2 text-sm text-indigo-600 bg-indigo-50 px-3 py-2 rounded-lg w-fit">
                     <Calendar className="w-4 h-4" />
-                    <span>You can select any date (past, present, or future) to mark attendance</span>
+                    <span>Change the date below to view & delete past attendance records</span>
                   </div>
                 </div>
                 
                 {/* Date, Time and Batch Selector for Manual */}
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">Date</label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                    />
+                    <label className="text-sm font-medium text-gray-700 block mb-1 flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      Select Date to View/Edit
+                    </label>
+                    <div className="flex gap-1">
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
+                      />
+                      <button
+                        onClick={() => setDate(new Date().toISOString().split('T')[0])}
+                        className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 text-xs font-medium whitespace-nowrap"
+                        title="Set to today"
+                      >
+                        Today
+                      </button>
+                    </div>
+                    {/* Quick date buttons */}
+                    <div className="flex gap-1 mt-1">
+                      <button
+                        onClick={() => {
+                          const yesterday = new Date();
+                          yesterday.setDate(yesterday.getDate() - 1);
+                          setDate(yesterday.toISOString().split('T')[0]);
+                        }}
+                        className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
+                      >
+                        Yesterday
+                      </button>
+                      <button
+                        onClick={() => {
+                          const lastWeek = new Date();
+                          lastWeek.setDate(lastWeek.getDate() - 7);
+                          setDate(lastWeek.toISOString().split('T')[0]);
+                        }}
+                        className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
+                      >
+                        Last Week
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-700 block mb-1">Start Time</label>
@@ -1454,24 +1623,79 @@ const AttendanceManager = () => {
               </div>
 
               {/* Quick Stats */}
-              <div className="grid grid-cols-4 gap-3 mb-4">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-gray-700">{allStudents.filter(s => s.batch === selectedBatch).length}</p>
-                  <p className="text-xs text-gray-500">Total</p>
+              <div className="mb-4">
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-purple-700 font-medium">Viewing Attendance For:</p>
+                      <p className="text-lg font-bold text-purple-900">
+                        {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                    {Object.keys(manualAttendance).length > 0 && (
+                      <div className="text-right">
+                        <p className="text-sm text-purple-700">Already Marked:</p>
+                        <p className="text-2xl font-bold text-purple-900">{Object.keys(manualAttendance).length}</p>
+                        <p className="text-xs text-purple-600">students have attendance</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-green-600">{manualAttendanceStatus.present}</p>
-                  <p className="text-xs text-green-700">Present</p>
-                </div>
-                <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-yellow-600">{manualAttendanceStatus.late}</p>
-                  <p className="text-xs text-yellow-700">Late</p>
-                </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-red-600">{manualAttendanceStatus.absent}</p>
-                  <p className="text-xs text-red-700">Absent</p>
+                
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-gray-50 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-gray-700">{allStudents.filter(s => s.batch === selectedBatch).length}</p>
+                    <p className="text-xs text-gray-500">Total</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-green-600">{manualAttendanceStatus.present}</p>
+                    <p className="text-xs text-green-700">Present</p>
+                  </div>
+                  <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-yellow-600">{manualAttendanceStatus.late}</p>
+                    <p className="text-xs text-yellow-700">Late</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-red-600">{manualAttendanceStatus.absent}</p>
+                    <p className="text-xs text-red-700">Absent</p>
+                  </div>
                 </div>
               </div>
+
+              {/* Bulk Actions Bar */}
+              {Object.keys(manualAttendance).length > 0 && (
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl mb-4 border-2 border-red-200">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <div>
+                      <p className="font-bold text-red-900 text-sm">Manage Attendance Records</p>
+                      <p className="text-xs text-red-700">Select students to delete their attendance for {new Date(date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={selectAllWithAttendance}
+                      className="px-4 py-2 bg-white text-red-700 rounded-lg hover:bg-red-50 font-medium text-sm border-2 border-red-300 transition"
+                    >
+                      Select All ({Object.keys(manualAttendance).length})
+                    </button>
+                    {selectedStudents.length > 0 && (
+                      <>
+                        <span className="text-sm font-bold text-red-700 bg-white px-3 py-2 rounded-lg border border-red-200">
+                          {selectedStudents.length} selected
+                        </span>
+                        <button
+                          onClick={bulkDeleteAttendance}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm shadow-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete Selected
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Students List */}
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
@@ -1499,6 +1723,14 @@ const AttendanceManager = () => {
                         }`}
                       >
                         <div className="flex items-center gap-4">
+                          {status && (
+                            <input
+                              type="checkbox"
+                              checked={selectedStudents.includes(student.userId)}
+                              onChange={() => toggleStudentSelection(student.userId)}
+                              className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          )}
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
                             status === 'present' ? 'bg-green-500 text-white' :
                             status === 'late' ? 'bg-yellow-500 text-white' :
@@ -1556,6 +1788,18 @@ const AttendanceManager = () => {
                           >
                             <XCircle className="w-4 h-4" />
                             Absent
+                          </button>
+                          <button
+                            onClick={() => deleteManualAttendance(student.userId)}
+                            disabled={isMarking || !status}
+                            className={`px-3 py-2 rounded-lg font-medium transition flex items-center gap-1 text-sm ${
+                              status 
+                                ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                                : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                            } disabled:opacity-50`}
+                            title={status ? 'Delete attendance record' : 'Mark attendance first'}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>

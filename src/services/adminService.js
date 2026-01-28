@@ -291,6 +291,31 @@ export const adminService = {
     }
   },
 
+  // Delete attendance record
+  async deleteAttendanceRecord(sessionId, userId, date = null, isManual = false) {
+    try {
+      let response;
+      if (isManual && date) {
+        // Delete manual attendance
+        response = await apiClient.delete(`/admin/attendance/manual/${userId}/${date}`);
+      } else if (sessionId) {
+        // Delete from session
+        response = await apiClient.delete(`/admin/attendance/record/${sessionId}/${userId}`);
+      } else {
+        throw new Error('Invalid parameters for delete');
+      }
+      
+      if (response.success) {
+        toast.success('Attendance record deleted');
+      }
+      return response;
+    } catch (error) {
+      console.error('Delete attendance record error:', error);
+      toast.error(error.message || 'Failed to delete attendance');
+      return { success: false, error: error.message };
+    }
+  },
+
   // Export report
   async exportAttendanceReport(params = {}) {
     try {
