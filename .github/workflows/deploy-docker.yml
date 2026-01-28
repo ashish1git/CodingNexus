@@ -1,11 +1,13 @@
 name: CD - Deploy with Docker
 
 on:
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+  # Disabled - using PM2 deployment instead
+  # Uncomment when you want to use Docker deployment
+  # push:
+  #   branches: [ main ]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'docs/**'
   workflow_dispatch:
 
 jobs:
