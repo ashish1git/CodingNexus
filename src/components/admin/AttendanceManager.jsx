@@ -47,6 +47,7 @@ const AttendanceManager = () => {
   const [selectedStudents, setSelectedStudents] = useState([]); // For bulk delete
   const [showHistory, setShowHistory] = useState(false); // Show attendance history
   const [historyRecords, setHistoryRecords] = useState([]); // Historical attendance records
+  const [qrMinimized, setQrMinimized] = useState(false); // Minimize QR modal
 
   const canMarkAttendance = hasPermission(userDetails, 'markAttendance');
   
@@ -1836,14 +1837,27 @@ const AttendanceManager = () => {
       </div>
 
       {/* QR Modal - Inline to prevent re-render issues */}
-      {showQR && currentSession && (
+      {showQR && currentSession && !qrMinimized && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 animate-scale-in">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-gray-800">Attendance Code</h3>
-              <button onClick={() => setShowQR(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setQrMinimized(true)} 
+                  className="p-2 hover:bg-gray-100 rounded-full transition"
+                  title="Minimize"
+                >
+                  <ChevronDown className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => setShowQR(false)} 
+                  className="p-2 hover:bg-gray-100 rounded-full transition"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Code Display - Compact */}
@@ -1909,6 +1923,85 @@ const AttendanceManager = () => {
           </div>
         </div>
       )}
+
+      {/* Minimized QR Widget - Floating bottom right */}
+      {showQR && currentSession && qrMinimized && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-4 w-72 border-2 border-white">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-white font-bold text-sm">Session Active</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => setQrMinimized(false)} 
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition text-white"
+                  title="Expand"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowQR(false);
+                    setQrMinimized(false);
+                  }} 
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition text-white"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Code Display */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 mb-3 text-center">
+              <p className="text-xs text-white/80 mb-1">Attendance Code</p>
+              <p className="text-3xl font-mono font-bold text-white tracking-[0.3em] select-all">
+                {shortCode}
+              </p>
+            </div>
+
+            {/* Timer */}
+            {qrExpiry !== null && (
+              <div className={`flex items-center justify-center gap-2 p-2 rounded-lg mb-3 text-sm font-bold ${
+                qrExpiry < 60 ? 'bg-red-500/90 text-white' : 
+                qrExpiry < 300 ? 'bg-yellow-500/90 text-white' : 
+                'bg-white/20 text-white'
+              }`}>
+                <Timer className="w-4 h-4" />
+                <span>{formatTime(qrExpiry)}</span>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={refreshQRCode}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-white/20 hover:bg-white/30 text-white text-xs rounded-lg transition backdrop-blur-sm"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Refresh
+              </button>
+              <button
+                onClick={() => setQrMinimized(false)}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-white/20 hover:bg-white/30 text-white text-xs rounded-lg transition backdrop-blur-sm"
+              >
+                <Eye className="w-3 h-3" />
+                View Full
+              </button>
+            </div>
+
+            {/* Session Info */}
+            <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/80">
+              <div className="flex justify-between">
+                <span>{currentSession?.batch}</span>
+                <span>{currentSession?.location}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {selectedStudent && studentDetails && <StudentDetailsModal />}
 
@@ -1919,6 +2012,13 @@ const AttendanceManager = () => {
         }
         .animate-scale-in {
           animation: scale-in 0.2s ease-out;
+        }
+        @keyframes slide-up {
+          from { transform: translateY(100px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
         }
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
