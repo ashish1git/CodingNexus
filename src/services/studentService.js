@@ -71,7 +71,46 @@ export const studentService = {
     }
   },
 
-  // ============ ATTENDANCE ============
+  // ============ ATTENDANCE (NEW PROFESSIONAL VERSION) ============
+  
+  // Get attendance records with stats
+  async getAttendanceRecords(params = {}) {
+    try {
+      // Add timestamp to prevent caching
+      const paramsWithTimestamp = { ...params, _t: Date.now() };
+      const queryString = new URLSearchParams(paramsWithTimestamp).toString();
+      const response = await apiClient.get(`/student/attendance/records?${queryString}`);
+      return response;
+    } catch (error) {
+      console.error('Get attendance records error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Mark attendance via QR code with geolocation
+  async markAttendanceByQR(data) {
+    try {
+      const response = await apiClient.post('/student/attendance/mark-qr', data);
+      return response;
+    } catch (error) {
+      console.error('Mark QR attendance error:', error);
+      const errorMsg = error.message || 'Failed to mark attendance';
+      return { success: false, error: errorMsg };
+    }
+  },
+
+  // Get attendance analytics
+  async getAttendanceAnalytics() {
+    try {
+      const response = await apiClient.get('/student/attendance/analytics');
+      return response;
+    } catch (error) {
+      console.error('Get attendance analytics error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ============ LEGACY ATTENDANCE (BACKWARD COMPATIBILITY) ============
   
   async getAttendance() {
     try {

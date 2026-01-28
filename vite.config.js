@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(),tailwindcss()],
   server: {
     port: 22000,
-    host: true, // Listen on all addresses
+    host: true, // Listen on all addresses (0.0.0.0)
   },
   preview: {
     port: 22000,

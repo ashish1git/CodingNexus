@@ -137,7 +137,173 @@ export const adminService = {
     }
   },
 
-  // ============ ATTENDANCE MANAGEMENT ============
+  // ============ ATTENDANCE MANAGEMENT (NEW PROFESSIONAL VERSION) ============
+  
+  // Create attendance session
+  async createAttendanceSession(sessionData) {
+    try {
+      const response = await apiClient.post('/admin/attendance/session', sessionData);
+      if (response.success) {
+        toast.success('Session created successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Create session error:', error);
+      toast.error(error.message || 'Failed to create session');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get all sessions
+  async getAttendanceSessions(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await apiClient.get(`/admin/attendance/sessions?${queryString}`);
+      return response;
+    } catch (error) {
+      console.error('Get sessions error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get session by ID
+  async getAttendanceSessionById(sessionId) {
+    try {
+      const response = await apiClient.get(`/admin/attendance/session/${sessionId}`);
+      return response;
+    } catch (error) {
+      console.error('Get session error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Mark bulk attendance
+  async markBulkAttendance(data) {
+    try {
+      const response = await apiClient.post('/admin/attendance/mark', data);
+      if (response.success) {
+        toast.success('Attendance saved successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Mark attendance error:', error);
+      toast.error(error.message || 'Failed to mark attendance');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Mark manual attendance (without session)
+  async markManualAttendance(data) {
+    try {
+      const response = await apiClient.post('/admin/attendance/manual', data);
+      return response;
+    } catch (error) {
+      console.error('Mark manual attendance error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get manual attendance for date/batch
+  async getManualAttendance(params) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await apiClient.get(`/admin/attendance/manual?${queryString}`);
+      return response;
+    } catch (error) {
+      console.error('Get manual attendance error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Mark attendance by QR
+  async markAttendanceByQR(data) {
+    try {
+      const response = await apiClient.post('/admin/attendance/mark-qr', data);
+      return response;
+    } catch (error) {
+      console.error('Mark QR attendance error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Refresh QR code for session
+  async refreshSessionQR(sessionId) {
+    try {
+      const response = await apiClient.post(`/admin/attendance/session/${sessionId}/refresh-qr`);
+      if (response.success) {
+        toast.success('QR code refreshed');
+      }
+      return response;
+    } catch (error) {
+      console.error('Refresh QR error:', error);
+      toast.error(error.message || 'Failed to refresh QR');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get student attendance details
+  async getStudentAttendanceDetails(userId) {
+    try {
+      const response = await apiClient.get(`/admin/attendance/student/${userId}`);
+      return response;
+    } catch (error) {
+      console.error('Get student details error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Close session
+  async closeAttendanceSession(sessionId) {
+    try {
+      const response = await apiClient.put(`/admin/attendance/session/${sessionId}/close`);
+      if (response.success) {
+        toast.success('Session closed');
+      }
+      return response;
+    } catch (error) {
+      console.error('Close session error:', error);
+      toast.error(error.message || 'Failed to close session');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Delete session
+  async deleteAttendanceSession(sessionId) {
+    try {
+      const response = await apiClient.delete(`/admin/attendance/session/${sessionId}`);
+      return response;
+    } catch (error) {
+      console.error('Delete session error:', error);
+      toast.error(error.message || 'Failed to delete session');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get analytics
+  async getAttendanceAnalytics(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await apiClient.get(`/admin/attendance/analytics?${queryString}`);
+      return response;
+    } catch (error) {
+      console.error('Get analytics error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Export report
+  async exportAttendanceReport(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await apiClient.get(`/admin/attendance/export?${queryString}`);
+      return response;
+    } catch (error) {
+      console.error('Export report error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ============ LEGACY ATTENDANCE (BACKWARD COMPATIBILITY) ============
   
   async markAttendance(attendanceData) {
     try {
