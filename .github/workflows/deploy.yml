@@ -1,8 +1,10 @@
 name: CD - Deploy to Server
 
 on:
-  push:
-    branches: [ main ]
+  # Disabled - deploying manually on college server
+  # Uncomment if you want auto-deployment via SSH
+  # push:
+  #   branches: [ main ]
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
