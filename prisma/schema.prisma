@@ -24,6 +24,7 @@ model User {
   quizAttempts             QuizAttempt[]
   studentProfile           Student?
   tickets                  SupportTicket[]
+  certificateRequests      CertificateRequest[]
 
   @@index([email])
   @@index([moodleId])
@@ -352,4 +353,40 @@ model SubmissionEvaluation {
   @@index([evaluatorId])
   @@index([createdAt])
   @@index([action])
+}
+
+// Certificate System
+model Certificate {
+  id            String               @id @default(uuid())
+  eventName     String
+  eventDate     DateTime
+  description   String?
+  batch         String               @default("All")
+  templateType  String               @default("participation") // participation, achievement, completion
+  isActive      Boolean              @default(true)
+  createdBy     String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  requests      CertificateRequest[]
+
+  @@index([batch])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model CertificateRequest {
+  id                String      @id @default(uuid())
+  certificateId     String
+  userId            String
+  nameOnCertificate String
+  status            String      @default("approved") // approved (auto-approved for now)
+  downloadCount     Int         @default(0)
+  requestedAt       DateTime    @default(now())
+  certificate       Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([certificateId, userId])
+  @@index([userId])
+  @@index([certificateId])
+  @@index([status])
 }

@@ -94,6 +94,7 @@ const AdminDashboard = () => {
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
     { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
+    { icon: <FileText />, label: 'Certificates', path: '/admin/certificates' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
     ...(userDetails?.role === 'superadmin' ? [{ icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }] : [])
   ];

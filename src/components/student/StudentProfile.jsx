@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn } from 'lucide-react';
+import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
+import ChangePasswordModal from '../shared/ChangePasswordModal';
 import toast from 'react-hot-toast';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -12,6 +13,7 @@ const StudentProfile = () => {
   const [uploading, setUploading] = useState(false);
   const [photoURL, setPhotoURL] = useState(userDetails?.profilePhotoUrl || userDetails?.photoURL || null);
   const [showCropModal, setShowCropModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -359,6 +361,27 @@ const StudentProfile = () => {
               )}
             </div>
 
+            {/* Security Section - Change Password */}
+            <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-slate-700/30 rounded-lg border border-slate-600/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-900/50 rounded-lg border border-amber-700/50">
+                    <Lock className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-white">Account Security</h3>
+                    <p className="text-xs sm:text-sm text-slate-400">Manage your password</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPasswordModal(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition text-sm font-medium"
+                >
+                  Change Password
+                </button>
+              </div>
+            </div>
+
             {/* Help Text */}
             <div className="mt-6 p-3 sm:p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
               <p className="text-xs sm:text-sm text-blue-300">
@@ -368,6 +391,12 @@ const StudentProfile = () => {
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
 
       {/* CROP MODAL */}
       {showCropModal && imageSrc && (

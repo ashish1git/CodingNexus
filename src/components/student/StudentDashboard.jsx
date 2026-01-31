@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
+import { certificateService } from '../../services/certificateService';
 import dataCache from '../../utils/dataCache';
 import toast from 'react-hot-toast';
 
@@ -22,6 +23,7 @@ const StudentDashboard = () => {
   });
   const [recentAnnouncements, setRecentAnnouncements] = useState([]);
   const [upcomingQuizzes, setUpcomingQuizzes] = useState([]);
+  const [availableCertificatesCount, setAvailableCertificatesCount] = useState(0);
 
   // Helper function to format quiz duration
   const formatQuizDuration = (minutes) => {
@@ -58,8 +60,22 @@ const StudentDashboard = () => {
     // Refresh user data on mount to get latest profile info (in case admin updated it)
     refreshUser();
     fetchDashboardData();
+    fetchAvailableCertificates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount
+
+  const fetchAvailableCertificates = async () => {
+    try {
+      const response = await certificateService.getAvailableCertificates();
+      if (response.success) {
+        // Count only certificates that haven't been requested yet
+        const unclaimedCount = response.data.filter(cert => !cert.requested).length;
+        setAvailableCertificatesCount(unclaimedCount);
+      }
+    } catch (error) {
+      console.error('Error fetching certificates:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     if (!userDetails || !currentUser) return;
@@ -183,6 +199,7 @@ const StudentDashboard = () => {
     { icon: <Calendar className="w-5 h-5" />, label: 'Attendance', path: '/student/attendance' },
     { icon: <Award className="w-5 h-5" />, label: 'Quizzes', path: '/student/quiz/list' },
     { icon: <Trophy className="w-5 h-5" />, label: 'Competitions', path: '/student/competitions' },
+    { icon: <FileText className="w-5 h-5" />, label: 'Certificates', path: '/student/certificates', badge: availableCertificatesCount, isNew: true },
     { icon: <Code className="w-5 h-5" />, label: 'Code Editor', path: '/student/code-editor' },
     { icon: <HelpCircle className="w-5 h-5" />, label: 'Support', path: '/student/support' }
   ];
@@ -263,11 +280,28 @@ const StudentDashboard = () => {
                 <Link
                   key={idx}
                   to={item.path}
-                  className="flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-slate-300 hover:bg-indigo-600/20 hover:text-indigo-400 rounded-lg transition border border-transparent hover:border-indigo-600/50 text-sm sm:text-base"
+                  className="flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-slate-300 hover:bg-indigo-600/20 hover:text-indigo-400 rounded-lg transition border border-transparent hover:border-indigo-600/50 text-sm sm:text-base relative"
                   onClick={() => setIsSidebarOpen(false)}
                 >
-                  {item.icon}
+                  <span className="relative">
+                    {item.icon}
+                    {item.badge > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center font-bold animate-pulse">
+                        {item.badge > 9 ? '9+' : item.badge}
+                      </span>
+                    )}
+                  </span>
                   <span className="font-medium">{item.label}</span>
+                  {item.isNew && (
+                    <span className="ml-auto bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse shadow-lg shadow-green-500/30">
+                      NEW
+                    </span>
+                  )}
+                  {item.badge > 0 && !item.isNew && (
+                    <span className="ml-auto bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                      {item.badge} new
+                    </span>
+                  )}
                 </Link>
               ))}
             </nav>

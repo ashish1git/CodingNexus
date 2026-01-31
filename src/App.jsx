@@ -12,6 +12,7 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
 import AdminLogin from './components/auth/AdminLogin';
+import ForgotPassword from './components/auth/ForgotPassword';
 
 // Student components
 import StudentDashboard from './components/student/StudentDashboard';
@@ -26,6 +27,7 @@ import SupportTicket from './components/student/SupportTicket';
 import Competitions from './components/student/Competitions';
 import CompetitionProblems from './components/student/CompetitionProblems';
 import CompetitionResults from './components/student/CompetitionResults';
+import StudentCertificates from './components/student/StudentCertificates';
 
 // Admin components
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -42,6 +44,7 @@ import TicketManagement from './components/admin/TicketManagement';
 import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
+import CertificateManager from './components/admin/CertificateManager';
 
 // Shared/Other components
 import ClubMembers from './components/shared/ClubMembers';
@@ -75,6 +78,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               
               {/* Club Members Page - Share this route directly with selected members */}
               <Route path="/club-members" element={<ClubMembers />} />
@@ -174,6 +178,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SupportTicket />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/certificates" 
+                element={
+                  <ProtectedRoute>
+                    <StudentCertificates />
                   </ProtectedRoute>
                 } 
               />
@@ -288,6 +300,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <SubmissionEvaluator />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/certificates" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <CertificateManager />
                   </ProtectedRoute>
                 } 
               />

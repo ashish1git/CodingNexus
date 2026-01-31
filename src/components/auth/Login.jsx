@@ -126,16 +126,25 @@ const Login = () => {
               onChange={handleChange}
               style={{ color: '#111827' }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-gray-900"
-              placeholder="Enter your Moodle ID"
+              placeholder="e.g., 23106031"
               required
             />
+            <p className="mt-1 text-xs text-gray-500">Enter only your Moodle ID number</p>
           </div>
 
           {/* Password Input */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <Link
+                to="/forgot-password"
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                Forgot Password?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}

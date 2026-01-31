@@ -83,25 +83,41 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Normalize email (handle moodleId@codingnexus.com)
-    let normalizedEmail = email;
+    console.log('🔐 Login attempt with:', email);
+
+    // Build search conditions - handle multiple formats
+    const searchConditions = [
+      { email: email }, // Exact email match (e.g., 23106031@student.mu.ac.in)
+      { moodleId: email } // Moodle ID match (e.g., 23106031)
+    ];
+
+    // If input doesn't contain @, also try with common email domains
     if (!email.includes('@')) {
-      normalizedEmail = `${email}@codingnexus.com`;
+      searchConditions.push(
+        { email: `${email}@student.mu.ac.in` },
+        { email: `${email}@codingnexus.com` },
+        { email: `${email}@apsit.edu.in` }
+      );
+    } else {
+      // If it has @, also extract the moodleId part and search by that
+      const moodleIdPart = email.split('@')[0];
+      searchConditions.push({ moodleId: moodleIdPart });
     }
+
+    console.log('🔍 Search conditions:', JSON.stringify(searchConditions));
 
     // Find user by email or moodleId
     const user = await prisma.user.findFirst({
       where: {
-        OR: [
-          { email: normalizedEmail },
-          { moodleId: email }
-        ],
+        OR: searchConditions,
         role: 'student'
       },
       include: {
         studentProfile: true
       }
     });
+
+    console.log('👤 User found:', user ? { id: user.id, email: user.email, moodleId: user.moodleId, isActive: user.isActive, hasProfile: !!user.studentProfile, profileData: user.studentProfile } : 'NOT FOUND');
 
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
@@ -130,12 +146,16 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        moodleId: user.moodleId,
         isActive: user.isActive,
         profile: user.studentProfile,
         studentProfile: user.studentProfile,
-        // Add commonly accessed fields
+        // Add commonly accessed fields at root level
         batch: user.studentProfile?.batch,
-        name: user.studentProfile?.name
+        name: user.studentProfile?.name,
+        phone: user.studentProfile?.phone,
+        rollNo: user.studentProfile?.rollNo,
+        profilePhotoUrl: user.studentProfile?.profilePhotoUrl
       }
     });
   } catch (error) {
@@ -319,6 +339,154 @@ router.get('/me', authenticate, async (req, res) => {
     res.json({ success: true, user: userData });
   } catch (error) {
     console.error('Get profile error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Request password reset - verify moodleId exists and return masked info
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { moodleId } = req.body;
+
+    if (!moodleId) {
+      return res.status(400).json({ success: false, error: 'Moodle ID is required' });
+    }
+
+    const input = moodleId.trim();
+    
+    // Build search conditions - handle multiple formats
+    const searchConditions = [
+      { moodleId: input },
+      { email: input }
+    ];
+
+    // If input doesn't contain @, also try with common email domains
+    if (!input.includes('@')) {
+      searchConditions.push(
+        { email: `${input}@student.mu.ac.in` },
+        { email: `${input}@codingnexus.com` },
+        { email: `${input}@apsit.edu.in` }
+      );
+    } else {
+      // If it has @, also extract the moodleId part
+      const moodleIdPart = input.split('@')[0];
+      searchConditions.push({ moodleId: moodleIdPart });
+    }
+
+    // Find user by moodleId or email
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: searchConditions,
+        role: 'student'
+      },
+      include: {
+        studentProfile: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'No account found with this Moodle ID' });
+    }
+
+    // Get phone number hint (last 4 digits)
+    const phone = user.studentProfile?.phone || '';
+    const phoneHint = phone.length >= 4 ? phone.slice(-4) : '****';
+
+    // Get masked name (first name only)
+    const fullName = user.studentProfile?.name || 'Student';
+    const firstName = fullName.split(' ')[0];
+    const maskedName = firstName.length > 2 
+      ? firstName[0] + '*'.repeat(firstName.length - 2) + firstName[firstName.length - 1]
+      : firstName;
+
+    res.json({
+      success: true,
+      data: {
+        maskedName,
+        phoneHint,
+        hasPhone: !!phone
+      }
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Reset password - verify phone last 4 digits and update password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { moodleId, phoneLast4, newPassword } = req.body;
+
+    if (!moodleId || !phoneLast4 || !newPassword) {
+      return res.status(400).json({ success: false, error: 'All fields are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+
+    const input = moodleId.trim();
+    
+    // Build search conditions - handle multiple formats
+    const searchConditions = [
+      { moodleId: input },
+      { email: input }
+    ];
+
+    // If input doesn't contain @, also try with common email domains
+    if (!input.includes('@')) {
+      searchConditions.push(
+        { email: `${input}@student.mu.ac.in` },
+        { email: `${input}@codingnexus.com` },
+        { email: `${input}@apsit.edu.in` }
+      );
+    } else {
+      const moodleIdPart = input.split('@')[0];
+      searchConditions.push({ moodleId: moodleIdPart });
+    }
+
+    // Find user by moodleId or email
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: searchConditions,
+        role: 'student'
+      },
+      include: {
+        studentProfile: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    // Verify phone last 4 digits
+    const phone = user.studentProfile?.phone || '';
+    const actualLast4 = phone.length >= 4 ? phone.slice(-4) : '';
+
+    if (!actualLast4) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No phone number registered. Please contact admin to reset your password.' 
+      });
+    }
+
+    if (phoneLast4 !== actualLast4) {
+      return res.status(400).json({ success: false, error: 'Phone verification failed' });
+    }
+
+    // Hash new password and update
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

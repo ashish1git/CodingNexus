@@ -32,14 +32,9 @@ export const authService = {
   // Student login
   loginStudent: async (input, password) => {
     try {
-      // Normalize email - handle both moodle ID and email
-      let studentEmail = input;
-      if (!studentEmail.includes('@')) {
-        studentEmail = `${studentEmail}@codingnexus.com`;
-      }
-
+      // Send the input directly - backend handles all formats
       const response = await apiClient.post('/auth/login', {
-        email: studentEmail,
+        email: input,
         password
       });
 
@@ -47,23 +42,21 @@ export const authService = {
         apiClient.setToken(response.token);
         
         console.log('🔐 Login response user:', response.user);
-        console.log('📦 Profile data:', response.user.profile);
         
-        // Structure user data properly - merge profile into user object
+        // The backend already provides flattened data with batch/name at root level
+        // Just use it directly, but also ensure we have fallbacks
         const userData = {
           ...response.user,
-          studentProfile: response.user.profile,
-          // Also add batch and other profile fields directly for easy access
-          ...(response.user.profile && {
-            batch: response.user.profile.batch,
-            name: response.user.profile.name,
-            phone: response.user.profile.phone,
-            rollNo: response.user.profile.rollNo
-          })
+          // Ensure these are at root level (backend already provides them, but fallback just in case)
+          batch: response.user.batch || response.user.studentProfile?.batch || response.user.profile?.batch,
+          name: response.user.name || response.user.studentProfile?.name || response.user.profile?.name,
+          phone: response.user.phone || response.user.studentProfile?.phone || response.user.profile?.phone,
+          rollNo: response.user.rollNo || response.user.studentProfile?.rollNo || response.user.profile?.rollNo,
+          moodleId: response.user.moodleId
         };
         
         console.log('💾 Storing user data:', userData);
-        console.log('✅ Batch:', userData.batch);
+        console.log('✅ Batch:', userData.batch, '| Name:', userData.name);
         
         // Store user data in localStorage for AuthContext
         localStorage.setItem('user', JSON.stringify(userData));
@@ -194,6 +187,40 @@ export const authService = {
     } catch (error) {
       console.error('Activate account error:', error);
       toast.error(error.message || 'Failed to activate account');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Request password reset - verify moodleId exists
+  requestPasswordReset: async (moodleId) => {
+    try {
+      const response = await apiClient.post('/auth/forgot-password', {
+        moodleId
+      });
+      return response;
+    } catch (error) {
+      console.error('Request password reset error:', error);
+      toast.error(error.message || 'Failed to find account');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Reset password with phone verification
+  resetPassword: async (moodleId, phoneLast4, newPassword) => {
+    try {
+      const response = await apiClient.post('/auth/reset-password', {
+        moodleId,
+        phoneLast4,
+        newPassword
+      });
+
+      if (response.success) {
+        toast.success('Password reset successfully!');
+      }
+      return response;
+    } catch (error) {
+      console.error('Reset password error:', error);
+      toast.error(error.message || 'Failed to reset password');
       return { success: false, error: error.message };
     }
   },

@@ -7,6 +7,7 @@ import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
 import competitionRoutes from './routes/competition.js';
 import contestRoutes from './routes/contest.js';
+import certificateRoutes from './routes/certificate.js';
 import prisma from './config/db.js';
 
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/competitions', competitionRoutes);
 app.use('/api/contest', contestRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
