@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 
 // Import actual components
 import LandingPage from './components/layout/LandingPage';
+import MaintenancePage from './components/layout/MaintenancePage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
 // Auth components
@@ -50,6 +51,20 @@ import CertificateManager from './components/admin/CertificateManager';
 import ClubMembers from './components/shared/ClubMembers';
 
 function App() {
+  // Check if maintenance mode is enabled
+  const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
+
+  // If in maintenance mode, show maintenance page instead of normal routes
+  if (isMaintenanceMode) {
+    return (
+      <ThemeProvider>
+        <Router>
+          <MaintenancePage />
+        </Router>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>

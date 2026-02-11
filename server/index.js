@@ -50,6 +50,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Maintenance Mode Middleware
+app.use((req, res, next) => {
+  if (process.env.MAINTENANCE_MODE === 'true') {
+    return res.status(503).json({
+      success: false,
+      status: 503,
+      message: 'Service Unavailable',
+      detail: 'We are currently under scheduled maintenance. Please try again soon.',
+      estimatedTime: '24-48 hours'
+    });
+  }
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);

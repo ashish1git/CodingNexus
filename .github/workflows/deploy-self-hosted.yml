@@ -1,0 +1,50 @@
+name: CD - Deploy (Self-Hosted Runner)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    name: Deploy to College Server
+    runs-on: self-hosted  # Uses your self-hosted runner
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+
+      - name: Restart PM2
+        run: |
+          pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs
+          pm2 save
+
+      - name: Verify Deployment
+        run: |
+          sleep 5
+          echo "✅ Deployment complete!"
+          pm2 status
