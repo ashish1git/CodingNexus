@@ -74,6 +74,9 @@ router.post('/students', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Normalize batch to lowercase
+    const normalizedBatch = batch ? batch.toLowerCase() : 'basic';
+
     // Create user and student profile - AUTO-ACTIVATED since created by admin
     const user = await prisma.user.create({
       data: {
@@ -86,7 +89,7 @@ router.post('/students', async (req, res) => {
           create: {
             name,
             rollNo,
-            batch,
+            batch: normalizedBatch,
             phone
           }
         }
@@ -169,7 +172,7 @@ router.put('/students/:id', async (req, res) => {
     // Build update object with only defined fields
     const updateData = {};
     if (name !== undefined) updateData.name = name;
-    if (batch !== undefined) updateData.batch = batch;
+    if (batch !== undefined) updateData.batch = batch.toLowerCase();
     if (phone !== undefined) updateData.phone = phone;
     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = profilePhotoUrl;
     
@@ -210,7 +213,7 @@ router.put('/students/:id', async (req, res) => {
       create: {
         userId: id,
         name: name || 'Student',
-        batch: batch || 'Basic',
+        batch: batch ? batch.toLowerCase() : 'basic',
         phone,
         profilePhotoUrl
       }
@@ -302,12 +305,15 @@ router.post('/notes', async (req, res) => {
       }
     }
 
+    // Normalize batch to lowercase
+    const normalizedBatch = batch && batch !== 'All' ? batch.toLowerCase() : batch;
+
     const note = await prisma.note.create({
       data: {
         title,
         description,
         fileUrl,
-        batch,
+        batch: normalizedBatch,
         subject,
         uploadedBy: req.user.id
       }
@@ -399,11 +405,14 @@ router.post('/announcements', async (req, res) => {
   try {
     const { title, message, batch, priority } = req.body;
 
+    // Normalize batch to lowercase
+    const normalizedBatch = batch && batch !== 'All' ? batch.toLowerCase() : batch;
+
     await prisma.announcement.create({
       data: {
         title,
         message,
-        batch,
+        batch: normalizedBatch,
         priority: priority || 'normal',
         createdBy: req.user.id
       }
@@ -1354,9 +1363,12 @@ router.post('/quizzes', async (req, res) => {
   try {
     const { title, description, batch, startTime, endTime, duration, questions } = req.body;
     
+    // Normalize batch to lowercase for consistency
+    const normalizedBatch = batch && batch !== 'All' ? batch.toLowerCase() : batch;
+    
     console.log('📝 Creating quiz:', {
       title,
-      batch,
+      batch: normalizedBatch,
       duration,
       questionsCount: Array.isArray(questions) ? questions.length : 0,
       createdBy: req.user.id
@@ -1366,7 +1378,7 @@ router.post('/quizzes', async (req, res) => {
       data: {
         title,
         description,
-        batch,
+        batch: normalizedBatch,
         startTime: startTime ? new Date(startTime) : undefined,
         endTime: endTime ? new Date(endTime) : undefined,
         duration,

@@ -8,6 +8,7 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import { parseString } from 'xml2js';
+import xlsx from 'xlsx';
 
 // Parse connection string to add SSL if it's a Render database
 const connectionString = process.env.DATABASE_URL;
@@ -29,7 +30,7 @@ const prisma = new PrismaClient({ adapter });
 
 // Default values for students
 const DEFAULT_PASSWORD = '123456'; // All students will have this password initially
-const DEFAULT_BATCH = '2024'; // Default batch
+const DEFAULT_BATCH = 'basic'; // Default batch
 const DEFAULT_ROLE = 'student';
 
 async function parseXMLFile(filePath) {
@@ -179,31 +180,139 @@ async function createStudent(moodleId, name, password) {
   }
 }
 
-async function importStudents() {
-  console.log('\n=== Import Students from XML ===\n');
-  
-  const xmlFilePath = 'users (1).xml';
-  
+async function activateExistingStudents() {
   try {
-    // Check if file exists
-    if (!fs.existsSync(xmlFilePath)) {
-      console.error(`File not found: ${xmlFilePath}`);
-      console.error('Please make sure "users (1).xml" exists in the project root.');
-      process.exit(1);
+    // Hash the default password
+    const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+    
+    // Get all students with moodleId
+    const allStudents = await prisma.user.findMany({
+      where: {
+        role: 'student',
+        moodleId: { not: null }
+      },
+      select: {
+        id: true,
+        email: true,
+        moodleId: true,
+        isActive: true,
+        studentProfile: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+    
+    if (allStudents.length === 0) {
+      return { activated: 0 };
     }
     
-    console.log(`📂 Reading file: ${xmlFilePath}`);
+    // Update all students to be active with default password and batch
+    const updatePromises = allStudents.map(student =>
+      prisma.user.update({
+        where: { id: student.id },
+        data: {
+          isActive: true,
+          password: hashedPassword,
+          studentProfile: student.studentProfile ? {
+            update: {
+              batch: DEFAULT_BATCH
+            }
+          } : undefined
+        }
+      })
+    );
     
-    // Parse XML
-    const xmlData = await parseXMLFile(xmlFilePath);
-    const students = extractStudentsFromXML(xmlData);
+    await Promise.all(updatePromises);
     
-    console.log(`\n📊 Found ${students.length} students in XML file\n`);
+    return { activated: allStudents.length, students: allStudents };
+  } catch (error) {
+    console.error('Error activating existing students:', error.message);
+    return { activated: 0, error: error.message };
+  }
+}
+
+function findUsersFile() {
+  const possibleFiles = ['users.ods', 'users.xlsx', 'users.xls', 'users.xml', 'users (1).xml'];
+  
+  for (const file of possibleFiles) {
+    if (fs.existsSync(file)) {
+      return file;
+    }
+  }
+  
+  return null;
+}
+
+function extractStudentsFromSpreadsheet(filePath) {
+  const students = [];
+  
+  try {
+    const workbook = xlsx.readFile(filePath);
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    // Skip header row, start from index 1
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      
+      if (!row || row.length < 2) continue;
+      
+      let moodleId = (row[0] || '').toString().trim();
+      let name = (row[1] || '').toString().trim();
+      
+      if (moodleId && name) {
+        students.push({ moodleId, name });
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing spreadsheet:', error.message);
+  }
+  
+  return students;
+}
+
+async function importStudents() {
+  console.log('\n=== Import & Activate All Students ===\n');
+  
+  const usersFile = findUsersFile();
+  
+  if (!usersFile) {
+    console.error('❌ No users file found!');
+    console.error('Please add one of these files to the project root:');
+    console.error('   - users.xml');
+    console.error('   - users.ods');
+    console.error('   - users.xlsx');
+    process.exit(1);
+  }
+  
+  console.log(`📂 Found file: ${usersFile}\n`);
+  
+  let students = [];
+  
+  try {
+    // Parse different file formats
+    if (usersFile.endsWith('.xml')) {
+      const xmlData = await parseXMLFile(usersFile);
+      students = extractStudentsFromXML(xmlData);
+    } else {
+      // Handle .ods and .xlsx/.xls files
+      students = extractStudentsFromSpreadsheet(usersFile);
+    }
+    
+    console.log(`📊 Found ${students.length} students in file\n`);
+    
+    if (students.length === 0) {
+      console.log('⚠️  No students found in file. Please check the file format.');
+      process.exit(0);
+    }
+    
     console.log(`Default settings:`);
     console.log(`   - Password: ${DEFAULT_PASSWORD}`);
     console.log(`   - Batch: ${DEFAULT_BATCH}`);
     console.log(`   - Email format: {moodleId}@student.mu.ac.in`);
-    console.log(`   - Status: Active\n`);
+    console.log(`   - Status: ACTIVATED\n`);
     
     // Import students
     let successCount = 0;
@@ -222,20 +331,32 @@ async function importStudents() {
       }
     }
     
-    // Summary
-    console.log('\n' + '='.repeat(50));
-    console.log('📈 Import Summary:');
-    console.log('='.repeat(50));
-    console.log(`✅ Successfully created: ${successCount} students`);
-    console.log(`⚠️  Skipped (already exist): ${skipCount} students`);
-    console.log(`❌ Failed: ${errorCount} students`);
-    console.log(`📊 Total processed: ${students.length} students`);
-    console.log('='.repeat(50) + '\n');
+    // Activate all existing students too
+    console.log('\n🔄 Activating all existing students...\n');
+    const activationResult = await activateExistingStudents();
     
-    if (successCount > 0) {
-      console.log('🎉 Students created successfully!');
-      console.log(`   Default password for all students: ${DEFAULT_PASSWORD}`);
-      console.log('   Students can login with their email and change their password later.\n');
+    if (activationResult.students && activationResult.students.length > 0) {
+      console.log(`✅ Activated ${activationResult.activated} students by Moodle ID:\n`);
+      activationResult.students.forEach((student, index) => {
+        console.log(`   ${index + 1}. Moodle ID: ${student.moodleId} | Email: ${student.email}`);
+      });
+    }
+    
+    // Summary
+    console.log('\n' + '='.repeat(60));
+    console.log('📈 Import & Activation Summary:');
+    console.log('='.repeat(60));
+    console.log(`✅ Successfully created: ${successCount} new students`);
+    console.log(`⚠️  Skipped (already exist): ${skipCount} students`);
+    console.log(`🔓 Activated total: ${activationResult.activated} students`);
+    console.log(`❌ Failed: ${errorCount} students`);
+    console.log(`📊 Total processed from file: ${students.length}`);
+    console.log('='.repeat(60) + '\n');
+    
+    if (successCount > 0 || activationResult.activated > 0) {
+      console.log('🎉 Operation completed successfully!');
+      console.log(`   ✅ Default password for all students: ${DEFAULT_PASSWORD}`);
+      console.log(`   ✅ All students activated and can login!\n`);
     }
     
   } catch (error) {
