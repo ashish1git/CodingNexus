@@ -339,7 +339,11 @@ router.get('/:id', authenticate, async (req, res) => {
             examples: true,
             testCases: true, // Include all test cases
             timeLimit: true,
-            memoryLimit: true
+            memoryLimit: true,
+            functionName: true,
+            parameters: true,
+            returnType: true,
+            starterCode: true
           },
           orderBy: { orderIndex: 'asc' }
         },
@@ -453,6 +457,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const { solutions } = req.body; // Array of {problemId, code, language}
+
 
     // Check if competition exists and is ongoing
     const competition = await prisma.competition.findUnique({
@@ -624,45 +629,63 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               );
             }
 
-            // Submit to Judge0 with wait=true for synchronous result
+            // Step 1: Submit code to Judge0 and get token
             const judge0Payload = {
               source_code: executableCode,
-              language_id: languageId
+              language_id: languageId,
+              stdin: testCase.input || '',
+              expected_output: testCase.output || ''
             };
-            
-            // Add stdin if problem doesn't use parameters (stdin-based)
-            if (!problem.parameters) {
-              judge0Payload.stdin = testCase.input || '';
-            }
-            
+
             console.log(`[Judge0 Request] TestCase ${i + 1}:`, JSON.stringify({
-              language_id: judge0Payload.language_id,
-              has_stdin: !!judge0Payload.stdin,
-              source_code_len: judge0Payload.source_code.length
+              language_id: languageId,
+              has_stdin: !!testCase.input,
+              source_code_len: executableCode.length
             }, null, 2));
 
-            const judge0Response = await axios.post(
-              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+            const submitResponse = await axios.post(
+              `${JUDGE0_URL}/submissions`,
               judge0Payload,
               {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 60000 // 60 seconds timeout
+                timeout: 30000
               }
             );
-            
-            console.log(`[Judge0 Response Received] TestCase ${i + 1}`);
 
-            const result = judge0Response.data;
-            
-            console.log(`[Judge0 Response] TestCase ${i + 1}:`, JSON.stringify({
-              status_id: result.status?.id,
-              status_desc: result.status?.description,
-              stdout: (result.stdout || '').substring(0, 100),
-              stderr: (result.stderr || '').substring(0, 100),
-              compile_output: (result.compile_output || '').substring(0, 100),
-              time: result.time,
-              memory: result.memory
-            }, null, 2));
+            const token = submitResponse.data.token;
+            console.log(`[Judge0 Submitted] TestCase ${i + 1} - Token: ${token}`);
+
+            // Step 2: Poll for results
+            let result;
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            while (attempts < maxAttempts) {
+              const statusResponse = await axios.get(
+                `${JUDGE0_URL}/submissions/${token}`,
+                {
+                  headers: { 'Content-Type': 'application/json' },
+                  timeout: 10000
+                }
+              );
+
+              result = statusResponse.data;
+
+              // Check if judging is complete (status 1 = In Queue, 2 = Processing, 3+ = Completed)
+              if (result.status?.id > 2) {
+                console.log(`[Judge0 Response] TestCase ${i + 1} - Status: ${result.status?.description}`);
+                break;
+              }
+
+              attempts++;
+              await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retrying
+            }
+
+            if (!result) {
+              throw new Error('Judge0 did not return results after max attempts');
+            }
+
+            console.log(`[Judge0 Response Received] TestCase ${i + 1}`);
             
             const stdout = (result.stdout || '').trim();
             const expected = (testCase.output || '').trim();
@@ -810,7 +833,11 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
             examples: problem.examples || [],
             testCases: problem.testCases || [],
             timeLimit: problem.timeLimit || 3000,
-            memoryLimit: problem.memoryLimit || 256
+            memoryLimit: problem.memoryLimit || 256,
+            functionName: problem.functionName || 'solution',
+            returnType: problem.returnType || 'int',
+            parameters: problem.parameters || [],
+            starterCode: problem.starterCode || {}
           }))
         }
       },
