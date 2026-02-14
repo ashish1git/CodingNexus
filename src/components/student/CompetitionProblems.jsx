@@ -117,6 +117,8 @@ const CompetitionProblems = () => {
   };
 
   const handleRunCode = async () => {
+    console.log('🔵 [1] handleRunCode started');
+    
     // Rate limiting: Allow only 1 run per 3 seconds
     const now = Date.now();
     const timeSinceLastRun = now - lastRunTime;
@@ -134,8 +136,15 @@ const CompetitionProblems = () => {
     toast.loading('Running test cases...');
     
     try {
+      console.log('🔵 [2] Code snippet:', code.substring(0, 100) + '...');
+      console.log('🔵 [3] Language selected:', language);
+      console.log('🔵 [4] Competition ID:', competitionId);
+      console.log('🔵 [5] Problem ID:', selectedProblem?.id);
+      
       // Get only visible (non-hidden) test cases
       const visibleTestCases = selectedProblem.testCases.filter(tc => !tc.hidden);
+      console.log('🔵 [6] Visible test cases count:', visibleTestCases.length);
+      console.log('🔵 [7] Test cases data:', visibleTestCases);
       
       // Map language names to Judge0 language IDs
       const judge0LanguageMap = {
@@ -149,29 +158,51 @@ const CompetitionProblems = () => {
       const languageId = judge0LanguageMap[language];
       const JUDGE0_URL = import.meta.env.VITE_JUDGE0_URL || 'http://64.227.149.20:2358';
       
+      console.log('🔵 [8] Judge0 URL:', JUDGE0_URL);
+      console.log('🔵 [9] Language ID:', languageId);
+      
       // Run code against each visible test case using Judge0
       const results = await Promise.all(
         visibleTestCases.map(async (tc, idx) => {
           try {
-            const response = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`, {
+            console.log(`🟠 [10.${idx}] Processing test case ${idx + 1}, input: ${tc.input}`);
+            
+            const requestPayload = {
+              source_code: code,
+              language_id: languageId,
+              stdin: tc.input || ''
+            };
+            
+            console.log(`🟠 [11.${idx}] Request payload:`, requestPayload);
+            
+            const requestUrl = `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`;
+            console.log(`🟠 [12.${idx}] Fetching from URL:`, requestUrl);
+            
+            const response = await fetch(requestUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                source_code: code,
-                language_id: languageId,
-                stdin: tc.input || ''
-              })
+              body: JSON.stringify(requestPayload)
             });
             
+            console.log(`🟠 [13.${idx}] Response status:`, response.status, response.statusText);
+            
+            if (!response.ok) {
+              console.error(`🟠 [14.${idx}] HTTP Error: ${response.status}`);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const result = await response.json();
+            console.log(`🟠 [15.${idx}] Judge0 response:`, result);
             
             // Check if execution was successful (status 3 = Accepted)
             if (result.status?.id === 3 || result.stdout) {
               const actualOutput = (result.stdout || '').trim();
               const expectedOutput = (tc.output || '').trim();
               const passed = actualOutput === expectedOutput;
+              
+              console.log(`🟠 [16.${idx}] Expected: "${expectedOutput}", Actual: "${actualOutput}", Passed: ${passed}`);
               
               return {
                 id: idx + 1,
@@ -185,6 +216,8 @@ const CompetitionProblems = () => {
             } else {
               // Compilation or runtime error
               const errorMsg = result.compile_output || result.stderr || result.status?.description || 'Unknown error';
+              console.log(`🟠 [17.${idx}] Error: ${errorMsg}`);
+              
               return {
                 id: idx + 1,
                 passed: false,
@@ -196,6 +229,7 @@ const CompetitionProblems = () => {
               };
             }
           } catch (error) {
+            console.error(`🟠 [18.${idx}] Exception caught:`, error);
             return {
               id: idx + 1,
               passed: false,
@@ -212,6 +246,9 @@ const CompetitionProblems = () => {
       const passedCount = results.filter(r => r.passed).length;
       const totalCount = results.length;
       
+      console.log('🟢 [19] Results summary:', { passed: passedCount, total: totalCount });
+      console.log('🟢 [20] Full results:', results);
+      
       setTestResults({
         passed: passedCount,
         total: totalCount,
@@ -227,7 +264,8 @@ const CompetitionProblems = () => {
       }
       
     } catch (error) {
-      console.error('Error running code:', error);
+      console.error('🔴 [ERROR] Main error running code:', error);
+      console.error('🔴 [ERROR] Stack:', error.stack);
       toast.dismiss();
       toast.error('Failed to run code. Please try again.');
     } finally {

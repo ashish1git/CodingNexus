@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert
+  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
@@ -36,7 +36,20 @@ const CompetitionManager = () => {
     points: 100,
     constraints: [''],
     examples: [{ input: '', output: '', explanation: '' }],
-    testCases: [{ input: '', output: '', hidden: false }]
+    testCases: [{ input: '', output: '', hidden: false }],
+    functionName: 'solution',
+    returnType: 'int',
+    parameters: [{ name: 'nums', type: 'int[]' }],
+    timeLimit: 3000,
+    memoryLimit: 256,
+    currentLanguage: 'python',
+    starterCode: {
+      python: 'def solution(nums):\n    # Write your code here\n    pass',
+      cpp: '#include <vector>\nusing namespace std;\n\nint solution(vector<int>& nums) {\n    // Write your code here\n    return 0;\n}',
+      java: 'public class Solution {\n    public int solution(int[] nums) {\n        // Write your code here\n        return 0;\n    }\n}',
+      javascript: 'var solution = function(nums) {\n    // Write your code here\n    return 0;\n};',
+      c: '#include <stdio.h>\n\nint solution(int* nums, int numsSize) {\n    // Write your code here\n    return 0;\n}'
+    }
   });
   const [competitions, setCompetitions] = useState([]);
 
@@ -380,7 +393,20 @@ const CompetitionManager = () => {
       points: 100,
       constraints: [''],
       examples: [{ input: '', output: '', explanation: '' }],
-      testCases: [{ input: '', output: '', hidden: false }]
+      testCases: [{ input: '', output: '', hidden: false }],
+      functionName: 'solution',
+      returnType: 'int',
+      parameters: [{ name: 'nums', type: 'int[]' }],
+      timeLimit: 3000,
+      memoryLimit: 256,
+      currentLanguage: 'python',
+      starterCode: {
+        python: 'def solution(nums):\n    # Write your code here\n    pass',
+        cpp: '#include <vector>\nusing namespace std;\n\nint solution(vector<int>& nums) {\n    // Write your code here\n    return 0;\n}',
+        java: 'public class Solution {\n    public int solution(int[] nums) {\n        // Write your code here\n        return 0;\n    }\n}',
+        javascript: 'var solution = function(nums) {\n    // Write your code here\n    return 0;\n};',
+        c: '#include <stdio.h>\n\nint solution(int* nums, int numsSize) {\n    // Write your code here\n    return 0;\n}'
+      }
     });
   };
 
@@ -902,6 +928,145 @@ const CompetitionManager = () => {
                           <option value="medium">Medium</option>
                           <option value="hard">Hard</option>
                         </select>
+                      </div>
+
+                      {/* Function Configuration (LeetCode Style) */}
+                      <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Code className="w-5 h-5 text-blue-600" />
+                          <h3 className="font-bold text-blue-900">LeetCode Style Function</h3>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Function Name</label>
+                            <input
+                              type="text"
+                              value={currentProblem.functionName}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, functionName: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              placeholder="e.g., solution"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Return Type</label>
+                            <input
+                              type="text"
+                              value={currentProblem.returnType}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, returnType: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              placeholder="e.g., int"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Parameters Editor */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">Parameters</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newParams = [...(currentProblem.parameters || []), { name: '', type: '' }];
+                                setCurrentProblem({ ...currentProblem, parameters: newParams });
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                            >
+                              <Plus className="w-4 h-4" /> Add Parameter
+                            </button>
+                          </div>
+                          {(currentProblem.parameters || []).map((param, idx) => (
+                            <div key={idx} className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={param.name}
+                                onChange={(e) => {
+                                  const newParams = [...currentProblem.parameters];
+                                  newParams[idx].name = e.target.value;
+                                  setCurrentProblem({ ...currentProblem, parameters: newParams });
+                                }}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                placeholder="Parameter name"
+                              />
+                              <input
+                                type="text"
+                                value={param.type}
+                                onChange={(e) => {
+                                  const newParams = [...currentProblem.parameters];
+                                  newParams[idx].type = e.target.value;
+                                  setCurrentProblem({ ...currentProblem, parameters: newParams });
+                                }}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                placeholder="Parameter type"
+                              />
+                              {(currentProblem.parameters || []).length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newParams = currentProblem.parameters.filter((_, i) => i !== idx);
+                                    setCurrentProblem({ ...currentProblem, parameters: newParams });
+                                  }}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Time Limit (ms)</label>
+                            <input
+                              type="number"
+                              value={currentProblem.timeLimit}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, timeLimit: parseInt(e.target.value) })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Memory Limit (MB)</label>
+                            <input
+                              type="number"
+                              value={currentProblem.memoryLimit}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, memoryLimit: parseInt(e.target.value) })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Starter Code Editor */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Starter Code</label>
+                          <div className="flex gap-2 mb-2 border-b">
+                            {['python', 'cpp', 'java', 'javascript', 'c'].map(lang => (
+                              <button
+                                key={lang}
+                                type="button"
+                                onClick={() => setCurrentProblem({ ...currentProblem, currentLanguage: lang })}
+                                className={`px-3 py-2 text-sm font-medium rounded-t ${
+                                  currentProblem.currentLanguage === lang
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                {lang.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={currentProblem.starterCode?.[currentProblem.currentLanguage] || ''}
+                            onChange={(e) => {
+                              const newStarterCode = { ...currentProblem.starterCode };
+                              newStarterCode[currentProblem.currentLanguage] = e.target.value;
+                              setCurrentProblem({ ...currentProblem, starterCode: newStarterCode });
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm"
+                            rows="8"
+                            placeholder="Enter starter code for this language..."
+                          />
+                        </div>
                       </div>
 
                       {/* Constraints */}
