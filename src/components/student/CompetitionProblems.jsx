@@ -156,12 +156,11 @@ const CompetitionProblems = () => {
       };
       
       const languageId = judge0LanguageMap[language];
-      const JUDGE0_URL = import.meta.env.VITE_JUDGE0_URL || 'http://64.227.149.20:2358';
       
-      console.log('🔵 [8] Judge0 URL:', JUDGE0_URL);
-      console.log('🔵 [9] Language ID:', languageId);
+      console.log('🔵 [8] Language ID:', languageId);
+      console.log('🔵 [8.5] Will call backend to proxy Judge0');
       
-      // Run code against each visible test case using Judge0
+      // Call BACKEND endpoint instead of Judge0 directly
       const results = await Promise.all(
         visibleTestCases.map(async (tc, idx) => {
           try {
@@ -170,15 +169,19 @@ const CompetitionProblems = () => {
             const requestPayload = {
               source_code: code,
               language_id: languageId,
-              stdin: tc.input || ''
+              stdin: tc.input || '',
+              expected_output: tc.output || ''
             };
             
             console.log(`🟠 [11.${idx}] Request payload:`, requestPayload);
             
-            const requestUrl = `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`;
-            console.log(`🟠 [12.${idx}] Fetching from URL:`, requestUrl);
+            const baseUrl = window.location.origin;
+            const backendUrl = `/api/competitions/${competitionId}/problems/${selectedProblem.id}/execute-test`;
+            const fullUrl = `${baseUrl}${backendUrl}`;
+            console.log(`🟠 [12.${idx}] Backend endpoint:`, backendUrl);
+            console.log(`🟠 [12.${idx}] Full URL:`, fullUrl);
             
-            const response = await fetch(requestUrl, {
+            const response = await fetch(backendUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -189,45 +192,36 @@ const CompetitionProblems = () => {
             console.log(`🟠 [13.${idx}] Response status:`, response.status, response.statusText);
             
             if (!response.ok) {
-              console.error(`🟠 [14.${idx}] HTTP Error: ${response.status}`);
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              const errorData = await response.json().catch(() => ({}));
+              console.error(`🟠 [14.${idx}] HTTP Error:`, errorData);
+              throw new Error(errorData.error || `HTTP ${response.status}`);
             }
             
             const result = await response.json();
-            console.log(`🟠 [15.${idx}] Judge0 response:`, result);
+            console.log(`🟠 [15.${idx}] Backend response:`, result);
             
-            // Check if execution was successful (status 3 = Accepted)
-            if (result.status?.id === 3 || result.stdout) {
-              const actualOutput = (result.stdout || '').trim();
-              const expectedOutput = (tc.output || '').trim();
-              const passed = actualOutput === expectedOutput;
-              
-              console.log(`🟠 [16.${idx}] Expected: "${expectedOutput}", Actual: "${actualOutput}", Passed: ${passed}`);
-              
-              return {
-                id: idx + 1,
-                passed,
-                input: tc.input,
-                expected: expectedOutput,
-                actual: result.stdout || '(no output)',
-                time: `${Math.round((parseFloat(result.time) || 0) * 1000)}ms`,
-                error: null
-              };
-            } else {
-              // Compilation or runtime error
-              const errorMsg = result.compile_output || result.stderr || result.status?.description || 'Unknown error';
-              console.log(`🟠 [17.${idx}] Error: ${errorMsg}`);
-              
-              return {
-                id: idx + 1,
-                passed: false,
-                input: tc.input,
-                expected: tc.output,
-                actual: errorMsg,
-                time: '0ms',
-                error: errorMsg
-              };
+            const actualOutput = (result.stdout || '').trim();
+            const expectedOutput = (tc.output || '').trim();
+            const passed = result.passed !== undefined ? result.passed : actualOutput === expectedOutput;
+            
+            console.log(`🟠 [16.${idx}] Expected: "${expectedOutput}", Actual: "${actualOutput}", Passed: ${passed}`);
+            
+            if (result.compile_output) {
+              console.log(`🟠 [17.${idx}] Compilation error:`, result.compile_output);
             }
+            if (result.stderr) {
+              console.log(`🟠 [17.${idx}] Runtime error:`, result.stderr);
+            }
+            
+            return {
+              id: idx + 1,
+              passed,
+              input: tc.input,
+              expected: expectedOutput,
+              actual: result.stdout || result.stderr || result.compile_output || '(no output)',
+              time: result.time ? `${Math.round(parseFloat(result.time) * 1000)}ms` : '0ms',
+              error: result.compile_output || result.stderr || null
+            };
           } catch (error) {
             console.error(`🟠 [18.${idx}] Exception caught:`, error);
             return {
