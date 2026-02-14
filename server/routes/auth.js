@@ -49,7 +49,7 @@ router.post('/signup', async (req, res) => {
         role: 'student',
         moodleId,
         isActive: false, // Requires admin activation
-        studentProfile: {
+        Student: {
           create: {
             name,
             batch,
@@ -58,7 +58,7 @@ router.post('/signup', async (req, res) => {
         }
       },
       include: {
-        studentProfile: true
+        Student: true
       }
     });
 
@@ -113,11 +113,11 @@ router.post('/login', async (req, res) => {
         role: 'student'
       },
       include: {
-        studentProfile: true
+        Student: true
       }
     });
 
-    console.log('👤 User found:', user ? { id: user.id, email: user.email, moodleId: user.moodleId, isActive: user.isActive, hasProfile: !!user.studentProfile, profileData: user.studentProfile } : 'NOT FOUND');
+    console.log('👤 User found:', user ? { id: user.id, email: user.email, moodleId: user.moodleId, isActive: user.isActive, hasProfile: !!user.Student, profileData: user.Student } : 'NOT FOUND');
 
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
@@ -148,14 +148,14 @@ router.post('/login', async (req, res) => {
         role: user.role,
         moodleId: user.moodleId,
         isActive: user.isActive,
-        profile: user.studentProfile,
-        studentProfile: user.studentProfile,
+        profile: user.Student,
+        studentProfile: user.Student,
         // Add commonly accessed fields at root level
-        batch: user.studentProfile?.batch,
-        name: user.studentProfile?.name,
-        phone: user.studentProfile?.phone,
-        rollNo: user.studentProfile?.rollNo,
-        profilePhotoUrl: user.studentProfile?.profilePhotoUrl
+        batch: user.Student?.batch,
+        name: user.Student?.name,
+        phone: user.Student?.phone,
+        rollNo: user.Student?.rollNo,
+        profilePhotoUrl: user.Student?.profilePhotoUrl
       }
     });
   } catch (error) {
@@ -175,7 +175,7 @@ router.post('/login/admin', async (req, res) => {
         role: { in: ['admin', 'subadmin', 'superadmin'] }
       },
       include: {
-        adminProfile: true
+        Admin: true
       }
     });
 
@@ -191,7 +191,7 @@ router.post('/login/admin', async (req, res) => {
     const token = generateToken(user.id, user.role);
 
     // Parse permissions if it's a JSON string
-    let permissions = user.adminProfile?.permissions || 'all';
+    let permissions = user.Admin?.permissions || 'all';
     if (typeof permissions === 'string' && permissions !== 'all') {
       try {
         permissions = JSON.parse(permissions);
@@ -209,10 +209,10 @@ router.post('/login/admin', async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        profile: user.adminProfile,
-        adminProfile: user.adminProfile,
+        profile: user.Admin,
+        adminProfile: user.Admin,
         // Add commonly accessed fields
-        name: user.adminProfile?.name,
+        name: user.Admin?.name,
         permissions: permissions
       }
     });
@@ -289,8 +289,8 @@ router.get('/me', authenticate, async (req, res) => {
         moodleId: true,
         isActive: true,
         createdAt: true,
-        studentProfile: true,
-        adminProfile: true
+        Student: true,
+        Admin: true
       }
     });
 
@@ -307,21 +307,21 @@ router.get('/me', authenticate, async (req, res) => {
       isActive: user.isActive,
       createdAt: user.createdAt,
       // Keep nested profiles for backward compatibility
-      profile: user.studentProfile || user.adminProfile,
-      studentProfile: user.studentProfile,
-      adminProfile: user.adminProfile,
+      profile: user.Student || user.Admin,
+      studentProfile: user.Student,
+      adminProfile: user.Admin,
       // Add profile data directly at root level for easy access
-      ...(user.studentProfile && {
-        batch: user.studentProfile.batch,
-        name: user.studentProfile.name,
-        phone: user.studentProfile.phone,
-        rollNo: user.studentProfile.rollNo,
-        profilePhotoUrl: user.studentProfile.profilePhotoUrl
+      ...(user.Student && {
+        batch: user.Student.batch,
+        name: user.Student.name,
+        phone: user.Student.phone,
+        rollNo: user.Student.rollNo,
+        profilePhotoUrl: user.Student.profilePhotoUrl
       }),
-      ...(user.adminProfile && {
-        name: user.adminProfile.name,
+      ...(user.Admin && {
+        name: user.Admin.name,
         permissions: (() => {
-          const perms = user.adminProfile.permissions;
+          const perms = user.Admin.permissions;
           if (!perms || perms === 'all') return 'all';
           if (typeof perms === 'string') {
             try {
@@ -380,7 +380,7 @@ router.post('/forgot-password', async (req, res) => {
         role: 'student'
       },
       include: {
-        studentProfile: true
+        Student: true
       }
     });
 
@@ -389,11 +389,11 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Get phone number hint (last 4 digits)
-    const phone = user.studentProfile?.phone || '';
+    const phone = user.Student?.phone || '';
     const phoneHint = phone.length >= 4 ? phone.slice(-4) : '****';
 
     // Get masked name (first name only)
-    const fullName = user.studentProfile?.name || 'Student';
+    const fullName = user.Student?.name || 'Student';
     const firstName = fullName.split(' ')[0];
     const maskedName = firstName.length > 2 
       ? firstName[0] + '*'.repeat(firstName.length - 2) + firstName[firstName.length - 1]
@@ -453,7 +453,7 @@ router.post('/reset-password', async (req, res) => {
         role: 'student'
       },
       include: {
-        studentProfile: true
+        Student: true
       }
     });
 
@@ -462,7 +462,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     // Verify phone last 4 digits
-    const phone = user.studentProfile?.phone || '';
+    const phone = user.Student?.phone || '';
     const actualLast4 = phone.length >= 4 ? phone.slice(-4) : '';
 
     if (!actualLast4) {

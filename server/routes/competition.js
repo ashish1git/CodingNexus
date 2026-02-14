@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
@@ -189,7 +190,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       include: {
         user: {
           include: {
-            studentProfile: {
+            Student: {
               select: {
                 name: true,
                 rollNo: true,
@@ -216,9 +217,9 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
     const leaderboard = submissions.map((sub, index) => ({
       rank: index + 1,
       userId: sub.userId,
-      name: sub.user.studentProfile?.name || sub.user.email,
-      rollNo: sub.user.studentProfile?.rollNo,
-      batch: sub.user.studentProfile?.batch,
+      name: sub.user.Student?.name || sub.user.email,
+      rollNo: sub.user.Student?.rollNo,
+      batch: sub.user.Student?.batch,
       totalScore: sub.totalScore,
       // Count problems that are either accepted OR evaluated (have score > 0)
       problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted' || p.score > 0).length,
@@ -246,7 +247,7 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'
       include: {
         user: {
           include: {
-            studentProfile: {
+            Student: {
               select: {
                 name: true,
                 rollNo: true,
@@ -280,9 +281,9 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'
     const formattedSubmissions = submissions.map(sub => ({
       submissionId: sub.id,
       userId: sub.userId,
-      userName: sub.user.studentProfile?.name || sub.user.email,
-      rollNo: sub.user.studentProfile?.rollNo,
-      batch: sub.user.studentProfile?.batch,
+      userName: sub.user.Student?.name || sub.user.email,
+      rollNo: sub.user.Student?.rollNo,
+      batch: sub.user.Student?.batch,
       status: sub.status,
       totalScore: sub.totalScore,
       totalTime: sub.totalTime,
@@ -435,6 +436,7 @@ router.post('/:id/register', authenticate, async (req, res) => {
     // Create registration
     const registration = await prisma.competitionRegistration.create({
       data: {
+        id: randomUUID(),
         competitionId: id,
         userId
       }
@@ -502,8 +504,10 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     }
 
     // Create competition submission
+    const competitionSubmissionId = randomUUID();
     const competitionSubmission = await prisma.competitionSubmission.create({
       data: {
+        id: competitionSubmissionId,
         competitionId: id,
         userId,
         status: 'pending'
@@ -521,6 +525,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
 
         return prisma.problemSubmission.create({
           data: {
+            id: randomUUID(),
             competitionSubmissionId: competitionSubmission.id,
             problemId: solution.problemId,
             userId,
@@ -785,9 +790,11 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
   try {
     const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, problems } = req.body;
 
+    const competitionId = randomUUID();
 
     const competition = await prisma.competition.create({
       data: {
+        id: competitionId,
         title,
         description,
         category,
@@ -799,8 +806,10 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
         prizePool,
         maxParticipants,
         createdBy: req.user.id,
+        updatedAt: new Date(),
         problems: {
           create: problems.map((problem, index) => ({
+            id: randomUUID(),
             title: problem.title,
             description: problem.description,
             difficulty: problem.difficulty,
@@ -810,7 +819,8 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
             examples: problem.examples || [],
             testCases: problem.testCases || [],
             timeLimit: problem.timeLimit || 3000,
-            memoryLimit: problem.memoryLimit || 256
+            memoryLimit: problem.memoryLimit || 256,
+            updatedAt: new Date()
           }))
         }
       },
@@ -822,7 +832,9 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
     res.status(201).json({ message: 'Competition created successfully', competition });
   } catch (error) {
     console.error('Error creating competition:', error);
-    res.status(500).json({ error: 'Failed to create competition' });
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to create competition', details: error.message });
   }
 });
 
@@ -845,7 +857,8 @@ router.put('/:id', authenticate, authorizeRole('admin', 'superadmin'), async (re
         type,
         prizePool,
         maxParticipants,
-        isActive
+        isActive,
+        updatedAt: new Date()
       }
     });
 
@@ -916,7 +929,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
             id: true,
             email: true,
             moodleId: true,
-            studentProfile: {
+            Student: {
               select: {
                 name: true,
                 rollNo: true
@@ -940,7 +953,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
     const formattedSubmissions = submissions.map(sub => ({
       ...sub,
       submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
-      user: sub.user || { id: null, email: 'Unknown', moodleId: 'N/A', studentProfile: { name: 'N/A', rollNo: 'N/A' } }
+      user: sub.user || { id: null, email: 'Unknown', moodleId: 'N/A', Student: { name: 'N/A', rollNo: 'N/A' } }
     }));
 
     res.json(formattedSubmissions);
@@ -990,7 +1003,7 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
         select: {
           role: true,
           email: true,
-          adminProfile: {
+          Admin: {
             select: { name: true }
           }
         }
@@ -1003,7 +1016,7 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
       const isUpdate = currentSubmission.isEvaluated;
       const previousMarks = currentSubmission.manualMarks;
       const previousComments = currentSubmission.evaluatorComments;
-      const evaluatorName = evaluator.adminProfile?.name || evaluator.email;
+      const evaluatorName = evaluator.Admin?.name || evaluator.email;
 
       // Update submission
       const submission = await tx.problemSubmission.update({
@@ -1114,7 +1127,7 @@ router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', '
           include: {
             user: {
               include: {
-                studentProfile: {
+                Student: {
                   select: {
                     name: true,
                     rollNo: true
@@ -1138,8 +1151,8 @@ router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', '
       id: ev.id,
       evaluatorName: ev.evaluatorName,
       evaluatorRole: ev.evaluatorRole,
-      studentName: ev.submission.user.studentProfile?.name || 'N/A',
-      rollNo: ev.submission.user.studentProfile?.rollNo || 'N/A',
+      studentName: ev.submission.user.Student?.name || 'N/A',
+      rollNo: ev.submission.user.Student?.rollNo || 'N/A',
       problemTitle: ev.submission.problem.title,
       marks: ev.marks,
       comments: ev.comments,
@@ -1227,3 +1240,4 @@ router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('ad
 });
 
 export default router;
+

@@ -88,8 +88,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Server is listening and will stay alive...`);
   
   // ✅ OPTIONAL Background polling job - disabled by default on free tier
   // Set ENABLE_POLLING=true in .env to enable
@@ -119,6 +120,17 @@ app.listen(PORT, () => {
     }, POLL_INTERVAL);
   }, 2000);
 });
+
+server.on('error', (error) => {
+  console.error('🚨 Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+    process.exit(1);
+  }
+});
+
+console.log(`✅ Server initialization complete - process will stay alive`);
+
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Code, CheckCircle, XCircle, Clock, Trophy,
@@ -10,14 +10,16 @@ import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
 import Loading from '../shared/Loading';
 import AsyncSubmissionHandler, { SubmissionStatusUI } from './AsyncSubmissionHandler';
+import Editor from '@monaco-editor/react';
 
 const CompetitionProblems = () => {
   const { competitionId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const editorRef = useRef(null);
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [code, setCode] = useState('');
-  const [language, setLanguage] = useState('python');
+  const [language, setLanguage] = useState('java'); // Default to Java
   const [testResults, setTestResults] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [lastRunTime, setLastRunTime] = useState(0);
@@ -31,6 +33,41 @@ const CompetitionProblems = () => {
   const [asyncStatus, setAsyncStatus] = useState('idle');
   const [asyncResult, setAsyncResult] = useState(null);
   const [pollCount, setPollCount] = useState(0);
+
+  // Map language to Monaco editor language ID
+  const getMonacoLanguage = (lang) => {
+    const languageMap = {
+      'cpp': 'cpp',
+      'java': 'java',
+      'python': 'python',
+      'javascript': 'javascript',
+      'c': 'c'
+    };
+    return languageMap[lang] || 'java';
+  };
+
+  // Handle Monaco Editor mount
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor;
+    
+    // Configure editor options
+    editor.updateOptions({
+      fontSize: 14,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      lineNumbers: 'on',
+      renderWhitespace: 'selection',
+      automaticLayout: true,
+      wordWrap: 'on',
+      tabSize: 4,
+      folding: true,
+      glyphMargin: false,
+      autoClosingBrackets: 'always',
+      autoClosingQuotes: 'always',
+      formatOnPaste: true,
+      formatOnType: true
+    });
+  };
 
   useEffect(() => {
     fetchCompetition();
@@ -86,10 +123,12 @@ const CompetitionProblems = () => {
     // Load saved code when switching problems
     if (selectedProblem && problemSolutions[selectedProblem.id]) {
       setCode(problemSolutions[selectedProblem.id].code || '');
-      setLanguage(problemSolutions[selectedProblem.id].language || 'python');
+      setLanguage(problemSolutions[selectedProblem.id].language || 'java');
     } else if (selectedProblem) {
       // Set starter code from problem if available
-      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || '';
+      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || 
+                         selectedProblem.starterCode?.['java'] || 
+                         '';
       setCode(starterCode);
     } else {
       setCode('');
@@ -369,61 +408,81 @@ const CompetitionProblems = () => {
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] text-white">
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: #3e3e3e;
+          border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: #4e4e4e;
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="bg-[#282828] border-b border-[#3e3e3e] sticky top-0 z-10">
+      <div className="bg-[#282828] border-b border-[#3e3e3e] sticky top-0 z-10 shadow-lg">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
                 to="/student/competitions"
-                className="text-gray-400 hover:text-white transition"
+                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-[#3e3e3e] rounded-lg"
+                title="Back to competitions"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Link>
               <div className="flex items-center gap-3">
-                <h1 className="text-base font-medium text-white">{competition.title}</h1>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${getDifficultyColor(competition.difficulty)}`}>
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                <h1 className="text-base font-semibold text-white">{competition.title}</h1>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(competition.difficulty)}`}>
                   {competition.difficulty.charAt(0).toUpperCase() + competition.difficulty.slice(1)}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <Clock className="w-4 h-4" />
-                <span>{getTimeRemaining()}</span>
+              <div className="flex items-center gap-2 text-sm px-3 py-1.5 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
+                <Clock className="w-4 h-4 text-blue-400" />
+                <span className="text-gray-300 font-medium">{getTimeRemaining()}</span>
               </div>
-              <div className="text-sm">
+              <div className="text-sm px-3 py-1.5 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
                 <span className="text-gray-400">Solved: </span>
-                <span className="text-yellow-400 font-semibold">
+                <span className="text-yellow-400 font-bold">
                   {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length}
                 </span>
               </div>
               <button
                 onClick={enterFullscreen}
-                className="p-2 text-gray-400 hover:text-white transition"
+                className="p-2 text-gray-400 hover:text-white transition-colors hover:bg-[#3e3e3e] rounded-lg"
                 title="Enter Fullscreen"
               >
-                <Maximize className="w-4 h-4" />
+                <Maximize className="w-5 h-5" />
               </button>
               {!submitted && (
                 <button
                   onClick={handleSubmitAll}
                   disabled={submitting}
-                  className="px-4 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-5 py-2 bg-linear-to-r from-green-600 to-green-500 text-white text-sm rounded-lg hover:from-green-700 hover:to-green-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-green-500/30 hover:shadow-green-500/50"
                 >
                   <Trophy className="w-4 h-4" />
-                  Submit All
+                  Submit All Solutions
                 </button>
               )}
               {submitted && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-600/20 text-green-400 text-sm rounded border border-green-600/30">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 text-green-400 text-sm rounded-lg border border-green-600/30 font-semibold">
                     <CheckCircle className="w-4 h-4" />
                     Submitted
                   </div>
                   <Link
                     to={`/student/competition/${competitionId}/results`}
-                    className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium flex items-center gap-2"
+                    className="px-4 py-2 bg-linear-to-r from-blue-600 to-blue-500 text-white text-sm rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50"
                   >
                     <Award className="w-4 h-4" />
                     View Results
@@ -438,50 +497,50 @@ const CompetitionProblems = () => {
       <div className="flex h-[calc(100vh-57px)]">
         {/* Left Sidebar - Problem List */}
         {showProblemList && (
-          <div className="w-60 bg-[#262626] border-r border-[#3e3e3e] overflow-y-auto flex-shrink-0">
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-3 px-2">
-                <div className="text-xs font-medium text-gray-400">
-                  PROBLEMS ({Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length})
+          <div className="w-64 bg-[#262626] border-r border-[#3e3e3e] overflow-y-auto shrink-0 scrollbar-thin scrollbar-thumb-[#3e3e3e] scrollbar-track-transparent">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4 px-2">
+                <div className="text-xs font-semibold text-gray-400 tracking-wider uppercase">
+                  Problems {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length}
                 </div>
                 <button
                   onClick={() => setShowProblemList(false)}
-                  className="text-gray-400 hover:text-white transition"
+                  className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-[#2e2e2e]"
                   title="Hide problem list"
                 >
                   <ChevronUp className="w-4 h-4 rotate-90" />
                 </button>
               </div>
-            <div className="space-y-1">
-              {competition.problems.map((problem) => (
+            <div className="space-y-2">
+              {competition.problems.map((problem, index) => (
                 <button
                   key={problem.id}
                   onClick={() => setSelectedProblem(problem)}
-                  className={`w-full text-left px-3 py-2 rounded transition group ${
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-all group ${
                     selectedProblem?.id === problem.id
-                      ? 'bg-[#3e3e3e] text-white'
-                      : 'text-gray-300 hover:bg-[#2e2e2e]'
+                      ? 'bg-[#3e3e3e] text-white shadow-md border border-[#4e4e4e]'
+                      : 'text-gray-300 hover:bg-[#2e2e2e] hover:border hover:border-[#3e3e3e]'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-3 mb-2">
                     {problemSolutions[problem.id]?.saved ? (
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
                     ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-gray-600 flex-shrink-0" />
+                      <div className="w-5 h-5 rounded-full border-2 border-gray-600 shrink-0 group-hover:border-gray-500 transition-colors" />
                     )}
-                    <span className="text-sm font-medium truncate">
-                      {problem.id}. {problem.title}
+                    <span className="text-sm font-semibold truncate">
+                      {index + 1}. {problem.title}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between ml-6">
-                    <span className={`text-xs ${
-                      problem.difficulty === 'easy' ? 'text-green-400' :
-                      problem.difficulty === 'medium' ? 'text-yellow-400' :
-                      'text-red-400'
+                  <div className="flex items-center justify-between ml-8">
+                    <span className={`text-xs font-medium px-2 py-1 rounded ${
+                      problem.difficulty === 'easy' ? 'bg-green-500/10 text-green-400' :
+                      problem.difficulty === 'medium' ? 'bg-yellow-500/10 text-yellow-400' :
+                      'bg-red-500/10 text-red-400'
                     }`}>
                       {problem.difficulty.charAt(0).toUpperCase() + problem.difficulty.slice(1)}
                     </span>
-                    <span className="text-xs text-gray-500">{problem.points}pts</span>
+                    <span className="text-xs text-gray-500 font-medium">{problem.points} pts</span>
                   </div>
                 </button>
               ))}
@@ -492,13 +551,13 @@ const CompetitionProblems = () => {
 
         {/* Toggle Button when minimized */}
         {!showProblemList && (
-          <div className="bg-[#262626] border-r border-[#3e3e3e] flex-shrink-0">
+          <div className="bg-[#262626] border-r border-[#3e3e3e] shrink-0">
             <button
               onClick={() => setShowProblemList(true)}
-              className="p-3 text-gray-400 hover:text-white hover:bg-[#2e2e2e] transition"
+              className="p-3 text-gray-400 hover:text-white hover:bg-[#2e2e2e] transition-colors rounded-lg m-2"
               title="Show problem list"
             >
-              <ChevronDown className="w-4 h-4 -rotate-90" />
+              <List className="w-5 h-5" />
             </button>
           </div>
         )}
@@ -506,22 +565,23 @@ const CompetitionProblems = () => {
         {/* Main Content Area */}
         <div className="flex-1 flex h-full">
           {/* Problem Description */}
-          <div className="w-1/2 h-full overflow-y-auto bg-[#1a1a1a]">
+          <div className="w-1/2 h-full overflow-y-auto bg-[#1a1a1a] scrollbar-thin scrollbar-thumb-[#3e3e3e] scrollbar-track-transparent">
             {selectedProblem && (
-              <div className="p-5">
+              <div className="p-6">
                 {/* Problem Header */}
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-white mb-3">
-                    {selectedProblem.id}. {selectedProblem.title}
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                    <span className="text-blue-400">{selectedProblem.id}.</span>
+                    {selectedProblem.title}
                   </h2>
                   
                   {/* Tabs */}
-                  <div className="flex gap-4 border-b border-[#3e3e3e]">
+                  <div className="flex gap-6 border-b border-[#3e3e3e]">
                     <button
                       onClick={() => setActiveTab('description')}
-                      className={`pb-2 px-1 text-sm font-medium transition ${
+                      className={`pb-3 px-1 text-sm font-semibold transition-all ${
                         activeTab === 'description'
-                          ? 'text-white border-b-2 border-white'
+                          ? 'text-white border-b-2 border-blue-500'
                           : 'text-gray-400 hover:text-gray-300'
                       }`}
                     >
@@ -529,9 +589,9 @@ const CompetitionProblems = () => {
                     </button>
                     <button
                       onClick={() => setActiveTab('submissions')}
-                      className={`pb-2 px-1 text-sm font-medium transition ${
+                      className={`pb-3 px-1 text-sm font-semibold transition-all ${
                         activeTab === 'submissions'
-                          ? 'text-white border-b-2 border-white'
+                          ? 'text-white border-b-2 border-blue-500'
                           : 'text-gray-400 hover:text-gray-300'
                       }`}
                     >
@@ -541,45 +601,52 @@ const CompetitionProblems = () => {
                 </div>
 
                 {activeTab === 'description' && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {/* Difficulty and Stats */}
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className={`px-2 py-1 rounded ${
-                        selectedProblem.difficulty === 'easy' ? 'bg-green-500/10 text-green-400' :
-                        selectedProblem.difficulty === 'medium' ? 'bg-yellow-500/10 text-yellow-400' :
-                        'bg-red-500/10 text-red-400'
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className={`px-3 py-1.5 rounded-lg font-semibold ${
+                        selectedProblem.difficulty === 'easy' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                        selectedProblem.difficulty === 'medium' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                        'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}>
                         {selectedProblem.difficulty.charAt(0).toUpperCase() + selectedProblem.difficulty.slice(1)}
                       </span>
-                      <span className="text-gray-400">•</span>
-                      <span className="text-gray-400">Accepted: {selectedProblem.submissions}</span>
-                      <span className="text-gray-400">•</span>
-                      <span className="text-gray-400">Acceptance Rate: {selectedProblem.acceptanceRate}%</span>
+                      <span className="text-gray-500">•</span>
+                      <span className="text-gray-400 font-medium">Accepted: <span className="text-white">{selectedProblem.submissions}</span></span>
+                      <span className="text-gray-500">•</span>
+                      <span className="text-gray-400 font-medium">Acceptance: <span className="text-white">{selectedProblem.acceptanceRate}%</span></span>
                     </div>
 
                     {/* Description */}
-                    <div className="text-gray-300 leading-relaxed whitespace-pre-line text-sm">
-                      {selectedProblem.description}
+                    <div className="bg-[#262626] border border-[#3e3e3e] rounded-lg p-5">
+                      <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">Problem Statement</h3>
+                      <div className="text-gray-300 leading-relaxed whitespace-pre-line">
+                        {selectedProblem.description}
+                      </div>
                     </div>
 
                     {/* Examples */}
-                    <div className="space-y-3">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Examples</h3>
                       {selectedProblem.examples.map((example, idx) => (
-                        <div key={idx} className="bg-[#262626] rounded-lg p-4 border border-[#3e3e3e]">
-                          <p className="text-xs font-semibold text-white mb-2">Example {idx + 1}:</p>
-                          <div className="space-y-1 text-sm">
+                        <div key={idx} className="bg-[#262626] rounded-lg p-5 border border-[#3e3e3e] hover:border-[#4e4e4e] transition-colors">
+                          <p className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">{idx + 1}</span>
+                            Example {idx + 1}
+                          </p>
+                          <div className="space-y-3 text-sm">
                             <div>
-                              <span className="text-gray-400">Input:</span>
-                              <pre className="text-white font-mono mt-1">{example.input}</pre>
+                              <div className="text-gray-400 mb-2 font-semibold">Input:</div>
+                              <pre className="text-white font-mono bg-[#1e1e1e] p-3 rounded-lg border border-[#3e3e3e]">{example.input}</pre>
                             </div>
                             <div>
-                              <span className="text-gray-400">Output:</span>
-                              <pre className="text-white font-mono mt-1">{example.output}</pre>
+                              <div className="text-gray-400 mb-2 font-semibold">Output:</div>
+                              <pre className="text-white font-mono bg-[#1e1e1e] p-3 rounded-lg border border-[#3e3e3e]">{example.output}</pre>
                             </div>
                             {example.explanation && (
                               <div className="pt-2">
-                                <span className="text-gray-400">Explanation:</span>
-                                <p className="text-gray-300 mt-1">{example.explanation}</p>
+                                <div className="text-gray-400 mb-2 font-semibold">Explanation:</div>
+                                <p className="text-gray-300 leading-relaxed">{example.explanation}</p>
                               </div>
                             )}
                           </div>
@@ -588,13 +655,13 @@ const CompetitionProblems = () => {
                     </div>
 
                     {/* Constraints */}
-                    <div>
-                      <h3 className="text-sm font-semibold text-white mb-2">Constraints:</h3>
-                      <ul className="space-y-1 text-sm text-gray-300">
+                    <div className="bg-[#262626] border border-[#3e3e3e] rounded-lg p-5">
+                      <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wide">Constraints</h3>
+                      <ul className="space-y-2 text-sm text-gray-300">
                         {selectedProblem.constraints.map((constraint, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-gray-500 mt-0.5">•</span>
-                            <code className="font-mono text-xs bg-[#262626] px-2 py-0.5 rounded">{constraint}</code>
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-blue-400 mt-1 text-xs">▸</span>
+                            <code className="font-mono text-sm bg-[#1e1e1e] px-3 py-1.5 rounded border border-[#3e3e3e]">{constraint}</code>
                           </li>
                         ))}
                       </ul>
@@ -616,33 +683,40 @@ const CompetitionProblems = () => {
           {/* Code Editor */}
           <div className="w-1/2 h-full flex flex-col bg-[#1e1e1e] border-l border-[#3e3e3e]">
             {/* Editor Header */}
-            <div className="px-4 py-2 bg-[#262626] border-b border-[#3e3e3e] flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-2.5 bg-[#262626] border-b border-[#3e3e3e] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-[#1e1e1e] text-gray-300 text-sm px-3 py-1.5 rounded border border-[#3e3e3e] focus:outline-none focus:border-gray-500"
-                >
-                  <option value="cpp">C++</option>
-                  <option value="java">Java</option>
-                  <option value="python">Python</option>
-                  <option value="javascript">JavaScript</option>
-                  <option value="c">C</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="appearance-none bg-[#1e1e1e] text-white text-sm px-4 py-2 pr-10 rounded-lg border border-[#3e3e3e] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer hover:bg-[#252525] hover:border-[#4e4e4e] font-medium"
+                    style={{
+                      backgroundImage: 'none',
+                      minWidth: '140px'
+                    }}
+                  >
+                    <option value="java" className="bg-[#1e1e1e] text-white">☕ Java</option>
+                    <option value="cpp" className="bg-[#1e1e1e] text-white">⚡ C++</option>
+                    <option value="python" className="bg-[#1e1e1e] text-white">🐍 Python</option>
+                    <option value="javascript" className="bg-[#1e1e1e] text-white">🌐 JavaScript</option>
+                    <option value="c" className="bg-[#1e1e1e] text-white">🔧 C</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleRunCode}
                   disabled={submitting || submitted}
-                  className="px-3 py-1.5 bg-[#3e3e3e] text-white text-sm rounded hover:bg-[#4e4e4e] transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-linear-to-r from-green-600 to-green-500 text-white text-sm rounded-lg hover:from-green-700 hover:to-green-600 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg shadow-green-500/20 hover:shadow-green-500/40"
                 >
                   <Play className="w-4 h-4" />
-                  Run
+                  Run Code
                 </button>
                 <button
                   onClick={handleSaveSolution}
                   disabled={submitting || submitted || !code.trim()}
-                  className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="px-4 py-2 bg-linear-to-r from-blue-600 to-blue-500 text-white text-sm rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
                 >
                   <Send className="w-4 h-4" />
                   {problemSolutions[selectedProblem?.id]?.saved ? 'Update' : 'Save Solution'}
@@ -651,7 +725,7 @@ const CompetitionProblems = () => {
             </div>
 
             {/* Code Editor Area */}
-            <div className="flex-1 overflow-auto relative min-h-0 bg-[#1e1e1e]">
+            <div className="flex-1 overflow-hidden relative bg-[#1e1e1e]">
               {submitted ? (
                 <div className="w-full h-full flex items-center justify-center bg-[#1e1e1e]">
                   <div className="text-center">
@@ -662,114 +736,148 @@ const CompetitionProblems = () => {
                   </div>
                 </div>
               ) : (
-                <>
-                  <textarea
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="// Write your code here..."
-                    className="w-full h-full bg-[#1e1e1e] p-4 font-mono text-sm resize-none focus:outline-none focus:ring-0 border-0 outline-none"
-                    style={{ 
-                      color: 'white',
-                      backgroundColor: '#1e1e1e',
-                      tabSize: 4,
-                      lineHeight: '1.6',
-                      minHeight: '300px',
-                      fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
-                      caretColor: '#0ea5e9',
-                      WebkitTextFillColor: 'white'
-                    }}
-                    spellCheck="false"
-                    disabled={submitted}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                  />
-                  <style>{`
-                    textarea::placeholder {
-                      color: #6b7280 !important;
-                      opacity: 1 !important;
-                    }
-                  `}</style>
-                </>
+                <Editor
+                  height="100%"
+                  language={getMonacoLanguage(language)}
+                  value={code}
+                  onChange={(value) => setCode(value || '')}
+                  onMount={handleEditorDidMount}
+                  theme="vs-dark"
+                  options={{
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    lineNumbers: 'on',
+                    renderWhitespace: 'selection',
+                    automaticLayout: true,
+                    wordWrap: 'on',
+                    tabSize: 4,
+                    folding: true,
+                    glyphMargin: false,
+                    autoClosingBrackets: 'always',
+                    autoClosingQuotes: 'always',
+                    formatOnPaste: true,
+                    formatOnType: true,
+                    padding: { top: 16, bottom: 16 },
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 3,
+                    renderLineHighlight: 'all',
+                    scrollbar: {
+                      vertical: 'visible',
+                      horizontal: 'visible',
+                      useShadows: false,
+                      verticalScrollbarSize: 10,
+                      horizontalScrollbarSize: 10
+                    },
+                    suggestOnTriggerCharacters: true,
+                    quickSuggestions: true,
+                    snippetSuggestions: 'inline',
+                    fontFamily: "'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace",
+                    fontLigatures: true
+                  }}
+                  loading={
+                    <div className="w-full h-full flex items-center justify-center bg-[#1e1e1e]">
+                      <div className="text-gray-400 text-sm">Loading editor...</div>
+                    </div>
+                  }
+                />
               )}
             </div>
 
             {/* Test Results Panel */}
             {testResults && (
-              <div className="border-t border-[#3e3e3e] bg-[#262626]">
+              <div className="border-t border-[#3e3e3e] bg-[#262626] shadow-lg">
                 <button
                   onClick={() => setShowTestCases(!showTestCases)}
-                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#2e2e2e] transition"
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#2e2e2e] transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <Terminal className="w-4 h-4 text-gray-400" />
-                    <span className="font-medium text-sm text-white">
-                      Testcase
+                    <Terminal className="w-5 h-5 text-gray-400" />
+                    <span className="font-semibold text-sm text-white">
+                      Test Results
                     </span>
                     {testResults.accepted ? (
-                      <span className="text-green-400 text-sm flex items-center gap-1">
+                      <span className="text-green-400 text-sm flex items-center gap-2 font-medium px-3 py-1 bg-green-500/10 rounded-full">
                         <CheckCircle className="w-4 h-4" />
-                        Accepted
+                        Accepted ({testResults.total}/{testResults.total})
                       </span>
                     ) : (
-                      <span className="text-red-400 text-sm">
-                        {testResults.passed}/{testResults.total} testcases passed
+                      <span className="text-red-400 text-sm font-medium px-3 py-1 bg-red-500/10 rounded-full">
+                        {testResults.passed}/{testResults.total} Passed
                       </span>
                     )}
                   </div>
                   {showTestCases ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
                   ) : (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                    <ChevronUp className="w-5 h-5 text-gray-400" />
                   )}
                 </button>
                 
                 {showTestCases && (
-                  <div className="max-h-64 overflow-y-auto border-t border-[#3e3e3e]">
+                  <div className="max-h-80 overflow-y-auto border-t border-[#3e3e3e]">
                     <div className="p-4 space-y-3">
                       {testResults.cases.map((testCase) => (
                         <div
                           key={testCase.id}
-                          className={`p-3 rounded border ${
+                          className={`p-4 rounded-lg border-2 transition-all ${
                             testCase.passed
-                              ? 'bg-green-500/5 border-green-500/20'
-                              : 'bg-red-500/5 border-red-500/20'
+                              ? 'bg-green-500/5 border-green-500/30 hover:bg-green-500/10'
+                              : 'bg-red-500/5 border-red-500/30 hover:bg-red-500/10'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               {testCase.passed ? (
-                                <CheckCircle className="w-4 h-4 text-green-400" />
+                                <CheckCircle className="w-5 h-5 text-green-400" />
                               ) : (
-                                <XCircle className="w-4 h-4 text-red-400" />
+                                <XCircle className="w-5 h-5 text-red-400" />
                               )}
-                              <span className="text-sm font-medium text-white">
-                                Case {testCase.id}
-                                {testCase.hidden && <span className="text-gray-500 ml-2">(Hidden)</span>}
+                              <span className="text-sm font-semibold text-white">
+                                Test Case {testCase.id}
+                                {testCase.hidden && <span className="text-gray-500 ml-2 text-xs">(Hidden)</span>}
                               </span>
                             </div>
-                            <span className="text-xs text-gray-500">{testCase.time}</span>
+                            <span className="text-xs text-gray-400 font-medium px-2 py-1 bg-[#1e1e1e] rounded">
+                              {testCase.time}
+                            </span>
                           </div>
                           {!testCase.hidden && (
-                            <div className="space-y-2 text-xs font-mono mt-2">
+                            <div className="space-y-3 text-xs font-mono mt-3">
                               <div>
-                                <span className="text-gray-400">Input:</span>
-                                <pre className="text-gray-300 mt-1 bg-[#1e1e1e] p-2 rounded overflow-x-auto">{testCase.input}</pre>
+                                <div className="text-gray-400 mb-1.5 font-semibold flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                  Input:
+                                </div>
+                                <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">{testCase.input}</pre>
                               </div>
                               <div>
-                                <span className="text-gray-400">Expected:</span>
-                                <pre className="text-gray-300 mt-1 bg-[#1e1e1e] p-2 rounded overflow-x-auto">{testCase.expected}</pre>
+                                <div className="text-gray-400 mb-1.5 font-semibold flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                  Expected:
+                                </div>
+                                <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">{testCase.expected}</pre>
                               </div>
                               <div>
-                                <span className="text-gray-400">Output:</span>
-                                <pre className={`mt-1 p-2 rounded overflow-x-auto ${testCase.passed ? 'text-green-400' : 'text-red-400'} bg-[#1e1e1e]`}>
+                                <div className={`mb-1.5 font-semibold flex items-center gap-2 ${testCase.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                  <span className={`w-2 h-2 rounded-full ${testCase.passed ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                  Your Output:
+                                </div>
+                                <pre className={`p-3 rounded-lg overflow-x-auto border ${
+                                  testCase.passed 
+                                    ? 'text-green-400 bg-green-500/5 border-green-500/20' 
+                                    : 'text-red-400 bg-red-500/5 border-red-500/20'
+                                }`}>
                                   {testCase.actual}
                                 </pre>
                               </div>
                               {testCase.error && (
                                 <div>
-                                  <span className="text-red-400">Error:</span>
-                                  <pre className="text-red-400 mt-1 bg-[#1e1e1e] p-2 rounded overflow-x-auto text-xs">
+                                  <div className="text-red-400 mb-1.5 font-semibold flex items-center gap-2">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Error:
+                                  </div>
+                                  <pre className="text-red-400 bg-red-500/5 p-3 rounded-lg overflow-x-auto text-xs border border-red-500/20">
                                     {testCase.error}
                                   </pre>
                                 </div>

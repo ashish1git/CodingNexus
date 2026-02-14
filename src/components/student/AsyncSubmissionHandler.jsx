@@ -1,6 +1,6 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { AuthContext } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 /**
  * ✅ SMART POLLING COMPONENT
@@ -13,7 +13,7 @@ import { AuthContext } from '../../context/AuthContext';
  * - No browser freezing
  */
 const AsyncSubmissionHandler = ({ problemId, code, language, onSuccess, onError }) => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState('idle');
   const [submissionId, setSubmissionId] = useState(null);

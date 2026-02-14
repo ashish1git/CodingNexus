@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
@@ -209,6 +210,7 @@ async function processSubmissionAsync(submissionId, problem, code, langId) {
           // Save token in Judge0Queue
           await prisma.judge0Queue.create({
             data: {
+              id: randomUUID(),
               judge0Token: token,
               submissionId,
               userId: 'system', // We don't have userId in this context

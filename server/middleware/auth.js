@@ -15,8 +15,8 @@ export const authenticate = async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        studentProfile: true,
-        adminProfile: true
+        Student: true,
+        Admin: true
       }
     });
 

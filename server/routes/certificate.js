@@ -106,7 +106,7 @@ router.get('/admin/:id/requests', authenticate, authorizeRole('admin', 'subadmin
           select: {
             email: true,
             moodleId: true,
-            studentProfile: {
+            Student: {
               select: { name: true, batch: true }
             }
           }
