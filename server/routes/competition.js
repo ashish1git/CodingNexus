@@ -217,9 +217,9 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
     const leaderboard = submissions.map((sub, index) => ({
       rank: index + 1,
       userId: sub.userId,
-      name: sub.user.Student?.name || sub.user.email,
-      rollNo: sub.user.Student?.rollNo,
-      batch: sub.user.Student?.batch,
+      name: sub.user.studentProfile?.name || sub.user.email,
+      rollNo: sub.user.studentProfile?.rollNo,
+      batch: sub.user.studentProfile?.batch,
       totalScore: sub.totalScore,
       // Count problems that are either accepted OR evaluated (have score > 0)
       problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted' || p.score > 0).length,
@@ -281,9 +281,9 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'
     const formattedSubmissions = submissions.map(sub => ({
       submissionId: sub.id,
       userId: sub.userId,
-      userName: sub.user.Student?.name || sub.user.email,
-      rollNo: sub.user.Student?.rollNo,
-      batch: sub.user.Student?.batch,
+      userName: sub.user.studentProfile?.name || sub.user.email,
+      rollNo: sub.user.studentProfile?.rollNo,
+      batch: sub.user.studentProfile?.batch,
       status: sub.status,
       totalScore: sub.totalScore,
       totalTime: sub.totalTime,
@@ -340,7 +340,12 @@ router.get('/:id', authenticate, async (req, res) => {
             examples: true,
             testCases: true, // Include all test cases
             timeLimit: true,
-            memoryLimit: true
+            memoryLimit: true,
+            // LeetCode-style function signature fields
+            functionName: true,
+            parameters: true,
+            returnType: true,
+            starterCode: true
           },
           orderBy: { orderIndex: 'asc' }
         },
@@ -604,17 +609,6 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           const testCase = testCases[i];
           
           try {
-            // Parse test case input if it's a string and problem has parameters
-            let parsedInput = testCase.input;
-            if (typeof testCase.input === 'string' && problem.parameters?.length > 0) {
-              // Parse "5, 3" or "5,3" into [5, 3]
-              parsedInput = testCase.input.split(',').map(v => {
-                const trimmed = v.trim();
-                // Try to parse as number, otherwise keep as string
-                return isNaN(trimmed) ? trimmed : (trimmed.includes('.') ? parseFloat(trimmed) : parseInt(trimmed));
-              });
-            }
-            
             // Wrap user code with test harness if problem has function signature
             let executableCode = submission.code;
             if (problem.parameters && problem.functionName) {
@@ -622,10 +616,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
                 submission.code,
                 submission.language,
                 problem,
-                {
-                  ...testCase,
-                  input: parsedInput
-                }
+                testCase
               );
             }
 
@@ -820,6 +811,11 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
             testCases: problem.testCases || [],
             timeLimit: problem.timeLimit || 3000,
             memoryLimit: problem.memoryLimit || 256,
+            // LeetCode-style function signature fields
+            functionName: problem.functionName || 'solution',
+            parameters: problem.parameters || [],
+            returnType: problem.returnType || 'int',
+            starterCode: problem.starterCode || {},
             updatedAt: new Date()
           }))
         }
@@ -1016,7 +1012,7 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
       const isUpdate = currentSubmission.isEvaluated;
       const previousMarks = currentSubmission.manualMarks;
       const previousComments = currentSubmission.evaluatorComments;
-      const evaluatorName = evaluator.Admin?.name || evaluator.email;
+      const evaluatorName = evaluator.adminProfile?.name || evaluator.email;
 
       // Update submission
       const submission = await tx.problemSubmission.update({
@@ -1151,8 +1147,8 @@ router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', '
       id: ev.id,
       evaluatorName: ev.evaluatorName,
       evaluatorRole: ev.evaluatorRole,
-      studentName: ev.submission.user.Student?.name || 'N/A',
-      rollNo: ev.submission.user.Student?.rollNo || 'N/A',
+      studentName: ev.submission.user.studentProfile?.name || 'N/A',
+      rollNo: ev.submission.user.studentProfile?.rollNo || 'N/A',
       problemTitle: ev.submission.problem.title,
       marks: ev.marks,
       comments: ev.comments,
@@ -1240,4 +1236,5 @@ router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('ad
 });
 
 export default router;
+
 

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert
+  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
@@ -36,9 +36,99 @@ const CompetitionManager = () => {
     points: 100,
     constraints: [''],
     examples: [{ input: '', output: '', explanation: '' }],
-    testCases: [{ input: '', output: '', hidden: false }]
+    testCases: [{ input: '', output: '', hidden: false }],
+    // LeetCode-style function signature
+    functionName: 'solution',
+    returnType: 'int',
+    parameters: [{ name: 'nums', type: 'int[]' }]
   });
   const [competitions, setCompetitions] = useState([]);
+
+  // Generate starter code templates for each language based on function signature
+  const generateStarterCode = (problem) => {
+    const { functionName, returnType, parameters } = problem;
+    
+    // Map types to different languages
+    const typeMapping = {
+      java: {
+        'int': 'int',
+        'int[]': 'int[]',
+        'int[][]': 'int[][]',
+        'string': 'String',
+        'string[]': 'String[]',
+        'boolean': 'boolean',
+        'double': 'double',
+        'float': 'float',
+        'long': 'long',
+        'List<Integer>': 'List<Integer>',
+        'List<String>': 'List<String>',
+        'List<List<Integer>>': 'List<List<Integer>>'
+      },
+      cpp: {
+        'int': 'int',
+        'int[]': 'vector<int>',
+        'int[][]': 'vector<vector<int>>',
+        'string': 'string',
+        'string[]': 'vector<string>',
+        'boolean': 'bool',
+        'double': 'double',
+        'float': 'float',
+        'long': 'long long',
+        'List<Integer>': 'vector<int>',
+        'List<String>': 'vector<string>',
+        'List<List<Integer>>': 'vector<vector<int>>'
+      },
+      python: {
+        'int': 'int',
+        'int[]': 'List[int]',
+        'int[][]': 'List[List[int]]',
+        'string': 'str',
+        'string[]': 'List[str]',
+        'boolean': 'bool',
+        'double': 'float',
+        'float': 'float',
+        'long': 'int',
+        'List<Integer>': 'List[int]',
+        'List<String>': 'List[str]',
+        'List<List<Integer>>': 'List[List[int]]'
+      }
+    };
+
+    const getType = (lang, type) => typeMapping[lang]?.[type] || type;
+
+    // Java starter code
+    const javaParams = parameters.map(p => `${getType('java', p.type)} ${p.name}`).join(', ');
+    const javaCode = `class Solution {
+    public ${getType('java', returnType)} ${functionName}(${javaParams}) {
+        // Write your solution here
+        
+    }
+}`;
+
+    // C++ starter code
+    const cppParams = parameters.map(p => `${getType('cpp', p.type)}& ${p.name}`).join(', ');
+    const cppCode = `class Solution {
+public:
+    ${getType('cpp', returnType)} ${functionName}(${cppParams}) {
+        // Write your solution here
+        
+    }
+};`;
+
+    // Python starter code
+    const pythonParams = parameters.map(p => `${p.name}: ${getType('python', p.type)}`).join(', ');
+    const pythonReturnType = getType('python', returnType);
+    const pythonCode = `class Solution:
+    def ${functionName}(self, ${pythonParams}) -> ${pythonReturnType}:
+        # Write your solution here
+        pass`;
+
+    return {
+      java: javaCode,
+      cpp: cppCode,
+      python: pythonCode
+    };
+  };
 
   // Check permissions (use manageCompetitions permission)
   const canManageCompetitions = hasPermission(userDetails, 'manageCompetitions');
@@ -279,10 +369,59 @@ const CompetitionManager = () => {
       return;
     }
     if (currentProblem.testCases.length === 0 || !currentProblem.testCases[0].input) {
-      toast.error('Please add at least one test case');
+      toast.error('Please add at least one test case with input');
       return;
     }
-    setProblems([...problems, { ...currentProblem, id: problems.length + 1 }]);
+    if (!currentProblem.functionName) {
+      toast.error('Please provide a function name');
+      return;
+    }
+    
+    // Validate all parameters have names
+    const validParams = currentProblem.parameters.filter(p => p.name && p.type);
+    if (validParams.length === 0) {
+      toast.error('Please add at least one function parameter with a name');
+      return;
+    }
+    
+    // Validate all test cases have both input and output
+    const emptyOutputCases = currentProblem.testCases.filter(tc => tc.input && !tc.output.trim());
+    if (emptyOutputCases.length > 0) {
+      toast.error(`${emptyOutputCases.length} test case(s) missing expected output — Judge0 needs output to compare`);
+      return;
+    }
+    
+    // Validate test case input formats
+    let hasFormatError = false;
+    for (let i = 0; i < currentProblem.testCases.length; i++) {
+      const tc = currentProblem.testCases[i];
+      const inputCheck = validateTestCaseInput(tc.input);
+      if (!inputCheck.valid) {
+        toast.error(`Test Case ${i + 1} input error: ${inputCheck.message}`);
+        hasFormatError = true;
+        break;
+      }
+      const outputCheck = validateTestCaseOutput(tc.output);
+      if (!outputCheck.valid) {
+        toast.error(`Test Case ${i + 1} output warning: ${outputCheck.message}`);
+        hasFormatError = true;
+        break;
+      }
+    }
+    if (hasFormatError) return;
+    
+    // Generate starter code for all supported languages
+    const starterCode = generateStarterCode(currentProblem);
+    
+    const problemWithStarterCode = {
+      ...currentProblem,
+      id: problems.length + 1,
+      starterCode,
+      // Ensure parameters are properly formatted
+      parameters: validParams
+    };
+    
+    setProblems([...problems, problemWithStarterCode]);
     setCurrentProblem({
       title: '',
       description: '',
@@ -290,9 +429,12 @@ const CompetitionManager = () => {
       points: 100,
       constraints: [''],
       examples: [{ input: '', output: '', explanation: '' }],
-      testCases: [{ input: '', output: '', hidden: false }]
+      testCases: [{ input: '', output: '', hidden: false }],
+      functionName: 'solution',
+      returnType: 'int',
+      parameters: [{ name: 'nums', type: 'int[]' }]
     });
-    toast.success('Problem added!');
+    toast.success('Problem added with code templates!');
   };
 
   const removeProblem = (index) => {
@@ -359,6 +501,196 @@ const CompetitionManager = () => {
     });
   };
 
+  // Parameter management functions for function signature
+  const addParameter = () => {
+    setCurrentProblem({
+      ...currentProblem,
+      parameters: [...currentProblem.parameters, { name: '', type: 'int' }]
+    });
+  };
+
+  const updateParameter = (index, field, value) => {
+    const newParams = [...currentProblem.parameters];
+    newParams[index][field] = value;
+    setCurrentProblem({ ...currentProblem, parameters: newParams });
+  };
+
+  const removeParameter = (index) => {
+    if (currentProblem.parameters.length > 1) {
+      setCurrentProblem({
+        ...currentProblem,
+        parameters: currentProblem.parameters.filter((_, i) => i !== index)
+      });
+    }
+  };
+
+  // Common parameter types for dropdown
+  const parameterTypes = [
+    'int',
+    'int[]',
+    'int[][]',
+    'string',
+    'string[]',
+    'boolean',
+    'double',
+    'float',
+    'long',
+    'List<Integer>',
+    'List<String>',
+    'List<List<Integer>>'
+  ];
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FORMAT GUIDE HELPERS — Shows admin exactly what Judge0 expects
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Get example input format for a parameter type
+  const getInputFormatHint = (type) => {
+    const hints = {
+      'int': '5',
+      'int[]': '[1,2,3,4,5]',
+      'int[][]': '[[1,2],[3,4],[5,6]]',
+      'string': 'hello',
+      'string[]': '["abc","def","ghi"]',
+      'boolean': 'true',
+      'double': '3.14',
+      'float': '2.5',
+      'long': '999999999',
+      'List<Integer>': '[1,2,3,4,5]',
+      'List<String>': '["abc","def"]',
+      'List<List<Integer>>': '[[1,2],[3,4]]'
+    };
+    return hints[type] || '...';
+  };
+
+  // Get example output format based on return type
+  const getOutputFormatHint = (returnType) => {
+    const hints = {
+      'int': '42',
+      'int[]': '[1,2,3]  (no spaces!)',
+      'int[][]': '[[1,2],[3,4]]  (no spaces!)',
+      'string': 'hello  (no quotes)',
+      'string[]': '["abc","def"]',
+      'boolean': 'true  (lowercase)',
+      'double': '3.14',
+      'float': '2.5',
+      'long': '999999999',
+      'List<Integer>': '[1,2,3]  (no spaces!)',
+      'List<String>': '["abc","def"]',
+      'List<List<Integer>>': '[[1,2],[3,4]]  (no spaces!)'
+    };
+    return hints[returnType] || '...';
+  };
+
+  // Generate the full input format string from current parameters
+  const getFullInputFormat = () => {
+    const params = currentProblem.parameters.filter(p => p.name && p.type);
+    if (params.length === 0) return '';
+    return params.map(p => `${getInputFormatHint(p.type)}`).join(', ');
+  };
+
+  // Validate a test case input against parameters
+  const validateTestCaseInput = (inputStr) => {
+    const params = currentProblem.parameters.filter(p => p.name && p.type);
+    if (!inputStr || params.length === 0) return { valid: true, message: '' };
+    
+    const errors = [];
+    let remaining = inputStr.trim();
+    
+    for (let i = 0; i < params.length; i++) {
+      const param = params[i];
+      const isArray = param.type.includes('[]') || param.type.includes('List');
+      
+      if (!remaining && i < params.length) {
+        errors.push(`Missing value for parameter "${param.name}" (${param.type})`);
+        break;
+      }
+      
+      if (isArray) {
+        // Check for opening bracket
+        if (remaining.match(/^\s*\[/)) {
+          let depth = 0;
+          let endIndex = -1;
+          for (let j = 0; j < remaining.length; j++) {
+            if (remaining[j] === '[') depth++;
+            if (remaining[j] === ']') depth--;
+            if (depth === 0 && remaining[j] === ']') { endIndex = j; break; }
+          }
+          if (endIndex === -1) {
+            errors.push(`Unmatched brackets for "${param.name}" — close all [ with ]`);
+            break;
+          }
+          // Validate it's valid JSON
+          const arrayStr = remaining.substring(0, endIndex + 1);
+          try { JSON.parse(arrayStr); } catch { errors.push(`Invalid array for "${param.name}": ${arrayStr}`); }
+          remaining = remaining.substring(endIndex + 1).replace(/^\s*,?\s*/, '');
+        } else {
+          errors.push(`Expected array [..] for "${param.name}" (${param.type}), got: ${remaining.substring(0, 20)}`);
+          break;
+        }
+      } else {
+        // Non-array: take until next comma (or end)
+        const commaIdx = remaining.indexOf(',');
+        let value;
+        if (commaIdx > -1 && i < params.length - 1) {
+          value = remaining.substring(0, commaIdx).trim();
+          remaining = remaining.substring(commaIdx + 1).trim();
+        } else {
+          value = remaining.trim();
+          remaining = '';
+        }
+        
+        // Type-specific validation
+        if ((param.type === 'int' || param.type === 'long') && isNaN(parseInt(value))) {
+          errors.push(`"${param.name}" should be a number, got: "${value}"`);
+        }
+        if ((param.type === 'double' || param.type === 'float') && isNaN(parseFloat(value))) {
+          errors.push(`"${param.name}" should be a decimal number, got: "${value}"`);
+        }
+        if (param.type === 'boolean' && !['true', 'false'].includes(value.toLowerCase())) {
+          errors.push(`"${param.name}" should be true or false, got: "${value}"`);
+        }
+      }
+    }
+    
+    if (remaining.trim() && errors.length === 0) {
+      errors.push(`Extra values after all parameters: "${remaining.trim()}"`);
+    }
+    
+    return { valid: errors.length === 0, message: errors.join('; ') };
+  };
+
+  // Validate output format
+  const validateTestCaseOutput = (outputStr) => {
+    const returnType = currentProblem.returnType;
+    if (!outputStr) return { valid: true, message: '' };
+    
+    const trimmed = outputStr.trim();
+    const warnings = [];
+    
+    // Check for common mistakes
+    if (trimmed !== outputStr) {
+      warnings.push('Leading/trailing whitespace will be trimmed');
+    }
+    
+    if ((returnType.includes('[]') || returnType.includes('List')) && trimmed.startsWith('[')) {
+      // Check no spaces after commas in arrays
+      if (trimmed.includes(', ')) {
+        warnings.push('⚠️ SPACES IN ARRAY — Judge0 output has NO spaces: [1,2,3] not [1, 2, 3]');
+      }
+      // Validate it's valid JSON
+      try { JSON.parse(trimmed); } catch { warnings.push('Invalid JSON array format'); }
+    }
+    
+    if (returnType === 'boolean' || returnType === 'bool') {
+      if (trimmed === 'True' || trimmed === 'False') {
+        warnings.push('⚠️ Must be lowercase: true/false, not True/False');
+      }
+    }
+    
+    return { valid: warnings.filter(w => w.startsWith('⚠️')).length === 0, message: warnings.join('; ') };
+  };
+
   const resetForm = () => {
     setCurrentStep(1);
     setFormData({
@@ -380,7 +712,10 @@ const CompetitionManager = () => {
       points: 100,
       constraints: [''],
       examples: [{ input: '', output: '', explanation: '' }],
-      testCases: [{ input: '', output: '', hidden: false }]
+      testCases: [{ input: '', output: '', hidden: false }],
+      functionName: 'solution',
+      returnType: 'int',
+      parameters: [{ name: 'nums', type: 'int[]' }]
     });
   };
 
@@ -904,6 +1239,143 @@ const CompetitionManager = () => {
                         </select>
                       </div>
 
+                      {/* Function Signature - LeetCode Style */}
+                      <div className="border-2 border-indigo-200 bg-indigo-50 p-4 rounded-lg">
+                        <h4 className="text-sm font-semibold text-indigo-800 mb-4 flex items-center gap-2">
+                          <Code className="w-4 h-4" />
+                          Function Signature (LeetCode Style)
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Function Name *</label>
+                            <input
+                              type="text"
+                              value={currentProblem.functionName}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, functionName: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                              placeholder="e.g., twoSum"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Return Type *</label>
+                            <select
+                              value={currentProblem.returnType}
+                              onChange={(e) => setCurrentProblem({ ...currentProblem, returnType: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                            >
+                              {parameterTypes.map(type => (
+                                <option key={type} value={type}>{type}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Parameters */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">Function Parameters</label>
+                            <button
+                              type="button"
+                              onClick={addParameter}
+                              className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                            >
+                              <Plus className="w-4 h-4" /> Add Parameter
+                            </button>
+                          </div>
+                          {currentProblem.parameters.map((param, index) => (
+                            <div key={index} className="flex items-center gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={param.name}
+                                onChange={(e) => updateParameter(index, 'name', e.target.value)}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                                placeholder="Parameter name (e.g., nums)"
+                              />
+                              <select
+                                value={param.type}
+                                onChange={(e) => updateParameter(index, 'type', e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                              >
+                                {parameterTypes.map(type => (
+                                  <option key={type} value={type}>{type}</option>
+                                ))}
+                              </select>
+                              {currentProblem.parameters.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeParameter(index)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Preview */}
+                        <div className="mt-4 pt-4 border-t border-indigo-200">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Student Sees (Starter Code)</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <span className="text-xs text-gray-500 block mb-1">Java</span>
+                              <pre className="bg-gray-900 text-green-400 p-2 rounded text-xs font-mono overflow-x-auto">
+{`class Solution {
+  public ${currentProblem.returnType} ${currentProblem.functionName}(${currentProblem.parameters.map(p => `${p.type} ${p.name}`).join(', ')}) {
+    // code here
+  }
+}`}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500 block mb-1">Python</span>
+                              <pre className="bg-gray-900 text-green-400 p-2 rounded text-xs font-mono overflow-x-auto">
+{`class Solution:
+  def ${currentProblem.functionName}(self, ${currentProblem.parameters.map(p => p.name).join(', ')}):
+    # code here
+    pass`}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500 block mb-1">C++</span>
+                              <pre className="bg-gray-900 text-green-400 p-2 rounded text-xs font-mono overflow-x-auto">
+{`class Solution {
+public:
+  ${currentProblem.returnType} ${currentProblem.functionName}(${currentProblem.parameters.map(p => `${p.type}& ${p.name}`).join(', ')}) {
+    // code here
+  }
+};`}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Execution simulation */}
+                        <div className="mt-3 pt-3 border-t border-indigo-200">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">🔬 How Judge0 Runs It (Python example with Test Case 1)</label>
+                          <pre className="bg-gray-900 text-amber-300 p-3 rounded text-xs font-mono overflow-x-auto whitespace-pre">
+{(() => {
+  const params = currentProblem.parameters.filter(p => p.name && p.type);
+  const tc1 = currentProblem.testCases[0];
+  const inputStr = tc1?.input || getFullInputFormat();
+  // Simulate parsing
+  const lines = [];
+  lines.push(`sol = Solution()`);
+  lines.push(``);
+  lines.push(`# System auto-parses your test case input: "${inputStr}"`);
+  params.forEach((p, i) => {
+    lines.push(`${p.name} = ${getInputFormatHint(p.type)}  # from input`);
+  });
+  lines.push(``);
+  lines.push(`result = sol.${currentProblem.functionName}(${params.map(p => p.name).join(', ')})`);
+  lines.push(`print(result)  # must equal → ${tc1?.output || getOutputFormatHint(currentProblem.returnType).split('  ')[0]}`);
+  return lines.join('\n');
+})()}
+                          </pre>
+                        </div>
+                      </div>
+
                       {/* Constraints */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
@@ -1003,10 +1475,72 @@ const CompetitionManager = () => {
                             <Plus className="w-4 h-4" /> Add Test Case
                           </button>
                         </div>
-                        {currentProblem.testCases.map((testCase, index) => (
-                          <div key={index} className="border border-gray-300 p-3 rounded-lg mb-2 bg-gray-50">
+
+                        {/* ═══ FORMAT GUIDE BOX ═══ */}
+                        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
+                          <h5 className="text-xs font-bold text-amber-800 mb-2 uppercase tracking-wide">⚡ Judge0 Format Guide — Read This!</h5>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            {/* INPUT FORMAT */}
+                            <div>
+                              <p className="font-semibold text-amber-900 mb-1">INPUT FORMAT:</p>
+                              <p className="text-amber-800 mb-1">Values in order matching parameters, comma-separated:</p>
+                              <div className="bg-white rounded p-2 font-mono text-amber-900 border border-amber-200 space-y-0.5">
+                                {currentProblem.parameters.filter(p => p.name && p.type).map((p, i) => (
+                                  <div key={i}>
+                                    <span className="text-gray-500">{p.name}</span>
+                                    <span className="text-gray-400"> ({p.type}): </span>
+                                    <span className="text-green-700 font-semibold">{getInputFormatHint(p.type)}</span>
+                                  </div>
+                                ))}
+                                <div className="border-t border-amber-200 pt-1 mt-1">
+                                  <span className="text-gray-500">Full input: </span>
+                                  <span className="text-blue-700 font-bold">{getFullInputFormat()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* OUTPUT FORMAT */}
+                            <div>
+                              <p className="font-semibold text-amber-900 mb-1">OUTPUT FORMAT (return type: <code className="bg-amber-100 px-1 rounded">{currentProblem.returnType}</code>):</p>
+                              <div className="bg-white rounded p-2 font-mono text-amber-900 border border-amber-200 space-y-0.5">
+                                <div>
+                                  <span className="text-gray-500">Example: </span>
+                                  <span className="text-green-700 font-semibold">{getOutputFormatHint(currentProblem.returnType)}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2 space-y-1 text-amber-800">
+                                <p>🔴 <strong>EXACT match</strong> — stdout must equal expected output</p>
+                                <p>🔴 Arrays: <code className="bg-amber-100 px-1 rounded">[1,2,3]</code> NOT <code className="bg-red-100 px-1 rounded line-through">[1, 2, 3]</code></p>
+                                <p>🔴 Boolean: <code className="bg-amber-100 px-1 rounded">true</code> NOT <code className="bg-red-100 px-1 rounded line-through">True</code></p>
+                                <p>🔴 String: <code className="bg-amber-100 px-1 rounded">hello</code> NOT <code className="bg-red-100 px-1 rounded line-through">"hello"</code></p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {currentProblem.testCases.map((testCase, index) => {
+                          const inputValidation = validateTestCaseInput(testCase.input);
+                          const outputValidation = validateTestCaseOutput(testCase.output);
+                          return (
+                          <div key={index} className={`border p-3 rounded-lg mb-2 ${
+                            testCase.input && testCase.output 
+                              ? (inputValidation.valid && outputValidation.valid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50') 
+                              : 'border-gray-300 bg-gray-50'
+                          }`}>
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-700">Test Case {index + 1}</span>
+                              <span className="text-sm font-medium text-gray-700">
+                                Test Case {index + 1}
+                                {testCase.input && testCase.output && inputValidation.valid && outputValidation.valid && 
+                                  <span className="ml-2 text-green-600 text-xs">✅ Valid</span>
+                                }
+                                {testCase.input && !inputValidation.valid && 
+                                  <span className="ml-2 text-red-600 text-xs">❌ Input error</span>
+                                }
+                                {testCase.output && !outputValidation.valid && 
+                                  <span className="ml-2 text-orange-600 text-xs">⚠️ Output warning</span>
+                                }
+                              </span>
                               <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-2 text-sm">
                                   <input
@@ -1029,23 +1563,46 @@ const CompetitionManager = () => {
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                              <textarea
-                                value={testCase.input}
-                                onChange={(e) => updateTestCase(index, 'input', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
-                                placeholder="Input"
-                                rows="2"
-                              />
-                              <textarea
-                                value={testCase.output}
-                                onChange={(e) => updateTestCase(index, 'output', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
-                                placeholder="Expected Output"
-                                rows="2"
-                              />
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">
+                                  Input — {currentProblem.parameters.filter(p=>p.name).map(p => `${p.name}(${p.type})`).join(', ')}
+                                </label>
+                                <textarea
+                                  value={testCase.input}
+                                  onChange={(e) => updateTestCase(index, 'input', e.target.value)}
+                                  className={`w-full px-3 py-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono ${
+                                    testCase.input && !inputValidation.valid ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                  }`}
+                                  placeholder={getFullInputFormat() || 'Input'}
+                                  rows="2"
+                                />
+                                {testCase.input && !inputValidation.valid && (
+                                  <p className="text-xs text-red-600 mt-1">❌ {inputValidation.message}</p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">
+                                  Expected Output — returns {currentProblem.returnType}
+                                </label>
+                                <textarea
+                                  value={testCase.output}
+                                  onChange={(e) => updateTestCase(index, 'output', e.target.value)}
+                                  className={`w-full px-3 py-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono ${
+                                    testCase.output && !outputValidation.valid ? 'border-orange-400 bg-orange-50' : 'border-gray-300'
+                                  }`}
+                                  placeholder={getOutputFormatHint(currentProblem.returnType)?.split('  ')[0] || 'Expected Output'}
+                                  rows="2"
+                                />
+                                {testCase.output && outputValidation.message && (
+                                  <p className={`text-xs mt-1 ${outputValidation.valid ? 'text-amber-600' : 'text-red-600'}`}>
+                                    {outputValidation.message}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <button

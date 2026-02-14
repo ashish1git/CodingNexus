@@ -27,7 +27,7 @@ router.get('/users/:userId', async (req, res) => {
             permissions: true
           }
         },
-        Student: {
+        studentProfile: {
           select: {
             name: true,
             rollNo: true
@@ -85,7 +85,7 @@ router.post('/students', async (req, res) => {
         role: 'student',
         moodleId,
         isActive: true, // Auto-activate when admin creates student
-        Student: {
+        studentProfile: {
           create: {
             name,
             rollNo,
@@ -95,7 +95,7 @@ router.post('/students', async (req, res) => {
         }
       },
       include: {
-        Student: true
+        studentProfile: true
       }
     });
 
@@ -107,7 +107,7 @@ router.post('/students', async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        name: user.Student.name
+        name: user.studentProfile.name
       }
     });
   } catch (error) {
@@ -122,7 +122,7 @@ router.get('/students', async (req, res) => {
     const students = await prisma.user.findMany({
       where: { role: 'student' },
       include: {
-        Student: true
+        studentProfile: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -130,7 +130,7 @@ router.get('/students', async (req, res) => {
     res.json({ 
       success: true, 
       students: students.map(u => {
-        const student = u.Student || {};
+        const student = u.studentProfile || {};
         return {
           id: u.id,
           userId: u.id,
@@ -185,23 +185,23 @@ router.put('/students/:id', async (req, res) => {
       const currentUser = await prisma.user.findUnique({
         where: { id },
         include: {
-          Student: true
+          studentProfile: true
         }
       });
       
       return res.json({ 
         success: true,
-        student: {
+        studentProfile: {
           id: currentUser.id,
           userId: currentUser.id,
           email: currentUser.email,
           moodleId: currentUser.moodleId,
           isActive: currentUser.isActive,
-          name: currentUser.Student?.name,
-          rollNo: currentUser.Student?.rollNo,
-          batch: currentUser.Student?.batch,
-          phone: currentUser.Student?.phone,
-          profilePhotoUrl: currentUser.Student?.profilePhotoUrl
+          name: currentUser.studentProfile?.name,
+          rollNo: currentUser.studentProfile?.rollNo,
+          batch: currentUser.studentProfile?.batch,
+          phone: currentUser.studentProfile?.phone,
+          profilePhotoUrl: currentUser.studentProfile?.profilePhotoUrl
         }
       });
     }
@@ -225,26 +225,26 @@ router.put('/students/:id', async (req, res) => {
     const updatedUser = await prisma.user.findUnique({
       where: { id },
       include: {
-        Student: true
+        studentProfile: true
       }
     });
     
     console.log('✅ Final updated user:', updatedUser);
-    console.log('🎯 Final batch value:', updatedUser.Student?.batch);
+    console.log('🎯 Final batch value:', updatedUser.studentProfile?.batch);
 
     const responseData = { 
       success: true,
-      student: {
+      studentProfile: {
         id: updatedUser.id,
         userId: updatedUser.id,
         email: updatedUser.email,
         moodleId: updatedUser.moodleId,
         isActive: updatedUser.isActive,
-        name: updatedUser.Student?.name,
-        rollNo: updatedUser.Student?.rollNo,
-        batch: updatedUser.Student?.batch,
-        phone: updatedUser.Student?.phone,
-        profilePhotoUrl: updatedUser.Student?.profilePhotoUrl
+        name: updatedUser.studentProfile?.name,
+        rollNo: updatedUser.studentProfile?.rollNo,
+        batch: updatedUser.studentProfile?.batch,
+        phone: updatedUser.studentProfile?.phone,
+        profilePhotoUrl: updatedUser.studentProfile?.profilePhotoUrl
       }
     };
     
@@ -357,14 +357,14 @@ router.get('/notes', async (req, res) => {
           where: { id: note.uploadedBy },
           select: {
             email: true,
-            Admin: {
+            adminProfile: {
               select: { name: true }
             }
           }
         });
         
-        if (user?.Admin?.name) {
-          uploadedByName = user.Admin.name;
+        if (user?.adminProfile?.name) {
+          uploadedByName = user.adminProfile.name;
         } else if (user?.email) {
           uploadedByName = user.email.split('@')[0];
         }
@@ -555,7 +555,7 @@ router.get('/attendance/sessions', async (req, res) => {
           include: {
             user: {
               include: {
-                Student: true
+                studentProfile: true
               }
             }
           }
@@ -580,7 +580,7 @@ router.get('/attendance/session/:id', async (req, res) => {
           include: {
             user: {
               include: {
-                Student: true
+                studentProfile: true
               }
             }
           }
@@ -852,7 +852,7 @@ router.get('/attendance/manual', async (req, res) => {
       include: {
         user: {
           include: {
-            Student: true
+            studentProfile: true
           }
         }
       }
@@ -986,7 +986,7 @@ router.get('/attendance/analytics', async (req, res) => {
           include: {
             user: {
               include: {
-                Student: true
+                studentProfile: true
               }
             }
           }
@@ -1217,8 +1217,8 @@ router.get('/attendance/student/:userId', async (req, res) => {
 
     res.json({
       success: true,
-      student: {
-        ...student,
+      studentProfile: {
+        ...studentProfile,
         email: student.user?.email
       },
       stats: {
@@ -1265,7 +1265,7 @@ router.get('/attendance/export', async (req, res) => {
           include: {
             user: {
               include: {
-                Student: true
+                studentProfile: true
               }
             }
           }
@@ -1286,8 +1286,8 @@ router.get('/attendance/export', async (req, res) => {
       lateCount: session.lateCount,
       attendanceRate: session.attendanceRate,
       records: session.records.map(r => ({
-        studentName: r.user.Student?.name,
-        rollNo: r.user.Student?.rollNo,
+        studentName: r.user.studentProfile?.name,
+        rollNo: r.user.studentProfile?.rollNo,
         moodleId: r.user.moodleId,
         status: r.status,
         markedAt: r.markedAt,
@@ -1344,7 +1344,7 @@ router.get('/attendance/:date', async (req, res) => {
       include: {
         user: {
           include: {
-            Student: true
+            studentProfile: true
           }
         }
       }
@@ -1418,7 +1418,7 @@ router.get('/quizzes/:id/submissions', async (req, res) => {
           include: {
             user: {
               include: {
-                Student: true
+                studentProfile: true
               }
             }
           },
@@ -1433,10 +1433,10 @@ router.get('/quizzes/:id/submissions', async (req, res) => {
 
     const submissions = quiz.attempts.map(attempt => ({
       id: attempt.id,
-      studentName: attempt.user?.Student?.name || 'Unknown',
-      studentRollNo: attempt.user?.Student?.rollNo || 'N/A',
+      studentName: attempt.user?.studentProfile?.name || 'Unknown',
+      studentRollNo: attempt.user?.studentProfile?.rollNo || 'N/A',
       studentEmail: attempt.user?.email,
-      studentBatch: attempt.user?.Student?.batch || 'Unknown',
+      studentBatch: attempt.user?.studentProfile?.batch || 'Unknown',
       answers: attempt.answers,
       score: attempt.score,
       maxScore: attempt.maxScore,
@@ -1525,7 +1525,7 @@ router.get('/tickets', async (req, res) => {
       include: {
         user: {
           include: {
-            Student: true
+            studentProfile: true
           }
         }
       },
@@ -1534,8 +1534,8 @@ router.get('/tickets', async (req, res) => {
 
     const mappedTickets = tickets.map(ticket => ({
       ...ticket,
-      studentName: ticket.user?.Student?.name || 'Unknown',
-      studentRollNo: ticket.user?.Student?.rollNo || 'N/A',
+      studentName: ticket.user?.studentProfile?.name || 'Unknown',
+      studentRollNo: ticket.user?.studentProfile?.rollNo || 'N/A',
       responses: ticket.response ? (() => {
         try {
           return JSON.parse(ticket.response);
@@ -1582,7 +1582,7 @@ router.put('/tickets/:id', async (req, res) => {
       
       responses.push({
         from: 'admin',
-        name: req.user.Admin?.name || 'Admin',
+        name: req.user.adminProfile?.name || 'Admin',
         timestamp: new Date().toISOString(),
         message: reply.trim()
       });
@@ -1627,23 +1627,23 @@ router.get('/subadmins', async (req, res) => {
     const admins = await prisma.user.findMany({
       where: { role: 'subadmin' },
       include: {
-        Admin: true
+        adminProfile: true
       }
     });
 
     // Filter out users without admin profiles
-    const validAdmins = admins.filter(u => u.Admin);
+    const validAdmins = admins.filter(u => u.adminProfile);
 
     res.json({ 
       success: true, 
       subAdmins: validAdmins.map(u => ({
         id: u.id,
         userId: u.id,
-        adminId: u.Admin.id,
+        adminId: u.adminProfile.id,
         email: u.email,
-        name: u.Admin.name,
-        permissions: u.Admin.permissions ? 
-          (u.Admin.permissions === 'all' ? 'all' : JSON.parse(u.Admin.permissions)) 
+        name: u.adminProfile.name,
+        permissions: u.adminProfile.permissions ? 
+          (u.adminProfile.permissions === 'all' ? 'all' : JSON.parse(u.adminProfile.permissions)) 
           : 'all'
       }))
     });
@@ -1701,7 +1701,7 @@ router.put('/subadmins/:id', async (req, res) => {
     // First, verify the user exists
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { Admin: true }
+      include: { adminProfile: true }
     });
 
     if (!user) {
@@ -1718,7 +1718,7 @@ router.put('/subadmins/:id', async (req, res) => {
       });
     }
 
-    if (!user.Admin) {
+    if (!user.adminProfile) {
       return res.status(400).json({ 
         success: false, 
         error: 'Admin profile not found. Please contact support.' 
@@ -1739,7 +1739,7 @@ router.put('/subadmins/:id', async (req, res) => {
     // Return the updated sub-admin with properly formatted data
     const updatedUser = await prisma.user.findUnique({
       where: { id: userId },
-      include: { Admin: true }
+      include: { adminProfile: true }
     });
     
     res.json({ 
@@ -1747,11 +1747,11 @@ router.put('/subadmins/:id', async (req, res) => {
       subAdmin: {
         id: updatedUser.id,
         userId: updatedUser.id,
-        adminId: updatedUser.Admin.id,
+        adminId: updatedUser.adminProfile.id,
         email: updatedUser.email,
-        name: updatedUser.Admin.name,
-        permissions: updatedUser.Admin.permissions ? 
-          (updatedUser.Admin.permissions === 'all' ? 'all' : JSON.parse(updatedUser.Admin.permissions)) 
+        name: updatedUser.adminProfile.name,
+        permissions: updatedUser.adminProfile.permissions ? 
+          (updatedUser.adminProfile.permissions === 'all' ? 'all' : JSON.parse(updatedUser.adminProfile.permissions)) 
           : 'all'
       }
     });
@@ -1769,7 +1769,7 @@ router.delete('/subadmins/:id', async (req, res) => {
     // Check if user exists and is a subadmin
     const user = await prisma.user.findUnique({
       where: { id },
-      include: { Admin: true }
+      include: { adminProfile: true }
     });
 
     if (!user) {
@@ -1852,6 +1852,8 @@ router.get('/competitions/:id', async (req, res) => {
 });
 
 export default router;
+
+
 
 
 

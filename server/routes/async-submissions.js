@@ -18,6 +18,152 @@ const LANGUAGE_MAP = {
 };
 
 /**
+ * RUN CODE ENDPOINT - Quick testing without saving
+ * Uses Judge0 with wait=true for immediate results
+ * Only runs against sample/visible test cases
+ * 
+ * ✅ Immediate response
+ * ✅ No database save
+ * ✅ For "Run Code" button
+ */
+router.post('/:problemId/run', authenticate, async (req, res) => {
+  try {
+    const { problemId } = req.params;
+    const { code, language } = req.body;
+
+    // Validate input
+    if (!code || !language) {
+      return res.status(400).json({ error: 'Code and language are required' });
+    }
+
+    // Get problem with test cases (testCases is a JSON field, not a relation)
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId }
+    });
+
+    if (!problem) {
+      return res.status(404).json({ error: 'Problem not found' });
+    }
+
+    const langId = LANGUAGE_MAP[language.toLowerCase()];
+    if (!langId) {
+      return res.status(400).json({ error: `Unsupported language: ${language}` });
+    }
+
+    // Get only sample/visible test cases for "Run" (not all test cases)
+    const testCases = Array.isArray(problem.testCases) 
+      ? problem.testCases.filter(tc => tc.isSample || tc.isVisible !== false).slice(0, 3) // Max 3 sample tests
+      : [];
+
+    if (testCases.length === 0) {
+      // If no sample test cases, just compile check
+      testCases.push({ input: '', expectedOutput: '', isSample: true });
+    }
+
+    console.log(`🏃 Running code for problem ${problemId} with ${testCases.length} test cases`);
+
+    const results = [];
+    let passedCount = 0;
+    let totalTime = 0;
+    let maxMemory = 0;
+    let compilationError = null;
+
+    // Run each test case
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase = testCases[i];
+      
+      try {
+        // Wrap code if it's a function-based problem
+        let execCode = code;
+        if (problem.parameters && problem.functionName) {
+          execCode = wrapCodeForExecution(code, language, problem, testCase);
+        }
+
+        // Submit to Judge0 with wait=true for immediate result
+        const judge0Response = await axios.post(
+          `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+          {
+            source_code: execCode,
+            language_id: langId,
+            stdin: (!problem.parameters) ? (testCase.input || '') : '',
+            expected_output: testCase.expectedOutput || null,
+            cpu_time_limit: 5,
+            memory_limit: 128000
+          },
+          { timeout: 15000 }
+        );
+
+        const result = judge0Response.data;
+        
+        // Judge0 status codes:
+        // 1 = In Queue, 2 = Processing, 3 = Accepted, 4 = Wrong Answer
+        // 5 = Time Limit, 6 = Compilation Error, 7-12 = Runtime Errors
+        const statusId = result.status?.id;
+        
+        // Check for compilation error (only need to report once)
+        if (statusId === 6) {
+          compilationError = result.compile_output || 'Compilation failed';
+          results.push({
+            testCase: i + 1,
+            passed: false,
+            status: 'Compilation Error',
+            error: compilationError,
+            input: testCase.input?.substring(0, 100) || 'N/A'
+          });
+          break; // Stop on compilation error
+        }
+
+        const passed = statusId === 3;
+        if (passed) passedCount++;
+
+        totalTime += parseFloat(result.time || 0) * 1000;
+        maxMemory = Math.max(maxMemory, result.memory || 0);
+
+        results.push({
+          testCase: i + 1,
+          passed,
+          status: result.status?.description || 'Unknown',
+          input: testCase.input?.substring(0, 100) || 'N/A',
+          expectedOutput: testCase.expectedOutput?.substring(0, 100) || 'N/A',
+          actualOutput: (result.stdout || '').trim().substring(0, 100) || 'No output',
+          error: result.stderr || result.compile_output || null,
+          time: result.time ? `${(parseFloat(result.time) * 1000).toFixed(0)}ms` : 'N/A',
+          memory: result.memory ? `${(result.memory / 1024).toFixed(1)}MB` : 'N/A'
+        });
+
+      } catch (error) {
+        console.error(`Test case ${i + 1} error:`, error.message);
+        results.push({
+          testCase: i + 1,
+          passed: false,
+          status: 'Error',
+          error: error.message,
+          input: testCase.input?.substring(0, 100) || 'N/A'
+        });
+      }
+    }
+
+    // Return results
+    res.json({
+      success: true,
+      results,
+      summary: {
+        passed: passedCount,
+        total: results.length,
+        allPassed: passedCount === results.length && !compilationError,
+        executionTime: `${totalTime.toFixed(0)}ms`,
+        memoryUsed: `${(maxMemory / 1024).toFixed(1)}MB`,
+        compilationError
+      }
+    });
+
+  } catch (error) {
+    console.error('Error running code:', error);
+    res.status(500).json({ error: 'Failed to run code: ' + error.message });
+  }
+});
+
+/**
  * NEW ENDPOINT: Submit code WITHOUT waiting for results
  * Returns immediately with submission token
  * 
@@ -36,12 +182,11 @@ router.post('/:problemId/submit-async', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Code and language are required' });
     }
 
-    // Get problem
+    // Get problem (testCases is a JSON field, not a relation)
     const problem = await prisma.problem.findUnique({
       where: { id: problemId },
       include: {
-        competition: true,
-        testCases: true
+        competition: true
       }
     });
 
@@ -76,7 +221,7 @@ router.post('/:problemId/submit-async', authenticate, async (req, res) => {
     });
 
     // 🎯 Start async processing in background
-    processSubmissionAsync(submission.id, problem, code, langId);
+    processSubmissionAsync(submission.id, problem, code, language, langId);
 
   } catch (error) {
     console.error('Error submitting code:', error);
@@ -162,7 +307,7 @@ router.get('/:submissionId/status', authenticate, async (req, res) => {
  * Background async processing function
  * Runs AFTER responding to user (no wait)
  */
-async function processSubmissionAsync(submissionId, problem, code, langId) {
+async function processSubmissionAsync(submissionId, problem, code, language, langId) {
   try {
     console.log(`🚀 [Async] Starting processing for submission ${submissionId}`);
 
@@ -186,7 +331,7 @@ async function processSubmissionAsync(submissionId, problem, code, langId) {
         // Wrap code if needed
         let execCode = code;
         if (problem.parameters && problem.functionName) {
-          execCode = wrapCodeForExecution(code, problem, testCase);
+          execCode = wrapCodeForExecution(code, language, problem, testCase);
         }
 
         // 🎯 SUBMIT TO JUDGE0 WITHOUT WAITING
@@ -195,7 +340,7 @@ async function processSubmissionAsync(submissionId, problem, code, langId) {
           {
             source_code: execCode,
             language_id: langId,
-            stdin: testCase.input || ''
+            stdin: (!problem.parameters) ? (testCase.input || '') : ''
           },
           {
             headers: { 'Content-Type': 'application/json' },

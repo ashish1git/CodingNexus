@@ -15,8 +15,8 @@ export const authenticate = async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        Student: true,
-        Admin: true
+        studentProfile: true,
+        adminProfile: true
       }
     });
 
@@ -42,3 +42,4 @@ export const authorizeRole = (...roles) => {
     next();
   };
 };
+

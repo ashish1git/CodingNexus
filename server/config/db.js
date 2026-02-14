@@ -27,15 +27,33 @@ console.log('📡 Initializing Database Connection Pool...');
 const pool = new pg.Pool({
   connectionString,
   max: 5,  // REDUCED: Render free tier = 5 concurrent connections
-  idleTimeoutMillis: 10000,  // Release unused connections quickly
-  connectionTimeoutMillis: 3000,  // Fail fast on connection issues
-  maxUses: 100,  // Recycle connections to prevent stale connections
+  min: 1,  // Keep at least 1 connection active
+  idleTimeoutMillis: 30000,  // Release unused connections after 30 seconds (was 10s - too aggressive)
+  connectionTimeoutMillis: 5000,  // Increase timeout to handle slower connections
+  application_name: 'coding-nexus-server',  // Identify connections in database logs
 });
 
-// Handle pool errors gracefully without crashing
-pool.on('error', (error) => {
-  console.warn('⚠️  Pool error (non-critical):', error.message);
+// Handle pool errors with recovery logic
+let poolErrorCount = 0;
+pool.on('error', (error, client) => {
+  poolErrorCount++;
+  // Log the error but don't block server
+  if (error.message.includes('Connection terminated')) {
+    console.warn(`⚠️  Connection closed (${poolErrorCount} occurrences):`, error.message);
+  } else {
+    console.warn('⚠️  Pool error (non-critical):', error.message);
+  }
+  
+  // If client is still active, attempt to remove it from pool
+  if (client) {
+    client.release(true); // Force remove from pool to prevent stale connections
+  }
 });
+
+// Reset error counter after 60 seconds of no errors
+setInterval(() => {
+  poolErrorCount = 0;
+}, 60000);
 
 // Create Prisma adapter
 const adapter = new PrismaPg(pool);

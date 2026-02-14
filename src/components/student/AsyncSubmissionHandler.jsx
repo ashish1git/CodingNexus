@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/apiClient';
 
 /**
  * ✅ SMART POLLING COMPONENT
@@ -36,11 +37,12 @@ const AsyncSubmissionHandler = ({ problemId, code, language, onSuccess, onError 
     try {
       console.log('📤 Submitting code (no wait)...');
 
+      const token = apiClient.getToken();
       const response = await axios.post(
         `/api/submissions/${problemId}/submit-async`,
         { code, language },
         {
-          headers: { Authorization: `Bearer ${user?.token}` },
+          headers: { Authorization: `Bearer ${token}` },
           timeout: 5000  // Submit itself shouldn't take long
         }
       );
@@ -147,11 +149,12 @@ const AsyncSubmissionHandler = ({ problemId, code, language, onSuccess, onError 
    */
   const fetchResultsOnDemand = async (id) => {
     try {
+      const token = apiClient.getToken();
       const response = await axios.post(
         `/api/submissions/${id}/fetch-results`,
         {},
         {
-          headers: { Authorization: `Bearer ${user?.token}` },
+          headers: { Authorization: `Bearer ${token}` },
           timeout: 10000
         }
       );
@@ -169,10 +172,11 @@ const AsyncSubmissionHandler = ({ problemId, code, language, onSuccess, onError 
    */
   const checkStatus = async (id) => {
     try {
+      const token = apiClient.getToken();
       const response = await axios.get(
         `/api/submissions/${id}/status`,
         {
-          headers: { Authorization: `Bearer ${user?.token}` },
+          headers: { Authorization: `Bearer ${token}` },
           timeout: 5000
         }
       );

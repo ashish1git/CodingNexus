@@ -6,6 +6,7 @@ import {
   ChevronUp, List, FileText, TestTube, Terminal, Maximize
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/apiClient';
 import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
 import Loading from '../shared/Loading';
@@ -33,6 +34,67 @@ const CompetitionProblems = () => {
   const [asyncStatus, setAsyncStatus] = useState('idle');
   const [asyncResult, setAsyncResult] = useState(null);
   const [pollCount, setPollCount] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+
+  // Generate default starter code template when none exists
+  const generateStarterCode = (problem, lang) => {
+    if (!problem) return '';
+    
+    const functionName = problem.functionName || 'solution';
+    const returnType = problem.returnType || 'int';
+    const parameters = problem.parameters || [{ name: 'nums', type: 'int[]' }];
+
+    // Type mappings for each language
+    const typeMap = {
+      java: {
+        'int': 'int', 'int[]': 'int[]', 'int[][]': 'int[][]',
+        'string': 'String', 'String': 'String', 'string[]': 'String[]',
+        'boolean': 'boolean', 'bool': 'boolean', 'double': 'double',
+        'long': 'long', 'List<Integer>': 'List<Integer>', 'List<String>': 'List<String>'
+      },
+      cpp: {
+        'int': 'int', 'int[]': 'vector<int>', 'int[][]': 'vector<vector<int>>',
+        'string': 'string', 'String': 'string', 'string[]': 'vector<string>',
+        'boolean': 'bool', 'bool': 'bool', 'double': 'double',
+        'long': 'long long', 'List<Integer>': 'vector<int>', 'List<String>': 'vector<string>'
+      },
+      python: {
+        'int': 'int', 'int[]': 'List[int]', 'int[][]': 'List[List[int]]',
+        'string': 'str', 'String': 'str', 'string[]': 'List[str]',
+        'boolean': 'bool', 'bool': 'bool', 'double': 'float',
+        'long': 'int', 'List<Integer>': 'List[int]', 'List<String>': 'List[str]'
+      }
+    };
+
+    const getType = (type, lang) => typeMap[lang]?.[type] || type;
+
+    if (lang === 'java') {
+      const params = parameters.map(p => `${getType(p.type, 'java')} ${p.name}`).join(', ');
+      return `class Solution {
+    public ${getType(returnType, 'java')} ${functionName}(${params}) {
+        // Write your solution here
+        
+    }
+}`;
+    } else if (lang === 'cpp') {
+      const params = parameters.map(p => `${getType(p.type, 'cpp')}& ${p.name}`).join(', ');
+      return `class Solution {
+public:
+    ${getType(returnType, 'cpp')} ${functionName}(${params}) {
+        // Write your solution here
+        
+    }
+};`;
+    } else if (lang === 'python') {
+      const params = parameters.map(p => `${p.name}: ${getType(p.type, 'python')}`).join(', ');
+      return `class Solution:
+    def ${functionName}(self, ${params}) -> ${getType(returnType, 'python')}:
+        # Write your solution here
+        pass`;
+    }
+    
+    return '';
+  };
 
   // Map language to Monaco editor language ID
   const getMonacoLanguage = (lang) => {
@@ -119,16 +181,45 @@ const CompetitionProblems = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live countdown timer effect
+  useEffect(() => {
+    if (!competition?.endTime) return;
+
+    const updateTimer = () => {
+      const end = new Date(competition.endTime);
+      const now = new Date();
+      const diff = end - now;
+
+      if (diff <= 0) {
+        setTimeRemaining({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeRemaining({ hours, minutes, seconds, expired: false });
+    };
+
+    // Update immediately
+    updateTimer();
+    
+    // Update every second
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [competition?.endTime]);
+
   useEffect(() => {
     // Load saved code when switching problems
     if (selectedProblem && problemSolutions[selectedProblem.id]) {
       setCode(problemSolutions[selectedProblem.id].code || '');
       setLanguage(problemSolutions[selectedProblem.id].language || 'java');
     } else if (selectedProblem) {
-      // Set starter code from problem if available
+      // Set starter code from problem if available, or generate one
       const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || 
-                         selectedProblem.starterCode?.['java'] || 
-                         '';
+                         generateStarterCode(selectedProblem, language.toLowerCase());
       setCode(starterCode);
     } else {
       setCode('');
@@ -139,7 +230,9 @@ const CompetitionProblems = () => {
   useEffect(() => {
     // Update code when language changes (only if not saved)
     if (selectedProblem && !problemSolutions[selectedProblem.id]?.saved) {
-      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || '';
+      // Try to get starter code from problem, or generate one
+      const starterCode = selectedProblem.starterCode?.[language.toLowerCase()] || 
+                         generateStarterCode(selectedProblem, language.toLowerCase());
       if (starterCode) {
         setCode(starterCode);
       }
@@ -175,46 +268,70 @@ const CompetitionProblems = () => {
     setLastRunTime(now);
     setSubmitting(true);
     setTestResults(null);
-    setAsyncStatus('submitted');
-    setPollCount(0);
-    
-    const codeToSubmit = code;
-    const languageToSubmit = language;
+    // Don't set asyncStatus for 'run' - we want inline results, not modal
     
     try {
-      console.log('📤 Submitting code for async evaluation...');
+      console.log('🏃 Running code against sample test cases...');
 
-      // Submit to backend async endpoint
-      const response = await fetch(`/api/submissions/${selectedProblem.id}/submit-async`, {
+      const token = apiClient.getToken();
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      // Use /run endpoint for quick testing (not /submit-async)
+      const response = await fetch(`/api/submissions/${selectedProblem.id}/run`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          code: codeToSubmit,
-          language: languageToSubmit
+          code,
+          language
         })
       });
 
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to submit code');
+        throw new Error(result.error || 'Failed to run code');
       }
 
-      const { submissionId } = result;
-      console.log('✅ Submission accepted, starting polling...');
+      console.log('✅ Run complete:', result);
 
-      // Start smart polling
-      startSmartPolling(submissionId);
+      // Format test results for UI (expected format: accepted, passed, total, cases[])
+      const formattedResults = {
+        accepted: result.summary.allPassed,
+        passed: result.summary.passed,
+        total: result.summary.total,
+        cases: result.results.map((r, idx) => ({
+          id: r.testCase || idx + 1,
+          passed: r.passed,
+          time: r.time || 'N/A',
+          input: r.input || 'N/A',
+          expected: r.expectedOutput || 'N/A',
+          actual: r.actualOutput || 'No output',
+          error: r.error || null,
+          hidden: false
+        }))
+      };
+
+      setTestResults(formattedResults);
+      setShowTestCases(true); // Auto-expand test results
+
+      if (result.summary.allPassed) {
+        toast.success(`All ${result.summary.total} test cases passed! 🎉`);
+      } else if (result.summary.compilationError) {
+        toast.error('Compilation Error');
+      } else {
+        toast(`${result.summary.passed}/${result.summary.total} test cases passed`);
+      }
 
     } catch (error) {
-      console.error('Submission error:', error);
-      setAsyncStatus('error');
-      setAsyncResult({ error: error.message });
+      console.error('Run error:', error);
+      toast.error('Failed to run code: ' + error.message);
+    } finally {
       setSubmitting(false);
-      toast.error('Failed to submit code: ' + error.message);
     }
   };
 
@@ -294,10 +411,11 @@ const CompetitionProblems = () => {
    * Check submission status from backend
    */
   const checkSubmissionStatus = async (submissionId) => {
+    const token = apiClient.getToken();
     const response = await fetch(`/api/submissions/${submissionId}/status`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${user?.token}`
+        'Authorization': `Bearer ${token}`
       }
     });
 
@@ -393,14 +511,18 @@ const CompetitionProblems = () => {
     }
   };
 
-  const getTimeRemaining = () => {
-    const end = new Date(competition.endTime);
-    const now = new Date();
-    const diff = end - now;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m remaining`;
+  // Format time remaining with live countdown
+  const getTimeRemainingDisplay = () => {
+    if (timeRemaining.expired) {
+      return '⏰ Time\'s up!';
+    }
+    const { hours, minutes, seconds } = timeRemaining;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)} remaining`;
   };
+
+  // Old function for backward compatibility
+  const getTimeRemaining = () => getTimeRemainingDisplay();
 
   if (loading || !competition) {
     return <Loading />;
@@ -447,9 +569,26 @@ const CompetitionProblems = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm px-3 py-1.5 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
-                <Clock className="w-4 h-4 text-blue-400" />
-                <span className="text-gray-300 font-medium">{getTimeRemaining()}</span>
+              <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border ${
+                timeRemaining.expired 
+                  ? 'bg-red-600/20 border-red-600/50 text-red-400' 
+                  : timeRemaining.hours === 0 && timeRemaining.minutes < 10 
+                    ? 'bg-orange-600/20 border-orange-600/50 text-orange-400 animate-pulse'
+                    : timeRemaining.hours === 0 && timeRemaining.minutes < 30
+                      ? 'bg-yellow-600/20 border-yellow-600/50 text-yellow-400'
+                      : 'bg-[#1e1e1e] border-[#3e3e3e]'
+              }`}>
+                <Clock className={`w-4 h-4 ${
+                  timeRemaining.expired ? 'text-red-400' : 
+                  timeRemaining.hours === 0 && timeRemaining.minutes < 10 ? 'text-orange-400' :
+                  timeRemaining.hours === 0 && timeRemaining.minutes < 30 ? 'text-yellow-400' :
+                  'text-blue-400'
+                }`} />
+                <span className={`font-mono font-bold ${
+                  timeRemaining.expired ? 'text-red-400' : 
+                  timeRemaining.hours === 0 && timeRemaining.minutes < 10 ? 'text-orange-400' :
+                  'text-gray-300'
+                }`}>{getTimeRemaining()}</span>
               </div>
               <div className="text-sm px-3 py-1.5 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
                 <span className="text-gray-400">Solved: </span>
@@ -698,8 +837,6 @@ const CompetitionProblems = () => {
                     <option value="java" className="bg-[#1e1e1e] text-white">☕ Java</option>
                     <option value="cpp" className="bg-[#1e1e1e] text-white">⚡ C++</option>
                     <option value="python" className="bg-[#1e1e1e] text-white">🐍 Python</option>
-                    <option value="javascript" className="bg-[#1e1e1e] text-white">🌐 JavaScript</option>
-                    <option value="c" className="bg-[#1e1e1e] text-white">🔧 C</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
