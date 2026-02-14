@@ -43,6 +43,17 @@ const CompetitionProblems = () => {
       if (data.hasSubmitted) {
         setSubmitted(true);
       }
+      
+      // Auto-register if not already registered
+      if (!data.isRegistered && !data.hasSubmitted) {
+        try {
+          await competitionService.registerForCompetition(competitionId);
+          console.log('Auto-registered for competition');
+        } catch (regError) {
+          // Ignore registration errors (might already be registered)
+          console.log('Registration skipped:', regError.message);
+        }
+      }
     } catch (error) {
       console.error('Error fetching competition:', error);
       toast.error('Failed to load competition');
@@ -126,47 +137,40 @@ const CompetitionProblems = () => {
       // Get only visible (non-hidden) test cases
       const visibleTestCases = selectedProblem.testCases.filter(tc => !tc.hidden);
       
-      // Map language names to Piston API language identifiers
-      const languageMap = {
-        'cpp': 'cpp',
-        'java': 'java',
-        'python': 'python',
-        'javascript': 'javascript',
-        'c': 'c'
+      // Map language names to Judge0 language IDs
+      const judge0LanguageMap = {
+        'c': 50,
+        'cpp': 54,
+        'java': 62,
+        'python': 71,
+        'javascript': 63
       };
       
-      const pistonLanguage = languageMap[language];
+      const languageId = judge0LanguageMap[language];
+      const JUDGE0_URL = import.meta.env.VITE_JUDGE0_URL || 'http://64.227.149.20:2358';
       
-      // Run code against each visible test case using Piston (free for testing)
+      // Run code against each visible test case using Judge0
       const results = await Promise.all(
         visibleTestCases.map(async (tc, idx) => {
           try {
-            const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+            const response = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                language: pistonLanguage,
-                version: '*', // Use latest version
-                files: [{
-                  name: 'main',
-                  content: code
-                }],
-                stdin: tc.input,
-                compile_timeout: 10000,
-                run_timeout: 3000,
-                compile_memory_limit: -1,
-                run_memory_limit: -1
+                source_code: code,
+                language_id: languageId,
+                stdin: tc.input || ''
               })
             });
             
             const result = await response.json();
             
-            // Check if execution was successful
-            if (result.run && result.run.code === 0) {
-              const actualOutput = result.run.stdout.trim();
-              const expectedOutput = tc.output.trim();
+            // Check if execution was successful (status 3 = Accepted)
+            if (result.status?.id === 3 || result.stdout) {
+              const actualOutput = (result.stdout || '').trim();
+              const expectedOutput = (tc.output || '').trim();
               const passed = actualOutput === expectedOutput;
               
               return {
@@ -174,13 +178,13 @@ const CompetitionProblems = () => {
                 passed,
                 input: tc.input,
                 expected: expectedOutput,
-                actual: result.run.stdout || '(no output)',
-                time: `${Math.round((result.run.runtime || 0) * 1000)}ms`,
+                actual: result.stdout || '(no output)',
+                time: `${Math.round((parseFloat(result.time) || 0) * 1000)}ms`,
                 error: null
               };
             } else {
               // Compilation or runtime error
-              const errorMsg = result.compile?.stderr || result.run?.stderr || result.run?.stdout || 'Unknown error';
+              const errorMsg = result.compile_output || result.stderr || result.status?.description || 'Unknown error';
               return {
                 id: idx + 1,
                 passed: false,
@@ -211,7 +215,8 @@ const CompetitionProblems = () => {
       setTestResults({
         passed: passedCount,
         total: totalCount,
-        cases: results
+        cases: results,
+        accepted: passedCount === totalCount
       });
       
       toast.dismiss();
@@ -465,9 +470,9 @@ const CompetitionProblems = () => {
         )}
 
         {/* Main Content Area */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex h-full">
           {/* Problem Description */}
-          <div className="w-1/2 overflow-y-auto bg-[#1a1a1a]">
+          <div className="w-1/2 h-full overflow-y-auto bg-[#1a1a1a]">
             {selectedProblem && (
               <div className="p-5">
                 {/* Problem Header */}
@@ -575,9 +580,9 @@ const CompetitionProblems = () => {
           </div>
 
           {/* Code Editor */}
-          <div className="w-1/2 flex flex-col bg-[#1e1e1e] border-l border-[#3e3e3e]">
+          <div className="w-1/2 h-full flex flex-col bg-[#1e1e1e] border-l border-[#3e3e3e]">
             {/* Editor Header */}
-            <div className="px-4 py-2 bg-[#262626] border-b border-[#3e3e3e] flex items-center justify-between">
+            <div className="px-4 py-2 bg-[#262626] border-b border-[#3e3e3e] flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <select
                   value={language}
@@ -612,7 +617,7 @@ const CompetitionProblems = () => {
             </div>
 
             {/* Code Editor Area */}
-            <div className="flex-1 overflow-hidden relative">
+            <div className="flex-1 overflow-auto relative min-h-0 bg-[#1e1e1e]">
               {submitted ? (
                 <div className="w-full h-full flex items-center justify-center bg-[#1e1e1e]">
                   <div className="text-center">
@@ -623,18 +628,35 @@ const CompetitionProblems = () => {
                   </div>
                 </div>
               ) : (
-                <textarea
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="// Write your code here..."
-                  className="w-full h-full bg-[#1e1e1e] text-gray-200 p-4 font-mono text-sm resize-none focus:outline-none"
-                  style={{ 
-                    tabSize: 4,
-                    lineHeight: '1.6'
-                  }}
-                  spellCheck="false"
-                  disabled={submitted}
-                />
+                <>
+                  <textarea
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="// Write your code here..."
+                    className="w-full h-full bg-[#1e1e1e] p-4 font-mono text-sm resize-none focus:outline-none focus:ring-0 border-0 outline-none"
+                    style={{ 
+                      color: 'white',
+                      backgroundColor: '#1e1e1e',
+                      tabSize: 4,
+                      lineHeight: '1.6',
+                      minHeight: '300px',
+                      fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
+                      caretColor: '#0ea5e9',
+                      WebkitTextFillColor: 'white'
+                    }}
+                    spellCheck="false"
+                    disabled={submitted}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                  />
+                  <style>{`
+                    textarea::placeholder {
+                      color: #6b7280 !important;
+                      opacity: 1 !important;
+                    }
+                  `}</style>
+                </>
               )}
             </div>
 

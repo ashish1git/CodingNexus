@@ -112,6 +112,26 @@ ${outputFormatting}
  * Java wrapper - wraps user class with I/O
  */
 function wrapJava(userCode, problem, testCase) {
+  // Check if user submitted a complete program (has public class and main method)
+  if (userCode.includes('public class') && userCode.includes('public static void main')) {
+    // User submitted complete program - replace all class names with Main
+    let modifiedCode = userCode;
+    
+    // Match: public class ClassName {
+    const classNameMatch = userCode.match(/public\s+class\s+(\w+)\s*{/);
+    if (classNameMatch) {
+      const originalClassName = classNameMatch[1];
+      // Replace the public class declaration
+      modifiedCode = modifiedCode.replace(
+        `public class ${originalClassName}`,
+        'public class Main'
+      );
+    }
+    
+    return modifiedCode;
+  }
+  
+  // Otherwise, wrap as a function-only submission
   const functionName = problem.functionName || 'solution';
   const className = 'Solution';
   const parameters = problem.parameters || [];

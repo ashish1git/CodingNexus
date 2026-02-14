@@ -25,7 +25,7 @@ import { authenticate } from '../middleware/auth.js';
 const router = express.Router();
 
 // Judge0 Configuration
-const JUDGE0_URL = process.env.JUDGE0_URL || 'http://4.247.146.10';
+const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
 
 // Supported languages (strict whitelist)
 const ALLOWED_LANGUAGES = {

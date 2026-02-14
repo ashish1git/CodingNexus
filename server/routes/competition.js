@@ -7,7 +7,7 @@ import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 const router = express.Router();
 
 // Judge0 Configuration
-const JUDGE0_URL = process.env.JUDGE0_URL || 'http://4.247.146.10';
+const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
 
 // Language mapping for Judge0
 const LANGUAGE_MAP = {
@@ -599,6 +599,17 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           const testCase = testCases[i];
           
           try {
+            // Parse test case input if it's a string and problem has parameters
+            let parsedInput = testCase.input;
+            if (typeof testCase.input === 'string' && problem.parameters?.length > 0) {
+              // Parse "5, 3" or "5,3" into [5, 3]
+              parsedInput = testCase.input.split(',').map(v => {
+                const trimmed = v.trim();
+                // Try to parse as number, otherwise keep as string
+                return isNaN(trimmed) ? trimmed : (trimmed.includes('.') ? parseFloat(trimmed) : parseInt(trimmed));
+              });
+            }
+            
             // Wrap user code with test harness if problem has function signature
             let executableCode = submission.code;
             if (problem.parameters && problem.functionName) {
@@ -606,28 +617,53 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
                 submission.code,
                 submission.language,
                 problem,
-                testCase
+                {
+                  ...testCase,
+                  input: parsedInput
+                }
               );
             }
 
             // Submit to Judge0 with wait=true for synchronous result
+            const judge0Payload = {
+              source_code: executableCode,
+              language_id: languageId
+            };
+            
+            // Add stdin if problem doesn't use parameters (stdin-based)
+            if (!problem.parameters) {
+              judge0Payload.stdin = testCase.input || '';
+            }
+            
+            console.log(`[Judge0 Request] TestCase ${i + 1}:`, JSON.stringify({
+              language_id: judge0Payload.language_id,
+              has_stdin: !!judge0Payload.stdin,
+              source_code_len: judge0Payload.source_code.length
+            }, null, 2));
+
             const judge0Response = await axios.post(
               `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
-              {
-                source_code: executableCode,
-                language_id: languageId,
-                stdin: problem.parameters ? '' : (testCase.input || ''), // No stdin for function-only
-                expected_output: testCase.output || '',
-                cpu_time_limit: problem.timeLimit || 2, // seconds
-                memory_limit: problem.memoryLimit || 128000 // KB
-              },
+              judge0Payload,
               {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 30000 // 30 seconds timeout
+                timeout: 60000 // 60 seconds timeout
               }
             );
+            
+            console.log(`[Judge0 Response Received] TestCase ${i + 1}`);
 
             const result = judge0Response.data;
+            
+            console.log(`[Judge0 Response] TestCase ${i + 1}:`, JSON.stringify({
+              status_id: result.status?.id,
+              status_desc: result.status?.description,
+              stdout: (result.stdout || '').substring(0, 100),
+              stderr: (result.stderr || '').substring(0, 100),
+              compile_output: (result.compile_output || '').substring(0, 100),
+              time: result.time,
+              memory: result.memory
+            }, null, 2));
+            
             const stdout = (result.stdout || '').trim();
             const expected = (testCase.output || '').trim();
             const passed = stdout === expected && result.status?.id === 3; // 3 = Accepted
@@ -646,16 +682,23 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               time: result.time,
               memory: result.memory,
               status: result.status?.description || 'Unknown',
-              stderr: result.stderr,
+              stderr: result.stderr || (result.compile_output ? 'Compilation Error' : ''),
               compile_output: result.compile_output
             });
 
           } catch (testError) {
-            console.error(`Test case ${i + 1} execution error:`, testError.message);
+            console.error(`❌ Test case ${i + 1} FAILED:`, testError.message);
+            console.error('Full error:', testError);
+            if (testError.response) {
+              console.error('Judge0 HTTP Status:', testError.response.status);
+              console.error('Judge0 Error Data:', JSON.stringify(testError.response.data, null, 2));
+            } else if (testError.code) {
+              console.error('Error Code:', testError.code);
+            }
             testResults.push({
               testCase: i + 1,
               passed: false,
-              error: testError.message
+              error: testError.response?.data?.message || testError.message
             });
           }
         }
