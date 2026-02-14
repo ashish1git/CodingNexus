@@ -6,6 +6,9 @@ import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 
 const router = express.Router();
 
+// Judge0 Configuration (moved to top so it's available in route handlers)
+const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
+
 // Simple test route to verify routing works
 router.all('/test', (req, res) => {
   console.log('✅ TEST endpoint hit! Method:', req.method);
@@ -33,7 +36,7 @@ router.post('/:competitionId/problems/:problemId/execute-test', async (req, res)
 
     // ⚠️ MOCK MODE: Judge0 server is unreachable
     // For testing, we'll simulate a successful response
-    const isMockMode = true;
+    const isMockMode = false;
     
     if (isMockMode) {
       console.log('🟡 [TEST-BACKEND-MOCK] Using MOCK Judge0 (real server unreachable)');
@@ -90,12 +93,31 @@ router.post('/:competitionId/problems/:problemId/execute-test', async (req, res)
     
     console.log('🔵 [TEST-BACKEND-5] Judge0 response received:', result);
 
-    // Compare output
-    const actualOutput = (result.stdout || '').trim();
-    const expectedOutput_trimmed = (expected_output || '').trim();
+    // Helper function to normalize output for comparison
+    const normalizeOutput = (output) => {
+      if (!output) return '';
+      let normalized = output.trim();
+      
+      // Remove common prefixes like "Indices: ", "Output: ", etc.
+      normalized = normalized.replace(/^(Indices:|Output:|Result:|Answer:)\s*/i, '');
+      
+      // Remove ALL spaces for strict comparison
+      normalized = normalized.replace(/\s+/g, '');
+      
+      return normalized.trim();
+    };
+
+    // Compare output with normalization
+    const actualOutput = normalizeOutput(result.stdout || '');
+    const expectedOutput_trimmed = normalizeOutput(expected_output || '');
     const passed = actualOutput === expectedOutput_trimmed;
 
-    console.log('🔵 [TEST-BACKEND-6] Output comparison: expected="' + expectedOutput_trimmed + '", actual="' + actualOutput + '", passed=' + passed);
+    console.log('🔵 [TEST-BACKEND-6] Output comparison:');
+    console.log('  Raw expected: "' + (expected_output || '') + '"');
+    console.log('  normalized expected="' + expectedOutput_trimmed + '"');
+    console.log('  Raw actual: "' + (result.stdout || '') + '"');
+    console.log('  normalized actual="' + actualOutput + '"');
+    console.log('  Match: ' + (passed ? '✅ TRUE' : '❌ FALSE'));
 
     res.json({
       passed,
@@ -112,9 +134,6 @@ router.post('/:competitionId/problems/:problemId/execute-test', async (req, res)
     res.status(500).json({ error: error.message || 'Failed to execute test' });
   }
 });
-
-// Judge0 Configuration
-const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
 
 // Language mapping for Judge0
 const LANGUAGE_MAP = {
