@@ -63,6 +63,8 @@ const CompetitionManager = () => {
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
   const [submissions, setSubmissions] = useState([]);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [showProblemEditModal, setShowProblemEditModal] = useState(false);
+  const [editingProblemIndex, setEditingProblemIndex] = useState(null);
 
   useEffect(() => {
     fetchCompetitions();
@@ -370,6 +372,17 @@ const CompetitionManager = () => {
       ...currentProblem,
       testCases: currentProblem.testCases.filter((_, i) => i !== index)
     });
+  };
+
+  const saveProblemChanges = () => {
+    if (editingProblemIndex !== null) {
+      const updatedProblems = [...problems];
+      updatedProblems[editingProblemIndex] = currentProblem;
+      setProblems(updatedProblems);
+      setShowProblemEditModal(false);
+      setEditingProblemIndex(null);
+      toast.success('Problem updated!');
+    }
   };
 
   const resetForm = () => {
@@ -1469,18 +1482,47 @@ const CompetitionManager = () => {
                 </div>
               </div>
 
-              {/* Problems Preview */}
+              {/* Problems Section with Test Cases */}
               {problems.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Problems ({problems.length})</h3>
-                  <div className="space-y-2">
-                    {problems.map((problem, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <span className="font-medium text-gray-900">{problem.title}</span>
-                          <span className="ml-3 text-sm text-gray-600 capitalize">({problem.difficulty})</span>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Problems & Test Cases ({problems.length})</h3>
+                  <div className="space-y-4">
+                    {problems.map((problem, problemIndex) => (
+                      <div key={problemIndex} className="border border-gray-300 p-4 rounded-lg bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-medium text-gray-900">{problem.title}</span>
+                            <span className="ml-3 text-sm text-gray-600 capitalize">({problem.difficulty})</span>
+                            <span className="ml-3 text-sm text-gray-700">{problem.points} points</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCurrentProblem(problem);
+                              setEditingProblemIndex(problemIndex);
+                              setShowProblemEditModal(true);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                          >
+                            Edit Problem
+                          </button>
                         </div>
-                        <span className="text-sm text-gray-600">{problem.points} points</span>
+
+                        {/* Test Cases for this problem */}
+                        {problem.testCases && problem.testCases.length > 0 && (
+                          <div className="mt-3 space-y-2 pl-3 border-l-2 border-indigo-300">
+                            <div className="text-sm font-medium text-gray-700">Test Cases ({problem.testCases.length}):</div>
+                            {problem.testCases.map((testCase, tcIndex) => (
+                              <div key={tcIndex} className="text-xs bg-white p-2 rounded border border-gray-200">
+                                <div className="font-mono text-gray-600">
+                                  <div><span className="font-semibold">Input:</span> {testCase.input?.substring(0, 50)}...</div>
+                                  <div><span className="font-semibold">Output:</span> {testCase.output?.substring(0, 50)}</div>
+                                  {testCase.hidden && <div className="text-red-600"><span className="font-semibold">Hidden</span></div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1716,6 +1758,139 @@ const CompetitionManager = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Problem Edit Modal */}
+      {showProblemEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-4xl w-full p-6 my-8 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Edit Problem: {currentProblem.title}</h2>
+              <button
+                onClick={() => {
+                  setShowProblemEditModal(false);
+                  setEditingProblemIndex(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Problem Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <input
+                  type="text"
+                  value={currentProblem.title}
+                  onChange={(e) => setCurrentProblem({ ...currentProblem, title: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Problem Title"
+                />
+              </div>
+
+              {/* Test Cases Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">Test Cases *</label>
+                  <button
+                    type="button"
+                    onClick={addTestCase}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" /> Add Test Case
+                  </button>
+                </div>
+                {currentProblem.testCases && currentProblem.testCases.length > 0 ? (
+                  <div className="space-y-3">
+                    {currentProblem.testCases.map((testCase, index) => (
+                      <div key={index} className="border border-gray-300 p-3 rounded-lg bg-gray-50">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">Test Case {index + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={testCase.hidden || false}
+                                onChange={(e) => updateTestCase(index, 'hidden', e.target.checked)}
+                                className="rounded"
+                              />
+                              <span className="text-gray-600">Hidden</span>
+                            </label>
+                            {currentProblem.testCases.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeTestCase(index)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Input</label>
+                            <textarea
+                              value={testCase.input || ''}
+                              onChange={(e) => updateTestCase(index, 'input', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                              placeholder="Input data"
+                              rows="3"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Expected Output</label>
+                            <textarea
+                              value={testCase.output || ''}
+                              onChange={(e) => updateTestCase(index, 'output', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                              placeholder="Expected output"
+                              rows="3"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 px-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg">
+                    <p className="text-gray-500 text-sm mb-2">No test cases yet</p>
+                    <button
+                      type="button"
+                      onClick={addTestCase}
+                      className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
+                    >
+                      <Plus className="w-4 h-4" /> Add First Test Case
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProblemEditModal(false);
+                    setEditingProblemIndex(null);
+                  }}
+                  className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveProblemChanges}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  Save Changes
+                </button>
+              </div>
             </div>
           </div>
         </div>
