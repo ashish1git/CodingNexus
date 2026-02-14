@@ -9,10 +9,12 @@ import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
 import Loading from '../shared/Loading';
+import AsyncSubmissionHandler, { SubmissionStatusUI } from './AsyncSubmissionHandler';
 
 const CompetitionProblems = () => {
   const { competitionId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
@@ -26,6 +28,9 @@ const CompetitionProblems = () => {
   const [problemSolutions, setProblemSolutions] = useState({});
   const [competition, setCompetition] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [asyncStatus, setAsyncStatus] = useState('idle');
+  const [asyncResult, setAsyncResult] = useState(null);
+  const [pollCount, setPollCount] = useState(0);
 
   useEffect(() => {
     fetchCompetition();
@@ -131,108 +136,137 @@ const CompetitionProblems = () => {
     setLastRunTime(now);
     setSubmitting(true);
     setTestResults(null);
-    toast.loading('Running test cases...');
+    setAsyncStatus('submitted');
+    setPollCount(0);
+    
+    const codeToSubmit = code;
+    const languageToSubmit = language;
     
     try {
-      // Get only visible (non-hidden) test cases
-      const visibleTestCases = selectedProblem.testCases.filter(tc => !tc.hidden);
-      
-      // Map language names to Judge0 language IDs
-      const judge0LanguageMap = {
-        'c': 50,
-        'cpp': 54,
-        'java': 62,
-        'python': 71,
-        'javascript': 63
-      };
-      
-      const languageId = judge0LanguageMap[language];
-      const JUDGE0_URL = import.meta.env.VITE_JUDGE0_URL || 'http://64.227.149.20:2358';
-      
-      // Run code against each visible test case using Judge0
-      const results = await Promise.all(
-        visibleTestCases.map(async (tc, idx) => {
-          try {
-            const response = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                source_code: code,
-                language_id: languageId,
-                stdin: tc.input || ''
-              })
-            });
-            
-            const result = await response.json();
-            
-            // Check if execution was successful (status 3 = Accepted)
-            if (result.status?.id === 3 || result.stdout) {
-              const actualOutput = (result.stdout || '').trim();
-              const expectedOutput = (tc.output || '').trim();
-              const passed = actualOutput === expectedOutput;
-              
-              return {
-                id: idx + 1,
-                passed,
-                input: tc.input,
-                expected: expectedOutput,
-                actual: result.stdout || '(no output)',
-                time: `${Math.round((parseFloat(result.time) || 0) * 1000)}ms`,
-                error: null
-              };
-            } else {
-              // Compilation or runtime error
-              const errorMsg = result.compile_output || result.stderr || result.status?.description || 'Unknown error';
-              return {
-                id: idx + 1,
-                passed: false,
-                input: tc.input,
-                expected: tc.output,
-                actual: errorMsg,
-                time: '0ms',
-                error: errorMsg
-              };
-            }
-          } catch (error) {
-            return {
-              id: idx + 1,
-              passed: false,
-              input: tc.input,
-              expected: tc.output,
-              actual: `Error: ${error.message}`,
-              time: '0ms',
-              error: error.message
-            };
-          }
+      console.log('📤 Submitting code for async evaluation...');
+
+      // Submit to backend async endpoint
+      const response = await fetch(`/api/submissions/${selectedProblem.id}/submit-async`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token}`
+        },
+        body: JSON.stringify({
+          code: codeToSubmit,
+          language: languageToSubmit
         })
-      );
-      
-      const passedCount = results.filter(r => r.passed).length;
-      const totalCount = results.length;
-      
-      setTestResults({
-        passed: passedCount,
-        total: totalCount,
-        cases: results,
-        accepted: passedCount === totalCount
       });
+
+      const result = await response.json();
       
-      toast.dismiss();
-      if (passedCount === totalCount) {
-        toast.success(`All ${totalCount} test cases passed! 🎉`);
-      } else {
-        toast.error(`${passedCount}/${totalCount} test cases passed`);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to submit code');
       }
-      
+
+      const { submissionId } = result;
+      console.log('✅ Submission accepted, starting polling...');
+
+      // Start smart polling
+      startSmartPolling(submissionId);
+
     } catch (error) {
-      console.error('Error running code:', error);
-      toast.dismiss();
-      toast.error('Failed to run code. Please try again.');
-    } finally {
+      console.error('Submission error:', error);
+      setAsyncStatus('error');
+      setAsyncResult({ error: error.message });
       setSubmitting(false);
+      toast.error('Failed to submit code: ' + error.message);
     }
+  };
+
+  /**
+   * Smart polling with exponential backoff
+   * Checks status every 3-10 seconds and stops when results ready
+   */
+  const startSmartPolling = (submissionId) => {
+    let currentPollCount = 0;
+    const maxPolls = 50;
+    let isPolling = true;
+
+    const poll = () => {
+      if (currentPollCount >= maxPolls) {
+        setAsyncStatus('timeout');
+        setAsyncResult({ error: 'Results check timed out. Try refreshing.' });
+        setSubmitting(false);
+        isPolling = false;
+        return;
+      }
+
+      checkSubmissionStatus(submissionId).then(data => {
+        setPollCount(currentPollCount + 1);
+
+        if (data.status === 'completed' || data.status === 'error') {
+          // ✅ Results ready!
+          setAsyncStatus('completed');
+          
+          // Convert API response to testResults format
+          setTestResults({
+            passed: data.passed,
+            total: data.total,
+            cases: data.testResults || [],
+            accepted: data.passed === data.total
+          });
+
+          setSubmitting(false);
+          isPolling = false;
+
+          toast.dismiss();
+          if (data.passed === data.total) {
+            toast.success(`All ${data.total} test cases passed! 🎉`);
+          } else {
+            toast.error(`${data.passed}/${data.total} test cases passed`);
+          }
+
+          console.log('✅ Polling stopped - results ready');
+        } else {
+          // Continue polling with exponential backoff
+          setAsyncStatus('processing');
+          const nextDelay = Math.min(3000 + (currentPollCount * 1000), 10000);
+          currentPollCount++;
+          
+          console.log(`⏱️  Next poll in ${nextDelay}ms (poll #${currentPollCount})`);
+          
+          if (isPolling) {
+            setTimeout(poll, nextDelay);
+          }
+        }
+      }).catch(error => {
+        console.error('Poll error:', error);
+        // Retry even if there's an error
+        const nextDelay = 5000;
+        currentPollCount++;
+        
+        if (isPolling && currentPollCount < maxPolls) {
+          setTimeout(poll, nextDelay);
+        }
+      });
+    };
+
+    // Start first poll after 2 seconds
+    setTimeout(poll, 2000);
+  };
+
+  /**
+   * Check submission status from backend
+   */
+  const checkSubmissionStatus = async (submissionId) => {
+    const response = await fetch(`/api/submissions/${submissionId}/status`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${user?.token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to check status');
+    }
+
+    return response.json();
   };
 
   const handleSaveSolution = () => {
@@ -752,6 +786,15 @@ const CompetitionProblems = () => {
           </div>
         </div>
       </div>
+
+      {/* Async Submission Status Modal */}
+      {['submitted', 'processing', 'completed', 'error', 'timeout'].includes(asyncStatus) && (
+        <SubmissionStatusUI 
+          status={asyncStatus} 
+          result={asyncResult} 
+          pollCount={pollCount}
+        />
+      )}
     </div>
   );
 };

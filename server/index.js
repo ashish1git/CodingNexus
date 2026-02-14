@@ -8,6 +8,7 @@ import studentRoutes from './routes/student.js';
 import competitionRoutes from './routes/competition.js';
 import contestRoutes from './routes/contest.js';
 import certificateRoutes from './routes/certificate.js';
+import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
 import prisma from './config/db.js';
 
 const app = express();
@@ -71,6 +72,7 @@ app.use('/api/student', studentRoutes);
 app.use('/api/competitions', competitionRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/submissions', asyncSubmissionRoutes);  // ✅ NEW: Async submissions
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -88,6 +90,34 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  
+  // ✅ OPTIONAL Background polling job - disabled by default on free tier
+  // Set ENABLE_POLLING=true in .env to enable
+  const pollingEnabled = process.env.ENABLE_POLLING === 'true';
+  
+  if (!pollingEnabled) {
+    console.log('⏸️  Polling job disabled (set ENABLE_POLLING=true to enable)');
+    console.log('   Submissions will still work - results will be fetched on-demand');
+    return;
+  }
+  
+  // Only enable polling if explicitly configured (for paid tier)
+  const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '15000', 10); // Default 15 seconds, more conservative
+  console.log(`⏱️  Background polling job configured (${POLL_INTERVAL}ms intervals)`);
+  
+  // Wait 2 seconds before starting polling to ensure database is ready
+  setTimeout(() => {
+    console.log('🎯 Starting background polling job...');
+    
+    setInterval(async () => {
+      try {
+        await checkPendingSubmissions();
+      } catch (error) {
+        console.error('❌ Background job error:', error.message);
+        // Continue running - don't crash
+      }
+    }, POLL_INTERVAL);
+  }, 2000);
 });
 
 // Handle unhandled promise rejections
