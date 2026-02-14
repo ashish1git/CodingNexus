@@ -318,12 +318,25 @@ public:
     try {
       const data = await competitionService.getCompetition(id);
       setEditCompetition(data);
+      
+      // Convert ISO datetime to datetime-local format (YYYY-MM-DDTHH:MM)
+      const formatForInput = (isoStr) => {
+        if (!isoStr) return '';
+        try {
+          const d = new Date(isoStr);
+          if (isNaN(d.getTime())) return '';
+          // Format as local time for datetime-local input
+          const pad = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        } catch { return ''; }
+      };
+      
       setFormData({
         title: data.title,
         description: data.description,
         difficulty: data.difficulty,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime: formatForInput(data.startTime),
+        endTime: formatForInput(data.endTime),
         duration: data.duration,
         prize: data.prizePool || data.prize || '',
         category: data.category,

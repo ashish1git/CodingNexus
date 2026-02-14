@@ -51,13 +51,19 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
     }
 
     // Get only sample/visible test cases for "Run" (not all test cases)
+    // Admin UI uses 'hidden' field - we want non-hidden ones for sample testing
     const testCases = Array.isArray(problem.testCases) 
-      ? problem.testCases.filter(tc => tc.isSample || tc.isVisible !== false).slice(0, 3) // Max 3 sample tests
+      ? problem.testCases.filter(tc => !tc.hidden).slice(0, 3) // Max 3 visible tests
       : [];
 
     if (testCases.length === 0) {
-      // If no sample test cases, just compile check
-      testCases.push({ input: '', expectedOutput: '', isSample: true });
+      // If no visible test cases, use first 3 regardless
+      const allCases = Array.isArray(problem.testCases) ? problem.testCases.slice(0, 3) : [];
+      if (allCases.length > 0) {
+        testCases.push(...allCases);
+      } else {
+        testCases.push({ input: '', output: '' });
+      }
     }
 
     console.log(`🏃 Running code for problem ${problemId} with ${testCases.length} test cases`);
@@ -124,7 +130,7 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
           passed,
           status: result.status?.description || 'Unknown',
           input: testCase.input?.substring(0, 100) || 'N/A',
-          expectedOutput: testCase.expectedOutput?.substring(0, 100) || 'N/A',
+          expectedOutput: (testCase.output || testCase.expectedOutput || '')?.substring(0, 100) || 'N/A',
           actualOutput: (result.stdout || '').trim().substring(0, 100) || 'No output',
           error: result.stderr || result.compile_output || null,
           time: result.time ? `${(parseFloat(result.time) * 1000).toFixed(0)}ms` : 'N/A',

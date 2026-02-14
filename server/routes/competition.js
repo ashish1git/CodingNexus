@@ -190,7 +190,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       include: {
         user: {
           include: {
-            Student: {
+            studentProfile: {
               select: {
                 name: true,
                 rollNo: true,
@@ -247,7 +247,7 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'
       include: {
         user: {
           include: {
-            Student: {
+            studentProfile: {
               select: {
                 name: true,
                 rollNo: true,
@@ -925,7 +925,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
             id: true,
             email: true,
             moodleId: true,
-            Student: {
+            studentProfile: {
               select: {
                 name: true,
                 rollNo: true
@@ -949,7 +949,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
     const formattedSubmissions = submissions.map(sub => ({
       ...sub,
       submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
-      user: sub.user || { id: null, email: 'Unknown', moodleId: 'N/A', Student: { name: 'N/A', rollNo: 'N/A' } }
+      user: sub.user || { id: null, email: 'Unknown', moodleId: 'N/A', studentProfile: { name: 'N/A', rollNo: 'N/A' } }
     }));
 
     res.json(formattedSubmissions);
@@ -999,7 +999,7 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
         select: {
           role: true,
           email: true,
-          Admin: {
+          adminProfile: {
             select: { name: true }
           }
         }
@@ -1123,7 +1123,7 @@ router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', '
           include: {
             user: {
               include: {
-                Student: {
+                studentProfile: {
                   select: {
                     name: true,
                     rollNo: true
