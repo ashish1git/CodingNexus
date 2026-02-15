@@ -1674,7 +1674,7 @@ router.post('/subadmins', async (req, res) => {
         password: hashedPassword,
         role: 'subadmin',
         isActive: true,
-        Admin: {
+        adminProfile: {
           create: {
             name,
             permissions: typeof permissions === 'object' ? JSON.stringify(permissions) : (permissions || 'all'),
