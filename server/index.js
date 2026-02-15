@@ -28,24 +28,11 @@ function testDatabaseConnection() {
     });
 }
 
-// CORS configuration - support multiple origins
-const allowedOrigins = process.env.FRONTEND_URL 
-  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
-  : ['http://localhost:5173', 'http://localhost:5174'];
-
+// CORS configuration - allow all origins for now
 // Middleware
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
+  origin: '*',
+  credentials: false
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -62,6 +49,14 @@ app.use((req, res, next) => {
       estimatedTime: '24-48 hours'
     });
   }
+  next();
+});
+
+// 🔍 DEBUG LOGGING: Log ALL API requests
+app.use('/api', (req, res, next) => {
+  console.log(`\n📨 [API REQUEST] ${req.method} ${req.path}`);
+  console.log('   Competition path:', req.path.includes('/competitions'));
+  console.log('   Execute-test:', req.path.includes('/execute-test'));
   next();
 });
 
