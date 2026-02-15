@@ -9,6 +9,9 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../services/apiClient';
 import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
+
+// API URL for backend calls
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:21000/api';
 import Loading from '../shared/Loading';
 import AsyncSubmissionHandler, { SubmissionStatusUI } from './AsyncSubmissionHandler';
 import Editor from '@monaco-editor/react';
@@ -279,7 +282,7 @@ public:
       }
 
       // Use /run endpoint for quick testing (not /submit-async)
-      const response = await fetch(`/api/submissions/${selectedProblem.id}/run`, {
+      const response = await fetch(`${API_URL}/submissions/${selectedProblem.id}/run`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -412,7 +415,7 @@ public:
    */
   const checkSubmissionStatus = async (submissionId) => {
     const token = apiClient.getToken();
-    const response = await fetch(`/api/submissions/${submissionId}/status`, {
+    const response = await fetch(`${API_URL}/submissions/${submissionId}/status`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`
