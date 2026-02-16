@@ -9,6 +9,7 @@ import competitionRoutes from './routes/competition.js';
 import contestRoutes from './routes/contest.js';
 import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
+import eventRoutes from './routes/events.js';
 import prisma from './config/db.js';
 
 const app = express();
@@ -68,6 +69,7 @@ app.use('/api/competitions', competitionRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/submissions', asyncSubmissionRoutes);  // ✅ NEW: Async submissions
+app.use('/api/events', eventRoutes);  // ✅ NEW: Event management
 
 // Health check
 app.get('/api/health', (req, res) => {

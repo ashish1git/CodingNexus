@@ -382,26 +382,33 @@ const LandingPage = () => {
 
       {/* Navbar */}
       <nav className="glass sticky top-0 z-50 shadow-lg shadow-purple-500/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 md:h-20">
-            <div className="flex items-center gap-2 md:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer group">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50 group-hover:shadow-purple-500/80 transition-all duration-300 animate-glow">
-                <Code className="w-5 h-5 md:w-7 md:h-7 text-white animate-pulse" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16 md:h-20">
+            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer group">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50 group-hover:shadow-purple-500/80 transition-all duration-300 animate-glow shrink-0">
+                <Code className="w-4 h-4 sm:w-5 sm:h-5 md:w-7 md:h-7 text-white animate-pulse" />
               </div>
-              <span className="text-white text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent animate-text-glow">
+              <span className="text-white text-base sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent animate-text-glow truncate">
                 Coding Nexus
               </span>
             </div>
-            <div className="flex gap-2 md:gap-4">
+            <div className="flex gap-1.5 sm:gap-2 md:gap-4 items-center">
+              <button 
+                onClick={() => handleNavigation('/events')}
+                className="px-2 py-1.5 sm:px-3 sm:py-2 md:px-5 md:py-2 text-xs sm:text-sm md:text-base text-white hover:bg-white/10 rounded-lg transition-all duration-300 font-medium border border-transparent hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 flex items-center gap-1 sm:gap-2"
+              >
+                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Events</span>
+              </button>
               <button 
                 onClick={() => handleNavigation('/login')}
-                className="px-3 py-2 md:px-6 md:py-2.5 text-sm md:text-base text-white hover:bg-white/10 rounded-lg transition-all duration-300 font-medium border border-transparent hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20"
+                className="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-2.5 text-xs sm:text-sm md:text-base text-white hover:bg-white/10 rounded-lg transition-all duration-300 font-medium border border-transparent hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20"
               >
                 Login
               </button>
               <button 
                 onClick={() => handleNavigation('/signup')}
-                className="px-3 py-2 md:px-6 md:py-2.5 text-sm md:text-base bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-cyan-700 transition-all duration-300 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/80 hover:scale-105"
+                className="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-2.5 text-xs sm:text-sm md:text-base bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-cyan-700 transition-all duration-300 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/80 hover:scale-105"
               >
                 Sign Up
               </button>

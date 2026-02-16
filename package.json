@@ -32,6 +32,7 @@
     "jspdf": "^4.0.0",
     "lucide-react": "^0.562.0",
     "multer": "^2.0.2",
+    "nodemailer": "^6.9.8",
     "pg": "^8.16.3",
     "prisma": "^7.2.0",
     "react": "^19.2.0",
@@ -42,6 +43,7 @@
     "react-router-dom": "^7.11.0",
     "react-syntax-highlighter": "^16.1.0",
     "tailwindcss": "^4.1.18",
+    "uuid": "^9.0.1",
     "xlsx": "^0.18.5",
     "xml2js": "^0.6.2"
   },

@@ -390,3 +390,181 @@ model CertificateRequest {
   @@index([certificateId])
   @@index([status])
 }
+
+// Event Management System - For external participants (non-batch students)
+model Event {
+  id                   String                @id @default(uuid())
+  title                String
+  description          String?
+  eventType            String                @default("workshop") // workshop, hackathon, seminar, competition, webinar
+  eventDate            DateTime
+  eventEndDate         DateTime?
+  venue                String?
+  posterUrl            String?               // Cloudinary URL for event poster
+  maxParticipants      Int                   @default(100)
+  registrationDeadline DateTime
+  status               String                @default("upcoming") // upcoming, ongoing, completed, cancelled
+  isActive             Boolean               @default(true)
+  batch                String?               // Optional: If event is batch-specific
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  registrations        EventRegistration[]
+  certificates         EventCertificate[]
+  accessControls       EventAccessControl[]
+  announcementsEvent   EventAnnouncement[]
+  emailLogs            EventEmailLog[]
+  quizzes              EventQuiz[]
+
+  @@index([status])
+  @@index([eventDate])
+  @@index([isActive])
+  @@index([createdBy])
+}
+
+model EventParticipant {
+  id                     String              @id @default(uuid())
+  name                   String
+  email                  String              @unique
+  phone                  String
+  year                   String?             // FE, SE, TE, BE
+  branch                 String?             // Computer, IT, EXTC, etc.
+  division               String?             // A, B, C
+  collegeName            String?
+  password               String              // Hashed password
+  isEmailVerified        Boolean             @default(false)
+  emailVerificationToken String?             @unique
+  userType               String              @default("event_guest") // Always event_guest
+  isActive               Boolean             @default(true)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  registrations          EventRegistration[]
+  certificates           EventCertificate[]
+  emailLogs              EventEmailLog[]
+  quizAttempts           EventQuizAttempt[]
+
+  @@index([email])
+  @@index([userType])
+  @@index([isEmailVerified])
+}
+
+model EventRegistration {
+  id                 String             @id @default(uuid())
+  eventId            String
+  participantId      String
+  registrationDate   DateTime           @default(now())
+  attendanceMarked   Boolean            @default(false)
+  attendanceTime     DateTime?
+  certificateGenerated Boolean          @default(false)
+  certificateId      String?
+  registrationStatus String             @default("confirmed") // confirmed, waitlist, cancelled
+  event              Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant        EventParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, participantId])
+  @@index([eventId])
+  @@index([participantId])
+  @@index([registrationStatus])
+}
+
+model EventCertificate {
+  id                String           @id @default(uuid())
+  eventId           String
+  participantId     String
+  registrationId    String?
+  certificateNumber String           @unique
+  certificateUrl    String?          // PDF URL on Cloudinary
+  issueDate         DateTime         @default(now())
+  templateType      String           @default("participation") // participation, winner, runner_up, excellence
+  verified          Boolean          @default(true)
+  event             Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant       EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([eventId])
+  @@index([certificateNumber])
+}
+
+model EventAccessControl {
+  id              String    @id @default(uuid())
+  eventId         String
+  resourceType    String    // quiz, notes, assignments, dashboard, competition
+  resourceId      String?   // ID of specific resource
+  accessAllowed   Boolean   @default(true)
+  accessStartTime DateTime?
+  accessEndTime   DateTime?
+  createdAt       DateTime  @default(now())
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([resourceType])
+}
+
+model EventEmailLog {
+  id            String            @id @default(uuid())
+  eventId       String
+  participantId String
+  emailType     String            // registration_confirmation, event_reminder, event_update, certificate, event_start, event_end
+  sentAt        DateTime          @default(now())
+  emailStatus   String            @default("sent") // sent, failed, pending
+  subject       String
+  message       String
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant   EventParticipant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([participantId])
+  @@index([emailType])
+}
+
+model EventAnnouncement {
+  id               String    @id @default(uuid())
+  eventId          String
+  title            String
+  message          String
+  announcementType String    @default("info") // info, important, update, reminder
+  createdAt        DateTime  @default(now())
+  createdBy        String
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model EventQuiz {
+  id          String              @id @default(uuid())
+  eventId     String
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int                 // in minutes
+  questions   Json                // Array of {question, type, options, correctAnswer, codeSnippet?}
+  isActive    Boolean             @default(true)
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attempts    EventQuizAttempt[]
+
+  @@index([eventId])
+  @@index([startTime])
+  @@index([isActive])
+}
+
+model EventQuizAttempt {
+  id            String           @id @default(uuid())
+  quizId        String
+  participantId String
+  answers       Json
+  score         Float
+  maxScore      Float
+  startedAt     DateTime         @default(now())
+  submittedAt   DateTime?
+  quiz          EventQuiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  participant   EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, participantId])
+  @@index([participantId])
+  @@index([quizId])
+}

@@ -50,6 +50,18 @@ import CertificateManager from './components/admin/CertificateManager';
 // Shared/Other components
 import ClubMembers from './components/shared/ClubMembers';
 
+// Event components
+import EventsPage from './components/events/EventsPage';
+import EventRegistration from './components/events/EventRegistration';
+import EventLogin from './components/events/EventLogin';
+import EventDashboard from './components/events/EventDashboard';
+import EventQuizList from './components/events/EventQuizList';
+import EventQuizAttempt from './components/events/EventQuizAttempt';
+import EventQuizResults from './components/events/EventQuizResults';
+import EventCertificates from './components/events/EventCertificates';
+import EventManagement from './components/admin/EventManagement';
+import EventQuizManager from './components/admin/EventQuizManager';
+
 function App() {
   // Check if maintenance mode is enabled
   const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
@@ -94,6 +106,17 @@ function App() {
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
+              
+              {/* Event Public Routes */}
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/:eventId/register" element={<EventRegistration />} />
+              <Route path="/event-login" element={<EventLogin />} />
+              <Route path="/event-dashboard" element={<EventDashboard />} />
+              <Route path="/event-dashboard/quizzes" element={<EventQuizList />} />
+              <Route path="/event-dashboard/quiz/:quizId" element={<EventQuizAttempt />} />
+              <Route path="/event-dashboard/quiz/:quizId/results" element={<EventQuizResults />} />
+              <Route path="/event-dashboard/certificates" element={<EventCertificates />} />
+              <Route path="/verify-email" element={<EventLogin />} />
               
               {/* Club Members Page - Share this route directly with selected members */}
               <Route path="/club-members" element={<ClubMembers />} />
@@ -315,6 +338,22 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <SubmissionEvaluator />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/events" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <EventManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/event-quizzes" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <EventQuizManager />
                   </ProtectedRoute>
                 } 
               />
