@@ -415,6 +415,7 @@ model Event {
   announcementsEvent   EventAnnouncement[]
   emailLogs            EventEmailLog[]
   quizzes              EventQuiz[]
+  mediaFiles           EventMedia[]
 
   @@index([status])
   @@index([eventDate])
@@ -567,4 +568,21 @@ model EventQuizAttempt {
   @@unique([quizId, participantId])
   @@index([participantId])
   @@index([quizId])
+}
+
+model EventMedia {
+  id          String   @id @default(uuid())
+  eventId     String
+  title       String
+  description String?
+  fileUrl     String
+  fileType    String   @default("document") // image, pdf, document, video, other
+  fileName    String
+  fileSize    Int?     // in bytes
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([fileType])
 }

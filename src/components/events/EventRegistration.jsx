@@ -9,6 +9,7 @@ export default function EventRegistration() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   
   const yearOptions = ['FE', 'TE', 'SE', 'BE'];
   const divisionOptions = Array.from({ length: 10 }, (_, i) => String.fromCharCode(65 + i)); // A-J
@@ -127,7 +128,7 @@ export default function EventRegistration() {
   const isEventFull = event.spotsLeft <= 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black py-6 px-4 sm:py-12">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black py-6 px-4 sm:py-12 event-dark-theme">
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
         <button
@@ -155,7 +156,17 @@ export default function EventRegistration() {
               
               {/* Event Description */}
               {event.description && (
-                <p className="text-gray-300 text-sm sm:text-base mb-4 sm:mb-6 line-clamp-4">{event.description}</p>
+                <div className="mb-4 sm:mb-6">
+                  <p className={`text-gray-300 text-sm sm:text-base leading-relaxed ${descExpanded ? '' : 'line-clamp-4'}`}>{event.description}</p>
+                  {event.description.length > 200 && (
+                    <button
+                      onClick={() => setDescExpanded(!descExpanded)}
+                      className="text-purple-400 hover:text-purple-300 text-xs font-medium mt-1.5 transition"
+                    >
+                      {descExpanded ? '▲ Show less' : '▼ Read more'}
+                    </button>
+                  )}
+                </div>
               )}
 
               {/* Event Details */}

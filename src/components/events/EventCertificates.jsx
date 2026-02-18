@@ -136,7 +136,7 @@ export default function EventCertificates() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black event-dark-theme">
       {/* Header */}
       <nav className="bg-gray-800/80 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Edit2, Eye, Clock, Award, Users, ChevronDown, ChevronUp, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { eventService } from '../../services/eventService';
 import toast from 'react-hot-toast';
 
 export default function EventQuizManager() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [quizzes, setQuizzes] = useState([]);
@@ -41,7 +42,14 @@ export default function EventQuizManager() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.success) setEvents(data.events || []);
+      if (data.success) {
+        setEvents(data.events || []);
+        // Auto-select event from URL parameter
+        const eventIdFromUrl = searchParams.get('eventId');
+        if (eventIdFromUrl && data.events.some(e => e.id === eventIdFromUrl)) {
+          setSelectedEventId(eventIdFromUrl);
+        }
+      }
     } catch (error) {
       console.error('Error fetching events:', error);
     }

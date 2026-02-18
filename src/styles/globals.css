@@ -163,10 +163,13 @@ select::placeholder {
   opacity: 1;
 }
 
-/* Global Input Text Color */
-input,
-textarea,
-select {
+/* Global Input Text Color - scoped to light backgrounds only */
+.light-inputs input,
+.light-inputs textarea,
+.light-inputs select,
+input.light-input,
+textarea.light-input,
+select.light-input {
   color: #111827 !important;
   caret-color: #111827 !important;
 }
@@ -176,6 +179,29 @@ select {
   color: #67e8f9 !important;
   caret-color: #67e8f9 !important;
   -webkit-text-fill-color: #67e8f9 !important;
+}
+
+/* Event dark theme input overrides */
+.event-dark-theme input,
+.event-dark-theme textarea,
+.event-dark-theme select {
+  color: #f3f4f6 !important;
+  caret-color: #f3f4f6 !important;
+}
+
+.event-dark-theme input::placeholder,
+.event-dark-theme textarea::placeholder,
+.event-dark-theme select::placeholder {
+  color: #9ca3af !important;
+  opacity: 1;
+}
+
+.event-dark-theme input:autofill,
+.event-dark-theme input:autofill:hover,
+.event-dark-theme input:autofill:focus {
+  -webkit-text-fill-color: #f3f4f6 !important;
+  -webkit-box-shadow: 0 0 0 1000px #1f2937 inset !important;
+  color: #f3f4f6 !important;
 }
 
 input::selection,

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
+import upload, { uploadToCloudinary } from '../middleware/upload.js';
 import { sendRegistrationConfirmation, sendCertificateEmail, sendEventReminder } from '../services/emailService.js';
 
 const router = express.Router();
@@ -534,15 +535,10 @@ router.get('/admin/events', authenticate, requireAdmin, async (req, res) => {
       }
     });
 
-    const formattedEvents = events.map(event => ({
-      ...event,
-      registeredCount: event._count.registrations,
-      _count: undefined
-    }));
-
+    // Keep _count for admin to access event._count.registrations
     res.json({
       success: true,
-      events: formattedEvents
+      events: events
     });
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -1440,6 +1436,148 @@ router.get('/event-guest/stats', authenticateEventGuest, async (req, res) => {
     console.error('❌ Error fetching stats:', error.message);
     console.error('   Stack:', error.stack);
     res.status(500).json({ success: false, error: 'Failed to fetch stats', details: error.message });
+  }
+});
+
+// ==================== MEDIA FILES ROUTES ====================
+
+// 27b. Admin: Upload media file to Cloudinary (server-side)
+router.post('/admin/events/:eventId/upload-media', authenticate, requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file provided' });
+    }
+
+    // Verify event exists
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    // Upload to Cloudinary using server-side credentials
+    const result = await uploadToCloudinary(req.file.buffer, `events/media/${eventId}`);
+
+    res.json({ 
+      success: true, 
+      fileUrl: result.secure_url,
+      publicId: result.public_id,
+      resourceType: result.resource_type,
+      format: result.format
+    });
+  } catch (error) {
+    console.error('Error uploading media to Cloudinary:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to upload file',
+      details: error.message 
+    });
+  }
+});
+
+// 28. Admin: Add media file to event
+router.post('/admin/events/:eventId/media', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { title, description, fileUrl, fileType, fileName, fileSize } = req.body;
+
+    console.log('Received media save request:', {
+      eventId,
+      title,
+      fileUrl: fileUrl?.substring(0, 50) + '...',
+      fileType,
+      fileName,
+      fileSize,
+      userId: req.user?.id
+    });
+
+    if (!title || !fileUrl || !fileName) {
+      return res.status(400).json({ success: false, error: 'Title, fileUrl, and fileName are required' });
+    }
+
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const media = await prisma.eventMedia.create({
+      data: {
+        eventId,
+        title,
+        description: description || null,
+        fileUrl,
+        fileType: fileType || 'document',
+        fileName,
+        fileSize: fileSize ? parseInt(fileSize) : null,
+        uploadedBy: req.user.id
+      }
+    });
+
+    console.log('Media saved successfully:', media.id);
+    res.status(201).json({ success: true, media });
+  } catch (error) {
+    console.error('Error adding media:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta
+    });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to add media file',
+      details: error.message 
+    });
+  }
+});
+
+// 29. Admin: List media files for an event
+router.get('/admin/events/:eventId/media', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const media = await prisma.eventMedia.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, media });
+  } catch (error) {
+    console.error('Error fetching media:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch media files' });
+  }
+});
+
+// 30. Admin: Delete media file
+router.delete('/admin/events/:eventId/media/:mediaId', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+    await prisma.eventMedia.delete({ where: { id: mediaId } });
+    res.json({ success: true, message: 'Media file deleted' });
+  } catch (error) {
+    console.error('Error deleting media:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete media file' });
+  }
+});
+
+// 31. Event Guest: List media files for their registered events
+router.get('/event-guest/events/:eventId/media', authenticateEventGuest, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const eventIds = req.user.events || [];
+
+    // Verify participant is registered for this event
+    if (!eventIds.includes(eventId)) {
+      return res.status(403).json({ success: false, error: 'You are not registered for this event' });
+    }
+
+    const media = await prisma.eventMedia.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, media });
+  } catch (error) {
+    console.error('Error fetching media for guest:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch media files' });
   }
 });
 

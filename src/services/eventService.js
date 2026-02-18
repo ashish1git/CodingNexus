@@ -40,6 +40,12 @@ class EventService {
     return apiClient.get('/events/event-guest/stats');
   }
 
+  // ==================== MEDIA FILES (Guest) ====================
+
+  async getEventMedia(eventId) {
+    return apiClient.get(`/events/event-guest/events/${eventId}/media`);
+  }
+
   // ==================== ADMIN QUIZ ENDPOINTS ====================
 
   async adminGetEventQuizzes(eventId) {
