@@ -46,6 +46,7 @@ import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 import CertificateManager from './components/admin/CertificateManager';
+import BulkEmailManager from './components/admin/BulkEmailManager';
 
 // Shared/Other components
 import ClubMembers from './components/shared/ClubMembers';
@@ -362,6 +363,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <CertificateManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/bulk-email" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <BulkEmailManager />
                   </ProtectedRoute>
                 } 
               />

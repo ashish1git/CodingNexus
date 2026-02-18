@@ -1851,6 +1851,444 @@ router.get('/competitions/:id', async (req, res) => {
   }
 });
 
+// ============ BULK EMAIL SYSTEM ============
+
+// Get email recipients list (for preview)
+router.post('/email/recipients', async (req, res) => {
+  try {
+    const { filterType, filterValue, searchQuery } = req.body;
+    
+    let query = {
+      role: 'student',
+      isActive: true
+    };
+
+    // Apply filters
+    if (filterType === 'batch' && filterValue) {
+      query.studentProfile = {
+        batch: {
+          equals: filterValue.toLowerCase(),
+          mode: 'insensitive'
+        }
+      };
+    } else if (filterType === 'event' && filterValue) {
+      // Get event participants with detailed info
+      const registrations = await prisma.eventRegistration.findMany({
+        where: { eventId: filterValue },
+        include: {
+          participant: true
+        }
+      });
+
+      // Get event details
+      const event = await prisma.event.findUnique({
+        where: { id: filterValue },
+        select: {
+          title: true,
+          eventDate: true,
+          eventType: true,
+          status: true
+        }
+      });
+
+      // Get event quizzes and their attempts
+      const eventQuizzes = await prisma.eventQuiz.findMany({
+        where: { eventId: filterValue },
+        include: {
+          attempts: {
+            select: {
+              participantId: true
+            }
+          }
+        }
+      });
+
+      // Create a set of participant IDs who took the quiz
+      const quizTakerIds = new Set();
+      eventQuizzes.forEach(quiz => {
+        quiz.attempts.forEach(attempt => {
+          quizTakerIds.add(attempt.participantId);
+        });
+      });
+
+      let recipients = registrations.map(reg => ({
+        id: reg.participant.id,
+        email: reg.participant.email,
+        name: reg.participant.name,
+        phone: reg.participant.phone || 'N/A',
+        registrationStatus: reg.registrationStatus,
+        registeredAt: reg.registeredAt,
+        tookQuiz: quizTakerIds.has(reg.participant.id)
+      }));
+
+      // Apply attendance status filter (based on quiz participation)
+      const { attendanceStatus } = req.body;
+      if (attendanceStatus === 'quiz_taken') {
+        recipients = recipients.filter(r => r.tookQuiz);
+      } else if (attendanceStatus === 'quiz_not_taken') {
+        recipients = recipients.filter(r => !r.tookQuiz);
+      }
+      // If 'all' or undefined, show all recipients
+
+      // Apply search filter if provided
+      if (searchQuery && searchQuery.trim()) {
+        const search = searchQuery.toLowerCase().trim();
+        recipients = recipients.filter(r => 
+          r.email.toLowerCase().includes(search) ||
+          r.name.toLowerCase().includes(search)
+        );
+      }
+
+      return res.json({
+        success: true,
+        recipients,
+        count: recipients.length,
+        eventInfo: {
+          ...event,
+          totalRegistered: registrations.length,
+          quizTakers: quizTakerIds.size,
+          noQuizTakers: registrations.length - quizTakerIds.size,
+          hasQuiz: eventQuizzes.length > 0
+        }
+      });
+    }
+
+    // Get students based on filter
+    const students = await prisma.user.findMany({
+      where: query,
+      include: {
+        studentProfile: true
+      },
+      orderBy: {
+        email: 'asc'
+      }
+    });
+
+    const recipients = students.map(student => ({
+      id: student.id,
+      email: student.email,
+      name: student.studentProfile?.name || 'Unknown',
+      batch: student.studentProfile?.batch || 'N/A'
+    }));
+
+    res.json({
+      success: true,
+      recipients,
+      count: recipients.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching recipients:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch recipients' 
+    });
+  }
+});
+
+// Send bulk email
+router.post('/email/send-bulk', async (req, res) => {
+  try {
+    const { subject, message, htmlContent, filterType, filterValue, recipientIds, recipientType } = req.body;
+
+    // Validate required fields
+    if (!subject || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subject and message are required'
+      });
+    }
+
+    // Get recipients based on type
+    let recipients = [];
+    
+    if (recipientIds && recipientIds.length > 0) {
+      // Check if we're sending to event participants or regular students
+      if (recipientType === 'eventParticipant' || filterType === 'event') {
+        // Send to event participants
+        const participants = await prisma.eventParticipant.findMany({
+          where: {
+            id: { in: recipientIds },
+            isActive: true
+          }
+        });
+        
+        recipients = participants.map(p => ({
+          email: p.email,
+          name: p.name
+        }));
+      } else {
+        // Send to regular students
+        const students = await prisma.user.findMany({
+          where: {
+            id: { in: recipientIds },
+            role: 'student',
+            isActive: true
+          },
+          include: {
+            studentProfile: true
+          }
+        });
+        
+        recipients = students.map(s => ({
+          email: s.email,
+          name: s.studentProfile?.name || 'Student'
+        }));
+      }
+    } else {
+      // Apply filters to get recipients
+      if (filterType === 'batch' && filterValue) {
+        const students = await prisma.user.findMany({
+          where: {
+            role: 'student',
+            isActive: true,
+            studentProfile: {
+              batch: {
+                equals: filterValue.toLowerCase(),
+                mode: 'insensitive'
+              }
+            }
+          },
+          include: {
+            studentProfile: true
+          }
+        });
+        
+        recipients = students.map(s => ({
+          email: s.email,
+          name: s.studentProfile?.name || 'Student'
+        }));
+      } else if (filterType === 'event' && filterValue) {
+        // Get event participants
+        const registrations = await prisma.eventRegistration.findMany({
+          where: { eventId: filterValue },
+          include: {
+            participant: true
+          }
+        });
+
+        recipients = registrations.map(reg => ({
+          email: reg.participant.email,
+          name: reg.participant.name
+        }));
+      } else {
+        // Get all active students
+        const students = await prisma.user.findMany({
+          where: {
+            role: 'student',
+            isActive: true
+          },
+          include: {
+            studentProfile: true
+          }
+        });
+        
+        recipients = students.map(s => ({
+          email: s.email,
+          name: s.studentProfile?.name || 'Student'
+        }));
+      }
+    }
+
+    if (recipients.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No recipients found with the specified criteria'
+      });
+    }
+
+    // Import email service
+    const { sendEmail } = await import('../services/email/brevo.service.js');
+    
+    // Send emails
+    let successCount = 0;
+    let failureCount = 0;
+    const errors = [];
+
+    for (const recipient of recipients) {
+      const { name, email } = recipient;
+
+      try {
+        // Generate HTML content if not provided
+        let html = htmlContent;
+        if (!html) {
+          html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { 
+                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                  line-height: 1.6; 
+                  color: #333; 
+                }
+                .container { 
+                  max-width: 600px; 
+                  margin: 20px auto; 
+                  background: white; 
+                  border-radius: 10px; 
+                  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                  overflow: hidden;
+                }
+                .header { 
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                  color: white; 
+                  padding: 30px; 
+                  text-align: center; 
+                }
+                .header h1 {
+                  margin: 0;
+                  font-size: 28px;
+                }
+                .content { 
+                  padding: 30px; 
+                }
+                .greeting {
+                  font-size: 18px;
+                  color: #667eea;
+                  margin-bottom: 15px;
+                }
+                .message {
+                  white-space: pre-wrap;
+                  line-height: 1.8;
+                }
+                .footer { 
+                  background: #f5f5f5; 
+                  padding: 20px; 
+                  text-align: center; 
+                  color: #666; 
+                  font-size: 14px; 
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>Coding Nexus</h1>
+                </div>
+                <div class="content">
+                  <p class="greeting">Hello ${name},</p>
+                  <div class="message">${message}</div>
+                  <p style="margin-top: 30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+                </div>
+                <div class="footer">
+                  <p>© 2026 Coding Nexus. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `;
+        }
+
+        const result = await sendEmail({
+          to: email,
+          subject: subject,
+          html: html,
+          text: `Hello ${name},\n\n${message}\n\nBest regards,\nCoding Nexus Team`
+        });
+
+        if (result.success) {
+          successCount++;
+        } else {
+          failureCount++;
+          errors.push({ email, error: result.error });
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+      } catch (error) {
+        failureCount++;
+        errors.push({ email, error: error.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Bulk email operation completed',
+      stats: {
+        total: recipients.length,
+        sent: successCount,
+        failed: failureCount,
+        successRate: ((successCount / recipients.length) * 100).toFixed(1) + '%'
+      },
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Error sending bulk email:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send bulk email: ' + error.message 
+    });
+  }
+});
+
+// Get list of events for filtering
+router.get('/email/events', async (req, res) => {
+  try {
+    const now = new Date();
+    
+    const events = await prisma.event.findMany({
+      select: {
+        id: true,
+        title: true,
+        eventDate: true,
+        eventType: true,
+        status: true,
+        venue: true,
+        _count: {
+          select: {
+            registrations: true
+          }
+        }
+      },
+      orderBy: {
+        eventDate: 'desc'
+      }
+    });
+
+    // Categorize events by status
+    const categorizedEvents = events.map(event => {
+      const eventDate = new Date(event.eventDate);
+      let computedStatus = event.status || 'scheduled';
+      
+      // Auto-determine status based on date if not set
+      if (computedStatus === 'scheduled') {
+        if (eventDate > now) {
+          computedStatus = 'upcoming';
+        } else if (eventDate < now && (now - eventDate) < 24 * 60 * 60 * 1000) {
+          computedStatus = 'ongoing';
+        } else if (eventDate < now) {
+          computedStatus = 'completed';
+        }
+      }
+
+      return {
+        id: event.id,
+        title: event.title,
+        date: event.eventDate,
+        type: event.eventType,
+        status: computedStatus,
+        venue: event.venue,
+        registrations: event._count.registrations
+      };
+    });
+
+    res.json({
+      success: true,
+      events: categorizedEvents
+    });
+
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch events' 
+    });
+  }
+});
+
 export default router;
 
 
