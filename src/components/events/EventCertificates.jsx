@@ -148,7 +148,14 @@ export default function EventCertificates() {
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
-        <EventCertificateDisplay certificate={selectedCert} />
+        <EventCertificateDisplay 
+          certificate={selectedCert}
+          onCertificateUpdate={(updatedCert) => {
+            setSelectedCert(updatedCert);
+            // Update the certificate in the list as well
+            setCertificates(certificates.map(cert => cert.id === updatedCert.id ? updatedCert : cert));
+          }}
+        />
       </div>
     );
   }

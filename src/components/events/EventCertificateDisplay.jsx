@@ -250,10 +250,11 @@ const OrnamentCorner = () => (
 );
 
 export default function EventCertificateDisplay({ certificate }) {
-  const [editing, setEditing] = useState(false);
+  // Get logged-in user name from localStorage (same as dashboard)
+  const userData = JSON.parse(localStorage.getItem('user') || '{}');
+  const participantName = userData?.name || "Participant";
   
   // Get data from database
-  const participantName = certificate?.participant?.name || "Participant";
   const eventTitle = certificate?.event?.title || "Event";
   const eventDate = new Date(certificate?.event?.eventDate).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -276,14 +277,6 @@ export default function EventCertificateDisplay({ certificate }) {
       default:
         return `For outstanding dedication and participation in demonstrating excellence, integrity, and a commitment to growth throughout the duration of this distinguished program.`;
     }
-  };
-
-  const [fields, setFields] = useState({
-    name: participantName,
-  });
-
-  const handleNameChange = (e) => {
-    setFields({ name: e.target.value });
   };
 
   return (
@@ -333,17 +326,7 @@ export default function EventCertificateDisplay({ certificate }) {
             <p className="cert-presented">This certificate is proudly presented to</p>
 
             <p className="cert-name">
-              {editing ? (
-                <input 
-                  type="text"
-                  value={fields.name}
-                  onChange={handleNameChange}
-                  className="editable editable-name"
-                  autoFocus
-                />
-              ) : (
-                <span className="editable-name">{fields.name}</span>
-              )}
+              <span className="editable-name">{participantName}</span>
             </p>
             <div className="cert-line"/>
 
@@ -369,10 +352,6 @@ export default function EventCertificateDisplay({ certificate }) {
             )}
           </div>
         </div>
-
-        <button className="edit-btn" onClick={() => setEditing(e => !e)}>
-          {editing ? "✓ Done Editing" : "✎ Edit Name"}
-        </button>
       </div>
     </>
   );
