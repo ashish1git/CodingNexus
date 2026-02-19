@@ -250,9 +250,8 @@ const OrnamentCorner = () => (
 );
 
 export default function EventCertificateDisplay({ certificate }) {
-  // Get logged-in user name from localStorage (same as dashboard)
-  const userData = JSON.parse(localStorage.getItem('user') || '{}');
-  const participantName = userData?.name || "Participant";
+  // Get participant name from database
+  const participantName = certificate?.participant?.name;
   
   // Get data from database
   const eventTitle = certificate?.event?.title || "Event";

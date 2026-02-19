@@ -1366,29 +1366,35 @@ router.get('/event-guest/quizzes/:quizId/results', authenticateEventGuest, async
 // 25. Get certificates for guest
 router.get('/event-guest/certificates', authenticateEventGuest, async (req, res) => {
   try {
-    // Ensure participant can only see their own certificates
-    // AND only from events where they were marked as present
     const participantId = req.user.userId;
 
     const certificates = await prisma.eventCertificate.findMany({
       where: {
-        participantId: participantId,
-        event: {
-          eventType: 'event'
-        },
-        // Only show certificates for events where participant was marked present
-        registrationId: {
-          not: null // Has a registration record
-        }
+        participantId: participantId
       },
       include: {
-        event: { select: { id: true, title: true, eventDate: true, eventType: true, venue: true, description: true } },
-        participant: { select: { id: true, name: true, email: true } }
+        event: { 
+          select: { 
+            id: true, 
+            title: true, 
+            eventDate: true, 
+            eventType: true, 
+            venue: true, 
+            description: true 
+          } 
+        },
+        participant: { 
+          select: { 
+            id: true, 
+            name: true, 
+            email: true 
+          } 
+        }
       },
       orderBy: { issueDate: 'desc' }
     });
 
-    // Additional filter: Ensure all returned certificates are for events where participant was present
+    // Filter: Only show certificates for events where participant was marked present
     const eventRegistrations = await prisma.eventRegistration.findMany({
       where: {
         participantId: participantId,
@@ -1431,56 +1437,7 @@ router.get('/event-guest/certificates/:certId', authenticateEventGuest, async (r
   }
 });
 
-// 27. Update certificate name (one-time edit)
-router.put('/event-guest/certificates/:certId/name', authenticateEventGuest, async (req, res) => {
-  const { certId } = req.params;
-  const { customName } = req.body;
-  const participantId = req.user.userId;
-
-  try {
-    // Verify certificate belongs to the participant and hasn't been edited yet
-    const certificate = await prisma.eventCertificate.findUnique({
-      where: { id: certId }
-    });
-
-    if (!certificate) {
-      return res.status(404).json({ success: false, error: 'Certificate not found' });
-    }
-
-    if (certificate.participantId !== participantId) {
-      return res.status(403).json({ success: false, error: 'Unauthorized' });
-    }
-
-    if (certificate.isNameEdited) {
-      return res.status(400).json({ success: false, error: 'Name has already been edited. Edit is allowed only once.' });
-    }
-
-    // Validate custom name
-    if (!customName || customName.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Name cannot be empty' });
-    }
-
-    // Update certificate with custom name and mark as edited
-    const updatedCert = await prisma.eventCertificate.update({
-      where: { id: certId },
-      data: {
-        customName: customName.trim(),
-        isNameEdited: true
-      },
-      include: {
-        participant: { select: { id: true, name: true, email: true } },
-        event: { select: { id: true, title: true, eventDate: true } }
-      }
-    });
-
-    res.json({ success: true, certificate: updatedCert });
-  } catch (error) {
-    console.error('Error updating certificate name:', error);
-    res.status(500).json({ success: false, error: 'Failed to update certificate name' });
-  }
-});
-
-// 28. Get event stats for guest (quizzes attempted, certs earned)
+// 27. Get event stats for guest (quizzes attempted, certs earned)
 router.get('/event-guest/stats', authenticateEventGuest, async (req, res) => {
   try {
     console.log('📊 Fetching stats for participant:', req.user.userId);
@@ -1549,7 +1506,7 @@ router.post('/admin/events/:eventId/upload-media', authenticate, requireAdmin, u
   }
 });
 
-// 29. Admin: Add media file to event
+// 28. Admin: Add media file to event
 router.post('/admin/events/:eventId/media', authenticate, requireAdmin, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -1604,7 +1561,7 @@ router.post('/admin/events/:eventId/media', authenticate, requireAdmin, async (r
   }
 });
 
-// 30. Admin: List media files for an event
+// 29. Admin: List media files for an event
 router.get('/admin/events/:eventId/media', authenticate, requireAdmin, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -1619,7 +1576,7 @@ router.get('/admin/events/:eventId/media', authenticate, requireAdmin, async (re
   }
 });
 
-// 31. Admin: Delete media file
+// 30. Admin: Delete media file
 router.delete('/admin/events/:eventId/media/:mediaId', authenticate, requireAdmin, async (req, res) => {
   try {
     const { mediaId } = req.params;
@@ -1631,7 +1588,7 @@ router.delete('/admin/events/:eventId/media/:mediaId', authenticate, requireAdmi
   }
 });
 
-// 32. Event Guest: List media files for their registered events
+// 31. Event Guest: List media files for their registered events
 router.get('/event-guest/events/:eventId/media', authenticateEventGuest, async (req, res) => {
   try {
     const { eventId } = req.params;
