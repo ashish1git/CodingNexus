@@ -12,7 +12,6 @@ services:
       POSTGRES_DB: ${DB_NAME:-codingnexus}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./prisma/migrations:/docker-entrypoint-initdb.d
     ports:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
@@ -27,28 +26,66 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:21000/api}
     container_name: codingnexus-app
     restart: unless-stopped
     ports:
       - "${PORT:-21000}:21000"
     environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-codingnexus}
+      # Server Configuration
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-21000}
+      
+      # Database Configuration
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-codingnexus}?sslmode=disable
+      
+      # JWT Configuration
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      
+      # CORS Configuration
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:22000}
+      
+      # Cloudinary Configuration
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME}
+      - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET}
+      - VITE_CLOUDINARY_NOTES_PRESET=${VITE_CLOUDINARY_NOTES_PRESET}
+      
+      # Judge0 Configuration
+      - JUDGE0_URL=${JUDGE0_URL:-http://64.227.149.20:2358}
+      - VITE_JUDGE0_URL=${VITE_JUDGE0_URL:-http://64.227.149.20:2358}
+      
+      # Brevo Email Configuration
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
+      - EMAIL_SERVICE=${EMAIL_SERVICE:-brevo}
+      
+      # Async Submissions
+      - ENABLE_POLLING=${ENABLE_POLLING:-false}
+      - POLL_INTERVAL=${POLL_INTERVAL:-15000}
+      
+      # Maintenance Mode
+      - MAINTENANCE_MODE=${MAINTENANCE_MODE:-false}
+      - VITE_MAINTENANCE_MODE=${VITE_MAINTENANCE_MODE:-false}
+      
+      # AI/ML APIs (Optional)
       - USE_GEMINI_DIRECT=${USE_GEMINI_DIRECT:-false}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      
+      # Frontend API URL (for frontend to call backend)
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:21000/api}
+      
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:21000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:21000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
