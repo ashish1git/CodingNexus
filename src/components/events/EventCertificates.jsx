@@ -9,6 +9,7 @@ export default function EventCertificates() {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(null);
+  const [lastRefresh, setLastRefresh] = useState(null);
   
   // Name prompt modal state
   const [showNameModal, setShowNameModal] = useState(false);
@@ -22,9 +23,18 @@ export default function EventCertificates() {
   const fetchRegistrations = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching fresh registrations from server...');
       const response = await eventService.getMyRegistrations();
       if (response.success) {
+        console.log('✅ API Response:', JSON.stringify(response.registrations.map(r => ({
+          eventId: r.eventId,
+          title: r.event?.title,
+          certificateIssued: r.certificateIssued,
+          certificateName: r.certificateName,
+          certificateApprovedByAdmin: r.certificateApprovedByAdmin
+        })), null, 2));
         setRegistrations(response.registrations || []);
+        setLastRefresh(new Date().toLocaleTimeString());
       }
     } catch (error) {
       console.error('Error fetching registrations:', error);
@@ -34,11 +44,69 @@ export default function EventCertificates() {
     }
   };
 
-  // Open the name prompt modal
-  const handleDownloadClick = (registration) => {
-    setSelectedRegistration(registration);
-    setCustomName(registration.participantName || registration.name || '');
-    setShowNameModal(true);
+  // Force hard refresh
+  const forceRefresh = async () => {
+    toast.loading('Refreshing data...');
+    await fetchRegistrations();
+    toast.dismiss();
+    toast.success('Data refreshed!');
+  };
+
+  // Handle download click - always refresh first to get latest state
+  const handleDownloadClick = async (registration) => {
+    console.log('📄 Certificate download clicked:', {
+      eventId: registration.eventId,
+      certificateIssued: registration.certificateIssued,
+      certificateName: registration.certificateName,
+      participantName: registration.participantName
+    });
+    
+    // Always refresh to get latest state (in case admin reset the certificate)
+    setDownloading(registration.eventId);
+    try {
+      const response = await eventService.getMyRegistrations();
+      if (response.success) {
+        setRegistrations(response.registrations || []);
+        // Find the updated registration
+        const updatedReg = response.registrations.find(r => r.eventId === registration.eventId);
+        if (!updatedReg) {
+          toast.error('Registration not found');
+          setDownloading(null);
+          return;
+        }
+        
+        console.log('📄 Updated registration state:', {
+          certificateIssued: updatedReg.certificateIssued,
+          certificateName: updatedReg.certificateName
+        });
+        
+        if (updatedReg.certificateIssued) {
+          // Certificate exists - download directly with locked name
+          const blob = await eventService.downloadCertificate(updatedReg.eventId, null);
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Certificate_${updatedReg.event.title.replace(/\s+/g, '_')}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          toast.success('Certificate downloaded!');
+          setDownloading(null);
+        } else {
+          // No certificate - show modal for name input
+          setDownloading(null);
+          setSelectedRegistration(updatedReg);
+          const nameToDisplay = updatedReg.participantName || updatedReg.name || '';
+          setCustomName(nameToDisplay);
+          setShowNameModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to check certificate status');
+      setDownloading(null);
+    }
   };
 
   // Close the name prompt modal
@@ -48,11 +116,17 @@ export default function EventCertificates() {
     setCustomName('');
   };
 
-  // Confirm and download with the entered name
+  // Confirm and download with the entered name (first-time only)
   const handleConfirmDownload = async () => {
     if (!selectedRegistration) return;
     
     const nameToUse = customName.trim();
+    
+    console.log('📥 First-time certificate download:', {
+      eventId: selectedRegistration.eventId,
+      nameToUse
+    });
+    
     if (!nameToUse) {
       toast.error('Please enter a name for the certificate');
       return;
@@ -62,7 +136,10 @@ export default function EventCertificates() {
     setDownloading(selectedRegistration.eventId);
     
     try {
-      const blob = await eventService.downloadCertificate(selectedRegistration.eventId, nameToUse);
+      const blob = await eventService.downloadCertificate(
+        selectedRegistration.eventId, 
+        nameToUse
+      );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -71,7 +148,10 @@ export default function EventCertificates() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Certificate downloaded!');
+      toast.success('Certificate downloaded! Name is now locked.');
+      
+      // Refresh to update the UI with certificate status
+      await fetchRegistrations();
     } catch (error) {
       console.error('Download error:', error);
       if (error?.response?.status === 403) {
@@ -109,9 +189,17 @@ export default function EventCertificates() {
             <ArrowLeft className="w-5 h-5" />
             <span className="hidden sm:inline text-sm">Back to Dashboard</span>
           </button>
-          <h1 className="text-lg font-bold text-white">My Certificates</h1>
-          <button onClick={fetchRegistrations} className="text-gray-400 hover:text-white transition">
-            <RefreshCw className="w-5 h-5" />
+          <div className="text-center">
+            <h1 className="text-lg font-bold text-white">My Certificates</h1>
+            {lastRefresh && <span className="text-xs text-gray-500">Last updated: {lastRefresh}</span>}
+          </div>
+          <button 
+            onClick={forceRefresh} 
+            className="flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
+            title="Refresh data from server"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="text-xs hidden sm:inline">Refresh</span>
           </button>
         </div>
       </nav>
@@ -201,23 +289,39 @@ export default function EventCertificates() {
 
                   {/* Download Button */}
                   {reg.eligible ? (
-                    <button
-                      onClick={() => handleDownloadClick(reg)}
-                      disabled={downloading === reg.eventId}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50"
-                    >
-                      {downloading === reg.eventId ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          Generating PDF...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4" />
-                          Download Certificate
-                        </>
+                    <div className="space-y-2">
+                      {reg.certificateIssued && (
+                        // Show locked name info
+                        <div className="flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-600/30 rounded-lg">
+                          <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <span className="text-blue-300 text-sm">
+                            Name locked: <span className="text-white font-medium">{reg.certificateName || reg.participantName || 'N/A'}</span>
+                          </span>
+                        </div>
                       )}
-                    </button>
+                      <button
+                        onClick={() => handleDownloadClick(reg)}
+                        disabled={downloading === reg.eventId}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50"
+                      >
+                        {downloading === reg.eventId ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Generating PDF...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            {reg.certificateIssued ? 'Re-download Certificate' : 'Download Certificate'}
+                          </>
+                        )}
+                      </button>
+                      {reg.certificateIssued && (
+                        <p className="text-xs text-gray-500 text-center">
+                          Wrong name? Contact admin to correct and re-issue.
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full text-center px-5 py-3 bg-gray-700/50 text-gray-500 rounded-lg text-sm">
                       Complete the quiz or get admin approval to download your certificate
@@ -237,7 +341,7 @@ export default function EventCertificates() {
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <User className="w-5 h-5 text-purple-400" />
-                Certificate Name
+                Enter Certificate Name
               </h3>
               <button
                 onClick={handleCloseModal}
@@ -248,7 +352,7 @@ export default function EventCertificates() {
             </div>
             <div className="p-5">
               <p className="text-gray-400 text-sm mb-4">
-                This name will appear on your certificate. You can use the registered name or enter a different one.
+                This name will appear on your certificate. <span className="text-yellow-400 font-medium">You can only set this once</span> - after download, the name will be locked.
               </p>
               <input
                 type="text"
@@ -279,7 +383,7 @@ export default function EventCertificates() {
                 className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                Download
+                Download &amp; Lock Name
               </button>
             </div>
           </div>

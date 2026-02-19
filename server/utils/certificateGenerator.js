@@ -21,6 +21,7 @@ const TEMPLATE_PATH = path.join(ASSETS_DIR, 'finalcert.png');
  * @param {string} options.eventDate - Formatted date string
  * @param {string} options.certificateNumber - Unique cert number
  * @param {string} options.templateType - participation/winner/runner_up/excellence
+ * @param {string} options.issueDate - Certificate issue date
  * @returns {Promise<PDFDocument>}
  */
 export async function generateCertificatePDF({
@@ -29,7 +30,8 @@ export async function generateCertificatePDF({
   eventName,
   eventDate,
   certificateNumber,
-  templateType = 'participation'
+  templateType = 'participation',
+  issueDate
 }) {
   const doc = new PDFDocument({
     layout: 'landscape',
@@ -68,6 +70,7 @@ export async function generateCertificatePDF({
       // Overlay text on template - ADJUST THESE VALUES based on your template layout
       overlayTextOnTemplate(doc, {
         participantName,
+        issueDate,
         pageWidth,
         pageHeight
       });
@@ -111,12 +114,14 @@ export async function generateCertificatePDF({
 function overlayTextOnTemplate(doc, options) {
   const {
     participantName,
+    issueDate,
     pageWidth,
     pageHeight
   } = options;
 
   // Text color for name (visible on template)
   const nameColor = '#FFD700';      // Gold for participant name
+  const issueDateColor = '#FFFFFF'; // White for issue date
 
   // ==================== PARTICIPANT NAME ====================
   // Position: Center, adjust Y value based on your template's blank space
@@ -131,7 +136,18 @@ function overlayTextOnTemplate(doc, options) {
       width: pageWidth
     });
 
-  // Note: All other elements (signatures, dates, event details) are already on the template
+  // ==================== ISSUE DATE (Bottom Right Corner) ====================
+  if (issueDate) {
+    doc.fontSize(9)                    // Small font for issue date
+      .fillColor(issueDateColor)       // White color
+      .font('Helvetica')
+      .text(`Issued: ${issueDate}`, pageWidth - 170, pageHeight - 30, {  // Bottom right corner
+        align: 'right',
+        width: 150
+      });
+  }
+
+  // Note: All other elements (signatures, event details) are already on the template
 }
 
 /**

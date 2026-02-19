@@ -625,10 +625,24 @@ router.get('/admin/events/:id/registrations', authenticate, requireAdmin, async 
       quizAttendedParticipants = new Set(quizAttempts.map(a => a.participantId));
     }
 
-    // Enrich registrations with computed quizAttended field
+    // Get certificate names for all participants
+    const certificates = await prisma.eventCertificate.findMany({
+      where: { 
+        eventId: id,
+        participantId: { in: registrations.map(r => r.participantId) }
+      },
+      select: { participantId: true, certificateName: true, issueDate: true }
+    });
+    const certByParticipantId = new Map(
+      certificates.map(c => [c.participantId, { name: c.certificateName, issueDate: c.issueDate }])
+    );
+
+    // Enrich registrations with computed quizAttended field and certificate name
     const enrichedRegistrations = registrations.map(reg => ({
       ...reg,
-      quizAttended: reg.quizAttended || quizAttendedParticipants.has(reg.participantId)
+      quizAttended: reg.quizAttended || quizAttendedParticipants.has(reg.participantId),
+      certificateName: certByParticipantId.get(reg.participantId)?.name || null,
+      certificateIssueDate: certByParticipantId.get(reg.participantId)?.issueDate || null
     }));
 
     res.json({
@@ -701,6 +715,11 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
       year: 'numeric'
     });
 
+    // Preview issue date (current date)
+    const issueDateFormatted = new Date().toLocaleDateString('en-IN', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+
     // Generate preview PDF
     const safeName = participantName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-');
     res.setHeader('Content-Type', 'application/pdf');
@@ -712,7 +731,8 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
       eventName: event.title,
       eventDate,
       certificateNumber: `PREVIEW-${Date.now()}`,
-      templateType: 'participation'
+      templateType: 'participation',
+      issueDate: issueDateFormatted
     });
 
     pdfDoc.pipe(res);
@@ -725,90 +745,58 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
 // 12. Generate certificate (admin)
 router.post('/admin/events/:eventId/certificate/:participantId', authenticate, requireAdmin, async (req, res) => {
   const { eventId, participantId } = req.params;
-  const { templateType } = req.body;
+
+  console.log('🎫 Admin APPROVE certificate route HIT');
+  console.log('   Event ID:', eventId);
+  console.log('   Participant ID:', participantId);
 
   try {
+    // Get registration
+    const registration = await prisma.eventRegistration.findFirst({
+      where: { eventId, participantId }
+    });
+
+    if (!registration) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Registration not found' 
+      });
+    }
+
     // Check if certificate already exists
     const existingCert = await prisma.eventCertificate.findFirst({
-      where: {
-        eventId,
-        participantId
-      }
+      where: { eventId, participantId }
     });
 
     if (existingCert) {
+      console.log('   ⚠️ Certificate already exists:', existingCert.id);
       return res.status(400).json({ 
         success: false, 
         error: 'Certificate already generated for this participant' 
       });
     }
 
-    // Get event and participant details
-    const event = await prisma.event.findUnique({
-      where: { id: eventId }
-    });
-
-    const participant = await prisma.eventParticipant.findUnique({
-      where: { id: participantId }
-    });
-
-    const registration = await prisma.eventRegistration.findFirst({
-      where: { eventId, participantId }
-    });
-
-    if (!event || !participant || !registration) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Event, participant, or registration not found' 
-      });
-    }
-
-    // Generate certificate number
-    const certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}`;
-
-    // Create certificate (PDF generation would be done here or via separate service)
-    const certificate = await prisma.eventCertificate.create({
-      data: {
-        eventId,
-        participantId,
-        registrationId: registration.id,
-        certificateNumber: certNumber,
-        templateType: templateType || 'participation',
-        verified: true
-        // certificateUrl would be set after PDF generation
-      }
-    });
-
-    // Update registration - set both flags
+    // Just APPROVE - don't create EventCertificate yet
+    // Student will create it when they download and enter their name
     await prisma.eventRegistration.update({
       where: { id: registration.id },
       data: {
-        certificateGenerated: true,
-        certificateId: certificate.id,
-        certificateApprovedByAdmin: true  // Auto-approve when admin generates cert
+        certificateApprovedByAdmin: true
+        // DON'T set certificateGenerated: true here!
+        // That only happens when student actually downloads
       }
     });
 
-    // Email sending disabled (SMTP auth issues)
-    // sendCertificateEmail(event, participant, certificate)
-    //   .then(result => {
-    //     console.log('✅ Certificate email sent:', result);
-    //   })
-    //   .catch(error => {
-    //     console.error('❌ Certificate email failed:', error);
-    //   });
+    console.log('   ✅ Certificate APPROVED (not issued yet)');
+    console.log('   Student can now download and enter their certificate name');
 
     res.json({
       success: true,
-      message: 'Certificate generated successfully',
-      certificate
+      message: 'Certificate approved. Student can now download and enter their name.'
     });
   } catch (error) {
-    console.error('Generate certificate error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to generate certificate' 
-    });
+    console.error('Certificate issue error:', error);
+    res.status(500).json({ success: false, error: 'Failed to issue certificate' });
   }
 });
 
@@ -871,7 +859,9 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
             participantId: registration.participantId,
             registrationId: registration.id,
             certificateNumber: certNumber,
+            certificateName: registration.participant.name, // Lock name from DB
             templateType: templateType || 'participation',
+            issueDate: new Date(),
             verified: true
           }
         });
@@ -917,9 +907,49 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
   }
 });
 
-// 13. Admin: Revoke/Delete certificate (MUST BE BEFORE /admin/events/:id to avoid route conflict)
+// 13. Admin: Edit certificate name (fixes student mistakes)
+router.patch('/admin/events/:eventId/certificate/:participantId/name', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId, participantId } = req.params;
+    const { newName } = req.body;
+
+    if (!newName || !newName.trim()) {
+      return res.status(400).json({ success: false, error: 'New name is required' });
+    }
+
+    // Find and update certificate
+    const certificate = await prisma.eventCertificate.findFirst({
+      where: { eventId, participantId }
+    });
+
+    if (!certificate) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Certificate not found. Student needs to download certificate first.' 
+      });
+    }
+
+    await prisma.eventCertificate.update({
+      where: { id: certificate.id },
+      data: { certificateName: newName.trim() }
+    });
+
+    res.json({
+      success: true,
+      message: 'Certificate name updated successfully',
+      certificateName: newName.trim()
+    });
+  } catch (error) {
+    console.error('Edit certificate name error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update certificate name' });
+  }
+});
+
+// 14. Admin: Revoke/Delete certificate (MUST BE BEFORE /admin/events/:id to avoid route conflict)
+// This allows student to re-download with a corrected name
 router.delete('/admin/events/:eventId/certificate/:participantId', authenticate, requireAdmin, async (req, res) => {
-  console.log('🗑️ Certificate revoke route HIT');
+  console.log('🗑️ ==========================================');
+  console.log('🗑️ Certificate RESET/REVOKE route HIT');
   console.log('   Event ID:', req.params.eventId);
   console.log('   Participant ID:', req.params.participantId);
   
@@ -931,16 +961,16 @@ router.delete('/admin/events/:eventId/certificate/:participantId', authenticate,
       where: { eventId, participantId }
     });
 
-    console.log('   Certificate found:', !!certificate);
+    console.log('   Certificate found:', certificate ? { id: certificate.id, name: certificate.certificateName } : 'NONE');
 
     // Delete certificate if it exists
     if (certificate) {
       await prisma.eventCertificate.delete({
         where: { id: certificate.id }
       });
-      console.log('   ✅ EventCertificate record deleted');
+      console.log('   ✅ EventCertificate DELETED:', certificate.id);
     } else {
-      console.log('   ⚠️ No EventCertificate record found, updating registration only');
+      console.log('   ⚠️ No EventCertificate record to delete');
     }
 
     // Always update registration to revoke certificate status
@@ -953,11 +983,13 @@ router.delete('/admin/events/:eventId/certificate/:participantId', authenticate,
       }
     });
 
-    console.log('   ✅ Registration updated:', updated.count, 'records');
+    console.log('   ✅ Registrations updated:', updated.count, 'records');
+    console.log('   ✅ certificateGenerated=false, certificateApprovedByAdmin=false');
+    console.log('🗑️ ==========================================');
 
     res.json({
       success: true,
-      message: 'Certificate revoked successfully'
+      message: 'Certificate reset successfully. Student can now re-download with corrected name.'
     });
   } catch (error) {
     console.error('Certificate revoke error:', error);
@@ -1770,6 +1802,12 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
   try {
     const participantId = req.user.userId;
 
+    // Also get participant name
+    const participant = await prisma.eventParticipant.findUnique({
+      where: { id: participantId },
+      select: { name: true }
+    });
+
     const registrations = await prisma.eventRegistration.findMany({
       where: {
         participantId,
@@ -1813,15 +1851,19 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
         participantId,
         eventId: { in: registrations.map(r => r.eventId) }
       },
-      select: { eventId: true, id: true }
+      select: { eventId: true, id: true, certificateName: true }
     });
 
-    const issuedCertEventIds = new Set(issuedCertificates.map(c => c.eventId));
+    // Map eventId to certificate info
+    const certByEventId = new Map(
+      issuedCertificates.map(c => [c.eventId, { id: c.id, certificateName: c.certificateName }])
+    );
 
     // Map registrations with eligibility
     const registrationsWithEligibility = registrations.map(reg => {
       const quizAttended = reg.quizAttended || quizAttendedEventIds.has(reg.eventId);
-      const certificateIssued = issuedCertEventIds.has(reg.eventId);
+      const certInfo = certByEventId.get(reg.eventId);
+      const certificateIssued = !!certInfo;
       
       // Eligible if: quiz attended OR admin approved OR certificate already issued
       const eligible = reg.registrationStatus === 'confirmed' && 
@@ -1835,6 +1877,8 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
         quizAttended,
         certificateApprovedByAdmin: reg.certificateApprovedByAdmin,
         certificateIssued,
+        certificateName: certInfo?.certificateName || null, // Locked name if already issued
+        participantName: participant?.name || null, // DB name as fallback
         eligible,
         event: reg.event
       };
@@ -1848,12 +1892,18 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
 });
 
 // 33. Event Guest: Download certificate PDF (backend-generated)
-// Supports both GET (uses DB name) and POST (accepts custom name)
+// Certificate can only be downloaded ONCE with a chosen name - after that, name is locked
 router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { customName } = req.body; // Optional custom name for certificate
+    const { customName } = req.body; // Optional custom name for certificate (only on first download)
     const participantId = req.user.userId;
+
+    console.log('📥 Certificate download request:', {
+      eventId,
+      participantId,
+      customName: customName || '(none - will use DB name or existing)'
+    });
 
     // Fetch registration
     const registration = await prisma.eventRegistration.findFirst({
@@ -1881,9 +1931,15 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
     }
 
     // Check if certificate already issued (EventCertificate exists)
-    const existingCert = await prisma.eventCertificate.findFirst({
+    let existingCert = await prisma.eventCertificate.findFirst({
       where: { eventId, participantId }
     });
+
+    console.log('🔍 Existing certificate:', existingCert ? {
+      id: existingCert.id,
+      certificateName: existingCert.certificateName,
+      certificateNumber: existingCert.certificateNumber
+    } : 'None - First time download');
 
     // Eligibility: quiz attended OR admin approved OR certificate already issued
     if (!quizAttended && !registration.certificateApprovedByAdmin && !existingCert) {
@@ -1903,22 +1959,74 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
       return res.status(404).json({ success: false, message: 'Event or participant not found' });
     }
 
-    // Use custom name if provided, otherwise use DB name
-    const certificateName = customName?.trim() || participant.name;
+    let certificateName;
+    let certNumber;
+    let issueDate;
+    let templateType = 'participation';
+
+    if (existingCert) {
+      // Certificate already issued - use the locked name (no changes allowed)
+      // If certificateName is null (old certificates), use participant.name and backfill
+      certificateName = existingCert.certificateName || participant.name;
+      certNumber = existingCert.certificateNumber;
+      issueDate = existingCert.issueDate;
+      templateType = existingCert.templateType;
+      
+      // Backfill certificateName for old certificates that have null
+      if (!existingCert.certificateName) {
+        console.log('⚠️ Backfilling certificateName for old certificate...');
+        await prisma.eventCertificate.update({
+          where: { id: existingCert.id },
+          data: { certificateName: certificateName }
+        });
+        console.log('✅ Backfilled certificateName:', certificateName);
+      }
+      
+      console.log('🔒 Using LOCKED name:', certificateName, '(customName ignored)');
+    } else {
+      // First time download - REQUIRE customName (don't silently use DB name)
+      if (!customName?.trim()) {
+        console.log('❌ No customName provided and no existing certificate');
+        return res.status(400).json({
+          success: false,
+          error: 'NAME_REQUIRED',
+          message: 'Please provide a name for the certificate. If you already downloaded before, please refresh the page.'
+        });
+      }
+      certificateName = customName.trim();
+      certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}`;
+      issueDate = new Date();
+
+      // Create certificate record to lock the name
+      existingCert = await prisma.eventCertificate.create({
+        data: {
+          eventId,
+          participantId,
+          registrationId: registration.id,
+          certificateNumber: certNumber,
+          certificateName: certificateName,
+          templateType,
+          issueDate,
+          verified: true
+        }
+      });
+
+      // Also mark registration as certificate generated
+      await prisma.eventRegistration.update({
+        where: { id: registration.id },
+        data: { certificateGenerated: true }
+      });
+    }
 
     // Format event date
     const eventDate = new Date(event.eventDate).toLocaleDateString('en-IN', {
       year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    // Generate certificate number
-    const certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}`;
-
-    // Determine template type
-    let templateType = 'participation';
-    if (existingCert) {
-      templateType = existingCert.templateType;
-    }
+    // Format issue date for certificate
+    const issueDateFormatted = new Date(issueDate).toLocaleDateString('en-IN', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
 
     // Generate PDF
     const safeName = certificateName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-');
@@ -1930,8 +2038,9 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
       division: participant.division || '',
       eventName: event.title,
       eventDate,
-      certificateNumber: existingCert?.certificateNumber || certNumber,
-      templateType
+      certificateNumber: certNumber,
+      templateType,
+      issueDate: issueDateFormatted
     });
 
     pdfDoc.pipe(res);
@@ -1941,7 +2050,7 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
   }
 });
 
-// GET version for backward compatibility
+// GET version - uses locked name if certificate already issued, otherwise uses DB name
 router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -1973,7 +2082,7 @@ router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest,
     }
 
     // Check if certificate already issued (EventCertificate exists)
-    const existingCert = await prisma.eventCertificate.findFirst({
+    let existingCert = await prisma.eventCertificate.findFirst({
       where: { eventId, participantId }
     });
 
@@ -1995,32 +2104,75 @@ router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest,
       return res.status(404).json({ success: false, message: 'Event or participant not found' });
     }
 
+    let certificateName;
+    let certNumber;
+    let issueDate;
+    let templateType = 'participation';
+
+    if (existingCert) {
+      // Certificate already issued - use the locked name
+      certificateName = existingCert.certificateName || participant.name;
+      certNumber = existingCert.certificateNumber;
+      issueDate = existingCert.issueDate;
+      templateType = existingCert.templateType;
+      
+      // Backfill certificateName for old certificates
+      if (!existingCert.certificateName) {
+        await prisma.eventCertificate.update({
+          where: { id: existingCert.id },
+          data: { certificateName: certificateName }
+        });
+      }
+    } else {
+      // First time download - create certificate record with DB name
+      certificateName = participant.name;
+      certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}`;
+      issueDate = new Date();
+
+      // Create certificate record to lock the name
+      existingCert = await prisma.eventCertificate.create({
+        data: {
+          eventId,
+          participantId,
+          registrationId: registration.id,
+          certificateNumber: certNumber,
+          certificateName: certificateName,
+          templateType,
+          issueDate,
+          verified: true
+        }
+      });
+
+      // Also mark registration as certificate generated
+      await prisma.eventRegistration.update({
+        where: { id: registration.id },
+        data: { certificateGenerated: true }
+      });
+    }
+
     // Format event date
     const eventDate = new Date(event.eventDate).toLocaleDateString('en-IN', {
       year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    // Generate certificate number if not already in EventCertificate
-    const certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}`;
-
-    // Determine template type from existingCert (already fetched above)
-    let templateType = 'participation';
-    if (existingCert) {
-      templateType = existingCert.templateType;
-    }
+    // Format issue date for certificate
+    const issueDateFormatted = new Date(issueDate).toLocaleDateString('en-IN', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
 
     // Generate PDF
-    const safeName = participant.name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-');
+    const safeName = certificateName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${safeName}-certificate.pdf`);
 
     const pdfDoc = await generateCertificatePDF({
-      participantName: participant.name,
+      participantName: certificateName,
       division: participant.division || '',
       eventName: event.title,
       eventDate,
-      certificateNumber: existingCert?.certificateNumber || certNumber,
-      templateType
+      certificateNumber: certNumber,
+      templateType,
+      issueDate: issueDateFormatted
     });
 
     pdfDoc.pipe(res);

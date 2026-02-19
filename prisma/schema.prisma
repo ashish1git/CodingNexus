@@ -476,6 +476,7 @@ model EventCertificate {
   participantId     String
   registrationId    String?
   certificateNumber String           @unique
+  certificateName   String?          // The name used on the certificate (locked after first download)
   certificateUrl    String?          // PDF URL on Cloudinary
   issueDate         DateTime         @default(now())
   templateType      String           @default("participation") // participation, winner, runner_up, excellence

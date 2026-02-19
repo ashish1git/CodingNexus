@@ -294,12 +294,34 @@ export default function EventManagement() {
   };
 
   const revokeCertificate = async (eventId, participantId) => {
-    if (!confirm('Are you sure you want to revoke this certificate?')) return;
+    if (!confirm('Reset this certificate? The student will be able to re-download with a corrected name.')) return;
     try {
       await axios.delete(`${API}/events/admin/events/${eventId}/certificate/${participantId}`, { headers });
-      toast.success('Certificate revoked');
+      toast.success('Certificate reset successfully. Student can now re-download.');
       openRegistrations(viewReg);
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to revoke certificate'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to reset certificate'); }
+  };
+
+  const editCertificateName = async (eventId, participantId, currentName) => {
+    const newName = prompt('Edit certificate name:', currentName || '');
+    if (!newName || newName.trim() === '') {
+      toast.error('Name cannot be empty');
+      return;
+    }
+    if (newName.trim() === currentName) {
+      return; // No change
+    }
+    try {
+      await axios.patch(
+        `${API}/events/admin/events/${eventId}/certificate/${participantId}/name`,
+        { newName: newName.trim() },
+        { headers }
+      );
+      toast.success('Certificate name updated successfully');
+      openRegistrations(viewReg);
+    } catch (err) { 
+      toast.error(err.response?.data?.error || 'Failed to update certificate name'); 
+    }
   };
 
   // Media
@@ -706,14 +728,51 @@ export default function EventManagement() {
                           </td>
                           <td className="py-2 px-3 text-center">
                             {r.certificateGenerated ? (
-                              <div className="flex items-center justify-center gap-1">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs"><Award className="w-3 h-3" /> Issued</span>
-                                <button onClick={() => revokeCertificate(viewReg.id, r.participant?.id)}
-                                  className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 transition" title="Revoke">✕</button>
+                              // Certificate actually downloaded and name locked
+                              <div className="flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-1 w-full">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">
+                                    <Award className="w-3 h-3" /> Downloaded
+                                  </span>
+                                  <button 
+                                    onClick={() => editCertificateName(viewReg.id, r.participant?.id, r.certificateName)}
+                                    className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-xs hover:bg-blue-200 transition" 
+                                    title="Edit certificate name"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => revokeCertificate(viewReg.id, r.participant?.id)}
+                                    className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 transition" 
+                                    title="Reset certificate (allows re-download with new name)"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                {r.certificateName && (
+                                  <div className="text-xs text-gray-500 ml-2" title="Certificate issued to this name">
+                                    📄 {r.certificateName}
+                                  </div>
+                                )}
+                              </div>
+                            ) : r.certificateApprovedByAdmin ? (
+                              // Approved but not yet downloaded
+                              <div className="flex items-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs">
+                                  <Award className="w-3 h-3" /> Approved
+                                </span>
+                                <button 
+                                  onClick={() => revokeCertificate(viewReg.id, r.participant?.id)}
+                                  className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 transition" 
+                                  title="Revoke approval"
+                                >
+                                  ✕
+                                </button>
                               </div>
                             ) : (
+                              // Not approved yet - show Approve button
                               <button onClick={() => issueCertificate(viewReg.id, r.participant?.id)} disabled={!r.attendanceMarked}
-                                className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200 transition disabled:opacity-40 disabled:cursor-not-allowed">Issue</button>
+                                className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200 transition disabled:opacity-40 disabled:cursor-not-allowed">Approve</button>
                             )}
                           </td>
                         </tr>
