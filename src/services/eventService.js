@@ -1,6 +1,8 @@
 // Event service for guest participants - completely separate from batch student services
 import apiClient from './apiClient';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:21000/api';
+
 class EventService {
   // ==================== QUIZ ENDPOINTS (Guest) ====================
   
@@ -32,6 +34,38 @@ class EventService {
 
   async getCertificateById(certId) {
     return apiClient.get(`/events/event-guest/certificates/${certId}`);
+  }
+
+  // Get all registrations with eligibility status
+  async getMyRegistrations() {
+    return apiClient.get('/events/event-guest/my-registrations');
+  }
+
+  // Download certificate as PDF blob with optional custom name (backend-generated)
+  async downloadCertificate(eventId, customName = null) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/events/event-guest/certificate/${eventId}/download`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ customName })
+    });
+
+    if (!response.ok) {
+      const error = new Error('Download failed');
+      error.response = { status: response.status };
+      try {
+        const data = await response.json();
+        error.message = data.message || data.error || 'Download failed';
+      } catch (e) {
+        // response wasn't JSON
+      }
+      throw error;
+    }
+
+    return response.blob();
   }
 
   // ==================== STATS ====================
@@ -66,6 +100,24 @@ class EventService {
 
   async adminGetQuizSubmissions(quizId) {
     return apiClient.get(`/events/admin/events/quizzes/${quizId}/submissions`);
+  }
+
+  // ==================== ADMIN CERTIFICATE APPROVAL ====================
+
+  async adminGetRegistrationsWithEligibility(eventId) {
+    return apiClient.get(`/events/admin/events/${eventId}/registrations-with-eligibility`);
+  }
+
+  async adminApproveCertificate(eventId, registrationId, approved = true) {
+    return apiClient.put(`/events/admin/events/${eventId}/registrations/${registrationId}/approve-certificate`, { approved });
+  }
+
+  async adminBulkApproveCertificates(eventId, registrationIds, approved = true) {
+    return apiClient.put(`/events/admin/events/${eventId}/certificates/bulk-approve`, { registrationIds, approved });
+  }
+
+  async adminRevokeCertificate(eventId, participantId) {
+    return apiClient.delete(`/events/admin/events/${eventId}/certificate/${participantId}`);
   }
 }
 

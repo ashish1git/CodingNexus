@@ -83,6 +83,8 @@ export default function EventManagement() {
   const [mediaFile, setMediaFile] = useState(null);
   const [posterUploading, setPosterUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const [bulkCertParticipants, setBulkCertParticipants] = useState([]);
 
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -246,12 +248,58 @@ export default function EventManagement() {
   };
 
   const bulkCertificates = async (eventId) => {
-    if (!confirm('Issue certificates to all attended participants?')) return;
+    // Get participants who attended (marked present OR took quiz) and haven't received certificates yet
+    const eligibleParticipants = registrations.filter(
+      r => (r.attendanceMarked || r.quizAttended) && !r.certificateGenerated
+    );
+    
+    if (eligibleParticipants.length === 0) {
+      toast.error('No eligible participants found. Either no one attended/took quiz or certificates already issued.');
+      return;
+    }
+    
+    // Show modal with participant list
+    setBulkCertParticipants(eligibleParticipants);
+    setShowBulkCertModal(true);
+  };
+
+  const confirmBulkCertificates = async () => {
     try {
-      const res = await axios.post(`${API}/events/admin/events/${eventId}/certificates/bulk`, {}, { headers });
+      const res = await axios.post(`${API}/events/admin/events/${viewReg.id}/certificates/bulk`, { attendanceRequired: true }, { headers });
       toast.success(res.data.message);
+      setShowBulkCertModal(false);
+      setBulkCertParticipants([]);
       openRegistrations(viewReg);
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.error || 'Failed');
+    }
+  };
+
+  const previewCertificate = async (eventId) => {
+    try {
+      const response = await axios.post(
+        `${API}/events/admin/events/${eventId}/certificate/preview`,
+        { participantName: 'Sample Student', division: 'FY AIML' },
+        { headers, responseType: 'blob' }
+      );
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+      toast.success('Preview opened in new tab');
+    } catch (err) {
+      console.error('Preview error:', err);
+      toast.error('Failed to generate preview');
+    }
+  };
+
+  const revokeCertificate = async (eventId, participantId) => {
+    if (!confirm('Are you sure you want to revoke this certificate?')) return;
+    try {
+      await axios.delete(`${API}/events/admin/events/${eventId}/certificate/${participantId}`, { headers });
+      toast.success('Certificate revoked');
+      openRegistrations(viewReg);
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to revoke certificate'); }
   };
 
   // Media
@@ -609,6 +657,9 @@ export default function EventManagement() {
                 <p className="text-gray-500 text-sm">{viewReg.title}</p>
               </div>
               <div className="flex items-center gap-2">
+                <button onClick={() => previewCertificate(viewReg.id)} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition flex items-center gap-1" title="Preview certificate with test data">
+                  <Eye className="w-3.5 h-3.5" /> Preview
+                </button>
                 <button onClick={() => bulkCertificates(viewReg.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200 transition flex items-center gap-1">
                   <Award className="w-3.5 h-3.5" /> Bulk Certs
                 </button>
@@ -655,7 +706,11 @@ export default function EventManagement() {
                           </td>
                           <td className="py-2 px-3 text-center">
                             {r.certificateGenerated ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs"><Award className="w-3 h-3" /> Issued</span>
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs"><Award className="w-3 h-3" /> Issued</span>
+                                <button onClick={() => revokeCertificate(viewReg.id, r.participant?.id)}
+                                  className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 transition" title="Revoke">✕</button>
+                              </div>
                             ) : (
                               <button onClick={() => issueCertificate(viewReg.id, r.participant?.id)} disabled={!r.attendanceMarked}
                                 className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200 transition disabled:opacity-40 disabled:cursor-not-allowed">Issue</button>
@@ -667,6 +722,73 @@ export default function EventManagement() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK CERTIFICATES CONFIRMATION MODAL */}
+      {showBulkCertModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Confirm Bulk Certificate Issue</h2>
+                <p className="text-gray-500 text-sm">{bulkCertParticipants.length} participant(s) eligible</p>
+              </div>
+              <button onClick={() => { setShowBulkCertModal(false); setBulkCertParticipants([]); }} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto flex-1">
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Ready to issue:</strong> Certificates will be issued to the following participants who attended the event or took the quiz.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {bulkCertParticipants.map((participant, index) => (
+                  <div key={participant.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div className="flex-shrink-0 w-8 h-8 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center font-semibold text-sm">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900">{participant.participant?.name || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500">{participant.participant?.email}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {participant.attendanceMarked && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">
+                          <CheckCircle className="w-3 h-3" /> Present
+                        </span>
+                      )}
+                      {participant.quizAttended && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+                          <Award className="w-3 h-3" /> Quiz
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t border-gray-200">
+              <button 
+                onClick={() => { setShowBulkCertModal(false); setBulkCertParticipants([]); }} 
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmBulkCertificates}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm font-medium flex items-center gap-2"
+              >
+                <Award className="w-4 h-4" />
+                Issue {bulkCertParticipants.length} Certificate{bulkCertParticipants.length !== 1 ? 's' : ''}
+              </button>
             </div>
           </div>
         </div>
