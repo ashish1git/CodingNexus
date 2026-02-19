@@ -1366,12 +1366,19 @@ router.get('/event-guest/quizzes/:quizId/results', authenticateEventGuest, async
 // 25. Get certificates for guest
 router.get('/event-guest/certificates', authenticateEventGuest, async (req, res) => {
   try {
+    // Ensure participant can only see their own certificates
+    const participantId = req.user.userId;
+
     const certificates = await prisma.eventCertificate.findMany({
       where: {
-        participantId: req.user.userId
+        participantId: participantId,
+        event: {
+          eventType: 'event'
+        }
       },
       include: {
-        event: { select: { id: true, title: true, eventDate: true, eventType: true, venue: true } }
+        event: { select: { id: true, title: true, eventDate: true, eventType: true, venue: true, description: true } },
+        participant: { select: { id: true, name: true, email: true } }
       },
       orderBy: { issueDate: 'desc' }
     });

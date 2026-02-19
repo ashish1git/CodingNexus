@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Award, Download, RefreshCw, Calendar, MapPin, ExternalLink, X } from 'lucide-react';
+import { ArrowLeft, Award, Download, RefreshCw, Calendar, MapPin, ExternalLink, X, Eye } from 'lucide-react';
 import { eventService } from '../../services/eventService';
+import EventCertificateDisplay from './EventCertificateDisplay';
 import toast from 'react-hot-toast';
 
 export default function EventCertificates() {
@@ -11,6 +12,7 @@ export default function EventCertificates() {
   const [downloading, setDownloading] = useState(null);
   const [namePrompt, setNamePrompt] = useState(null);
   const [customName, setCustomName] = useState('');
+  const [selectedCert, setSelectedCert] = useState(null);
 
   useEffect(() => {
     fetchCertificates();
@@ -135,6 +137,22 @@ export default function EventCertificates() {
     );
   }
 
+  // If viewing a certificate in beautiful display
+  if (selectedCert) {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setSelectedCert(null)}
+          className="fixed top-4 left-4 z-50 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+        <EventCertificateDisplay certificate={selectedCert} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black event-dark-theme">
       {/* Header */}
@@ -211,6 +229,13 @@ export default function EventCertificates() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => setSelectedCert(cert)}
+                      className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Certificate
+                    </button>
                     <button
                       onClick={() => promptForName(cert)}
                       disabled={downloading === cert.id}
