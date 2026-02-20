@@ -388,10 +388,10 @@ export default function EventsPage() {
                       {event.venue && (
                         <div className="bg-white/3 rounded-2xl p-4 border border-white/5">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
                               <MapPin className="w-5 h-5 text-blue-400" />
                             </div>
-                            <p className="text-gray-300 text-sm font-medium truncate">{event.venue}</p>
+                            <p className="text-gray-300 text-sm font-medium break-words">{event.venue}</p>
                           </div>
                         </div>
                       )}
