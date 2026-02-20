@@ -68,8 +68,8 @@ export default function EventRegistration() {
       return false;
     }
 
-    if (formData.moodleId && formData.moodleId.trim().length < 3) {
-      toast.error('Moodle ID must be at least 3 characters');
+    if (!formData.moodleId || formData.moodleId.trim().length < 3) {
+      toast.error('Moodle ID is required (minimum 3 characters)');
       return false;
     }
 
@@ -95,7 +95,7 @@ export default function EventRegistration() {
           fullName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
-          moodleId: formData.moodleId.trim() || null,
+          moodleId: formData.moodleId.trim(),
           year: formData.year,
           division: formData.division,
           branch: formData.branch
@@ -318,7 +318,7 @@ export default function EventRegistration() {
                 {/* Moodle ID */}
                 <div>
                   <label className="block text-gray-200 mb-2 text-sm font-semibold">
-                    Moodle ID <span className="text-gray-400 text-xs">(Optional)</span>
+                    Moodle ID <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -327,7 +327,8 @@ export default function EventRegistration() {
                     onChange={handleChange}
                     disabled={isDeadlineOver || isEventFull}
                     className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder:text-gray-400"
-                    placeholder="Your Moodle ID (if available)"
+                    placeholder="Enter your Moodle ID"
+                    required
                   />
                   <p className="text-xs text-gray-400 mt-2">🆔 Your student Moodle login ID</p>
                 </div>

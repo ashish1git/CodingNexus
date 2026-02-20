@@ -122,10 +122,18 @@ router.post('/public/events/:id/register', async (req, res) => {
 
   try {
     // Validate required fields
-    if (!fullName || !email || !phone) {
+    if (!fullName || !email || !phone || !moodleId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Full name, email, and phone are required' 
+        error: 'Full name, email, phone, and Moodle ID are required' 
+      });
+    }
+
+    // Validate Moodle ID format
+    if (moodleId.trim().length < 3) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Moodle ID must be at least 3 characters' 
       });
     }
 
@@ -217,7 +225,7 @@ router.post('/public/events/:id/register', async (req, res) => {
             name: fullName,
             email,
             phone,
-            moodleId: moodleId && moodleId.trim() !== '' ? moodleId.trim() : null,
+            moodleId: moodleId.trim(),
             year: year && year !== '' ? year : null,
             branch: branch && branch !== '' ? branch : null,
             division: division && division !== '' ? division : null,
@@ -251,7 +259,7 @@ router.post('/public/events/:id/register', async (req, res) => {
         data: {
           name: fullName,
           phone,
-          moodleId: moodleId && moodleId.trim() !== '' ? moodleId.trim() : participant.moodleId,
+          moodleId: moodleId.trim(),
           year: year && year !== '' ? year : participant.year,
           branch: branch && branch !== '' ? branch : participant.branch,
           division: division && division !== '' ? division : participant.division
