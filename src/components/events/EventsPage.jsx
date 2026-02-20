@@ -178,59 +178,59 @@ export default function EventsPage() {
 
       {/* Hero Section */}
       <div className="relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-purple-300 text-sm font-medium mb-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-12 pb-4 sm:pb-8">
+          <div className="text-center mb-4 sm:mb-10">
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1 sm:py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-purple-300 text-xs sm:text-sm font-medium mb-3 sm:mb-6">
               <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
               Discover &amp; Register
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white mb-4 tracking-tight">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white mb-2 sm:mb-4 tracking-tight">
               Upcoming <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">Events</span>
             </h1>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            <p className="text-gray-400 text-sm sm:text-lg max-w-2xl mx-auto">
               Explore workshops, hackathons, and competitions. Expand your skills with hands-on experiences.
             </p>
           </div>
 
           {/* Search Bar */}
-          <div className="max-w-2xl mx-auto mb-8">
+          <div className="max-w-2xl mx-auto mb-4 sm:mb-8">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search events by name, description, or venue..."
-                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition text-sm"
+                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition text-sm"
               />
             </div>
           </div>
 
           {/* Type Filter Chips */}
-          <div className="flex flex-wrap justify-center gap-2 mb-6">
+          <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 mb-3 sm:mb-6">
             {EVENT_TYPES.map(type => (
               <button
                 key={type.key}
                 onClick={() => setSelectedType(type.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                   selectedType === type.key
                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
                 }`}
               >
-                <span className="mr-1.5">{type.icon}</span>
+                <span className="mr-1 sm:mr-1.5">{type.icon}</span>
                 {type.label}
               </button>
             ))}
           </div>
 
           {/* Status Filter */}
-          <div className="flex justify-center gap-1 mb-8">
+          <div className="flex justify-center gap-1 mb-4 sm:mb-8">
             {STATUS_FILTERS.map(status => (
               <button
                 key={status.key}
                 onClick={() => setSelectedStatus(status.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-medium transition ${
                   selectedStatus === status.key
                     ? 'bg-white/10 text-white'
                     : 'text-gray-500 hover:text-gray-300'
@@ -245,9 +245,9 @@ export default function EventsPage() {
       </div>
 
       {/* Events Grid */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-gray-500 text-sm">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 sm:pb-20">
+        <div className="flex items-center justify-between mb-3 sm:mb-6">
+          <p className="text-gray-500 text-xs sm:text-sm">
             {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
           </p>
         </div>
@@ -273,13 +273,12 @@ export default function EventsPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
             {filteredEvents.map((event) => {
               const deadlinePassed = isDeadlinePassed(event);
               const regPercent = getRegistrationPercent(event);
               const timeUntil = getTimeUntil(event.eventDate);
               const isExpanded = expandedDesc[event.id];
-              const hasLongDesc = event.description && event.description.length > 200;
               const autoStatus = getAutoStatus(event);
 
               return (
@@ -351,10 +350,10 @@ export default function EventsPage() {
                     {/* Description */}
                     {event.description && (
                       <div className="mb-5">
-                        <p className={`text-gray-400 text-base leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
+                        <p className={`text-gray-400 text-base leading-relaxed whitespace-pre-wrap break-words ${isExpanded ? '' : 'line-clamp-3'}`}>
                           {event.description}
                         </p>
-                        {hasLongDesc && (
+                        {event.description.length > 150 && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
