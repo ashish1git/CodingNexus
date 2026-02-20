@@ -16,9 +16,27 @@ export const hasPermission = (userDetails, permission) => {
   
   // Check specific permission
   if (typeof permissions === 'object' && permissions !== null) {
-    return permissions[permission] === true;
+    // If the permission key exists, use its value
+    if (permission in permissions) {
+      const result = permissions[permission] === true;
+      console.log(`🔐 Permission check: ${permission} = ${result}`, permissions);
+      return result;
+    }
+    
+    // For backward compatibility: if createEvents/editEvents/deleteEvents don't exist
+    // but manageEvents is true, allow them
+    if (['createEvents', 'editEvents', 'deleteEvents'].includes(permission)) {
+      const result = permissions.manageEvents === true;
+      console.log(`🔐 Permission check (fallback): ${permission} = ${result}`, permissions);
+      return result;
+    }
+    
+    // Default to false for unknown permissions
+    console.log(`🔐 Permission check: ${permission} = false (not found)`, permissions);
+    return false;
   }
   
+  console.log(`🔐 Permission check: ${permission} = false (invalid permissions)`, permissions);
   return false;
 };
 
@@ -65,6 +83,36 @@ export const PERMISSIONS = {
     key: 'respondTickets',
     label: 'Respond to Tickets',
     description: 'Reply to and resolve support tickets'
+  },
+  manageEvents: {
+    key: 'manageEvents',
+    label: 'View Events',
+    description: 'View events and registrations'
+  },
+  createEvents: {
+    key: 'createEvents',
+    label: 'Create Events',
+    description: 'Create new events'
+  },
+  editEvents: {
+    key: 'editEvents',
+    label: 'Edit Events',
+    description: 'Edit existing events'
+  },
+  deleteEvents: {
+    key: 'deleteEvents',
+    label: 'Delete Events',
+    description: 'Delete events'
+  },
+  manageCertificates: {
+    key: 'manageCertificates',
+    label: 'Manage Certificates',
+    description: 'Create and manage certificates'
+  },
+  sendBulkEmails: {
+    key: 'sendBulkEmails',
+    label: 'Send Bulk Emails',
+    description: 'Send bulk emails to students'
   }
 };
 

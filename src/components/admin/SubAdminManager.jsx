@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, Edit, Eye, EyeOff, 
   X, CheckCircle, AlertCircle, Loader2, Lock, User, Mail, ShieldCheck
@@ -6,7 +7,8 @@ import {
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
 
-const SubAdminManager = ({ onBack }) => {
+const SubAdminManager = () => {
+  const navigate = useNavigate();
   const [subAdmins, setSubAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -27,7 +29,13 @@ const SubAdminManager = ({ onBack }) => {
     createQuizzes: true,
     manageCompetitions: true,
     viewTickets: true,
-    respondTickets: true
+    respondTickets: true,
+    manageEvents: true,
+    createEvents: true,
+    editEvents: true,
+    deleteEvents: true,
+    manageCertificates: true,
+    sendBulkEmails: true
   };
 
   const [formData, setFormData] = useState({
@@ -201,11 +209,16 @@ const SubAdminManager = ({ onBack }) => {
 
   const openEditModal = (admin) => {
     setSelectedAdmin(admin);
+    // Merge existing permissions with initialPermissions to ensure new permission keys are visible
+    const mergedPermissions = {
+      ...initialPermissions,
+      ...admin.permissions
+    };
     setFormData({
       name: admin.name,
       email: admin.email,
       password: '', 
-      permissions: { ...admin.permissions }
+      permissions: mergedPermissions
     });
     setShowEditModal(true);
   };
@@ -236,7 +249,7 @@ const SubAdminManager = ({ onBack }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <button 
-            onClick={onBack}
+            onClick={() => navigate('/admin/dashboard')}
             className="flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-2"
           >
             <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard

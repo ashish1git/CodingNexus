@@ -11,14 +11,15 @@ export default function EventRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   
-  const yearOptions = ['FE', 'TE', 'SE', 'BE'];
+  const yearOptions = ['FE', 'SE', 'TE', 'BE'];
   const divisionOptions = Array.from({ length: 10 }, (_, i) => String.fromCharCode(65 + i)); // A-J
-  const branchOptions = ['AIML', 'COMPS', 'IT', 'DS', 'MECH'];
+  const branchOptions = ['CSE AIML', 'COMPS', 'IT', 'CSE DS', 'MECH', 'CIVIL'];
   
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
+    moodleId: '',
     year: '',
     division: '',
     branch: '',
@@ -67,6 +68,11 @@ export default function EventRegistration() {
       return false;
     }
 
+    if (formData.moodleId && formData.moodleId.trim().length < 3) {
+      toast.error('Moodle ID must be at least 3 characters');
+      return false;
+    }
+
     if (!formData.year || !formData.division || !formData.branch) {
       toast.error('Please select year, division, and branch');
       return false;
@@ -89,6 +95,7 @@ export default function EventRegistration() {
           fullName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
+          moodleId: formData.moodleId.trim() || null,
           year: formData.year,
           division: formData.division,
           branch: formData.branch
@@ -306,6 +313,23 @@ export default function EventRegistration() {
                     pattern="[0-9]{10}"
                   />
                   <p className="text-xs text-gray-300 mt-2">📱 Expected format: 9876543210</p>
+                </div>
+
+                {/* Moodle ID */}
+                <div>
+                  <label className="block text-gray-200 mb-2 text-sm font-semibold">
+                    Moodle ID <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="moodleId"
+                    value={formData.moodleId}
+                    onChange={handleChange}
+                    disabled={isDeadlineOver || isEventFull}
+                    className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder:text-gray-400"
+                    placeholder="Your Moodle ID (if available)"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">🆔 Your student Moodle login ID</p>
                 </div>
 
                 {/* Year, Division, Branch - Grid */}

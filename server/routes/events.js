@@ -15,13 +15,33 @@ const router = express.Router();
 // 1. GET all active/upcoming events (public)
 router.get('/public/events', async (req, res) => {
   try {
+    const now = new Date();
+    
     const events = await prisma.event.findMany({
       where: {
         isActive: true,
-        status: {
-          in: ['upcoming', 'ongoing']
-        }
-        // Remove deadline filter - show all active events regardless of deadline
+        // Show events that are upcoming or ongoing based on dates
+        // OR have status set to upcoming/ongoing
+        OR: [
+          {
+            // Events where the event date hasn't passed yet
+            eventDate: {
+              gte: now
+            }
+          },
+          {
+            // Events with end date that hasn't passed yet
+            eventEndDate: {
+              gte: now
+            }
+          },
+          {
+            // Events with status manually set to upcoming or ongoing
+            status: {
+              in: ['upcoming', 'ongoing']
+            }
+          }
+        ]
       },
       select: {
         id: true,
@@ -120,7 +140,7 @@ router.get('/public/events/:id', async (req, res) => {
 // 3. Register for event (guest participant)
 router.post('/public/events/:id/register', async (req, res) => {
   const { id: eventId } = req.params;
-  const { fullName, email, phone, year, branch, division } = req.body;
+  const { fullName, email, phone, moodleId, year, branch, division } = req.body;
 
   try {
     // Validate required fields
@@ -219,6 +239,7 @@ router.post('/public/events/:id/register', async (req, res) => {
             name: fullName,
             email,
             phone,
+            moodleId: moodleId && moodleId.trim() !== '' ? moodleId.trim() : null,
             year: year && year !== '' ? year : null,
             branch: branch && branch !== '' ? branch : null,
             division: division && division !== '' ? division : null,
@@ -252,6 +273,7 @@ router.post('/public/events/:id/register', async (req, res) => {
         data: {
           name: fullName,
           phone,
+          moodleId: moodleId && moodleId.trim() !== '' ? moodleId.trim() : participant.moodleId,
           year: year && year !== '' ? year : participant.year,
           branch: branch && branch !== '' ? branch : participant.branch,
           division: division && division !== '' ? division : participant.division
@@ -803,7 +825,11 @@ router.post('/admin/events/:eventId/certificate/:participantId', authenticate, r
 // 12. Bulk generate certificates (admin)
 router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdmin, async (req, res) => {
   const { eventId } = req.params;
-  const { templateType, attendanceRequired } = req.body;
+  const { attendanceRequired } = req.body;
+
+  console.log('📦 Bulk certificate approval route HIT');
+  console.log('   Event ID:', eventId);
+  console.log('   Attendance required:', attendanceRequired);
 
   try {
     // First get all quiz attendees for this event (from actual quiz attempts)
@@ -820,63 +846,54 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
         select: { participantId: true }
       });
       quizAttendedParticipants = new Set(quizAttempts.map(a => a.participantId));
+      console.log('   Quiz attendees found:', quizAttendedParticipants.size);
     }
 
-    // Get all confirmed registrations without certificates
+    // Get all confirmed registrations that are NOT already approved and NOT already downloaded
     const registrations = await prisma.eventRegistration.findMany({
       where: {
         eventId,
         registrationStatus: 'confirmed',
-        certificateGenerated: false
+        certificateGenerated: false,  // Not yet downloaded
+        certificateApprovedByAdmin: false  // Not yet approved
       },
       include: {
         participant: true
       }
     });
 
-    // Filter registrations: must have attended (marked OR quizAttended OR in quiz attempts)
-    const filteredRegistrations = attendanceRequired 
-      ? registrations.filter(reg => 
-          reg.attendanceMarked || 
-          reg.quizAttended || 
-          quizAttendedParticipants.has(reg.participantId)
-        )
-      : registrations;
+    console.log('   Total registrations to check:', registrations.length);
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId }
+    // Filter registrations: ONLY students who attended quiz
+    const filteredRegistrations = registrations.filter(reg => {
+      const quizAttended = reg.quizAttended || quizAttendedParticipants.has(reg.participantId);
+      return quizAttended;  // MUST have attended quiz
     });
+
+    console.log('   Students with quiz attendance:', filteredRegistrations.length);
+
+    if (filteredRegistrations.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No eligible participants found. Students must attend the quiz.',
+        approved: 0
+      });
+    }
 
     const results = [];
 
+    // Only APPROVE certificates - don't create EventCertificate records yet
+    // Student will create that when they download and enter their name
     for (const registration of filteredRegistrations) {
       try {
-        const certNumber = `CN-${event.title.substring(0, 3).toUpperCase().replace(/\s/g, '')}-${Date.now()}-${registration.participant.id.substring(0, 4)}`;
-
-        const certificate = await prisma.eventCertificate.create({
-          data: {
-            eventId,
-            participantId: registration.participantId,
-            registrationId: registration.id,
-            certificateNumber: certNumber,
-            certificateName: registration.participant.name, // Lock name from DB
-            templateType: templateType || 'participation',
-            issueDate: new Date(),
-            verified: true
-          }
-        });
-
         await prisma.eventRegistration.update({
           where: { id: registration.id },
           data: {
-            certificateGenerated: true,
-            certificateId: certificate.id,
-            certificateApprovedByAdmin: true  // Auto-approve when admin generates cert
+            certificateApprovedByAdmin: true  // Just approve - student will download later
           }
         });
 
-        // Email sending disabled (SMTP auth issues)
-        // sendCertificateEmail(event, registration.participant, certificate).catch(console.error);
+        console.log('   ✅ Approved certificate for:', registration.participant.name);
 
         results.push({
           participantId: registration.participantId,
@@ -884,6 +901,7 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
           success: true
         });
       } catch (error) {
+        console.error('   ❌ Failed to approve for:', registration.participant.name, error);
         results.push({
           participantId: registration.participantId,
           participantName: registration.participant.name,
@@ -893,9 +911,14 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
       }
     }
 
+    const approvedCount = results.filter(r => r.success).length;
+
+    console.log('   📦 Bulk approval complete:', approvedCount, 'students approved');
+
     res.json({
       success: true,
-      message: `Generated ${results.filter(r => r.success).length} certificates`,
+      message: `Approved ${approvedCount} students who attended the quiz. They can now download and enter their certificate name.`,
+      approved: approvedCount,
       results
     });
   } catch (error) {
@@ -1036,7 +1059,8 @@ router.put('/admin/events/:id', authenticate, requireAdmin, async (req, res) => 
     maxParticipants,
     registrationDeadline,
     batch,
-    isActive
+    isActive,
+    status
   } = req.body;
 
   try {
@@ -1053,7 +1077,8 @@ router.put('/admin/events/:id', authenticate, requireAdmin, async (req, res) => 
         ...(maxParticipants && { maxParticipants }),
         ...(registrationDeadline && { registrationDeadline: new Date(registrationDeadline) }),
         ...(batch !== undefined && { batch }),
-        ...(isActive !== undefined && { isActive })
+        ...(isActive !== undefined && { isActive }),
+        ...(status && { status })
       }
     });
 

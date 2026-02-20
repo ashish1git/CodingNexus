@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Award, Plus, Edit2, Trash2, Eye, Search, Filter, 
-  Calendar, Users, Download, Loader, X, Check, AlertTriangle, FileText
+  Calendar, Users, Download, Loader, X, Check, AlertTriangle, FileText, ShieldAlert, ArrowLeft
 } from 'lucide-react';
 import { certificateService } from '../../services/certificateService';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../utils/permissions';
 import toast from 'react-hot-toast';
 
 const CertificateManager = () => {
+  const { userDetails } = useAuth();
+  const canManageCertificates = hasPermission(userDetails, 'manageCertificates');
+  
   const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -153,6 +159,32 @@ const CertificateManager = () => {
       day: 'numeric'
     });
   };
+
+  // Access Denied Screen
+  if (!canManageCertificates) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-md">
+            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldAlert className="w-12 h-12 text-red-600" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+            <p className="text-gray-600 mb-6">
+              You don't have permission to manage certificates. Contact your administrator to request access.
+            </p>
+            <Link
+              to="/admin/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">

@@ -68,7 +68,7 @@ export default function EventsPage() {
   };
 
   const filteredEvents = useMemo(() => {
-    return events.filter(event => {
+    const filtered = events.filter(event => {
       const matchesSearch = !searchQuery ||
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (event.description && event.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -77,6 +77,22 @@ export default function EventsPage() {
       const autoStatus = getAutoStatus(event);
       const matchesStatus = selectedStatus === 'all' || autoStatus === selectedStatus;
       return matchesSearch && matchesType && matchesStatus;
+    });
+
+    // Sort events: ongoing first, then upcoming, then completed
+    // Within each category, sort by event date (earliest first)
+    return filtered.sort((a, b) => {
+      const statusA = getAutoStatus(a);
+      const statusB = getAutoStatus(b);
+      
+      // Status priority: ongoing > upcoming > completed
+      const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 };
+      const priorityDiff = statusPriority[statusA] - statusPriority[statusB];
+      
+      if (priorityDiff !== 0) return priorityDiff;
+      
+      // Same status: sort by event date (earliest first)
+      return new Date(a.eventDate) - new Date(b.eventDate);
     });
   }, [events, searchQuery, selectedType, selectedStatus]);
 

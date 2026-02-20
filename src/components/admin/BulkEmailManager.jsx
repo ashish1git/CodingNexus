@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Mail, Send, Users, Filter, Eye, X, 
   CheckCircle, AlertCircle, Loader, FileText, Upload, 
-  Search, Calendar, MapPin, Clock, UserCheck 
+  Search, Calendar, MapPin, Clock, UserCheck, ShieldAlert, ArrowLeft
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../utils/permissions';
 import toast from 'react-hot-toast';
 
 const BulkEmailManager = () => {
+  const { userDetails } = useAuth();
+  const canSendBulkEmails = hasPermission(userDetails, 'sendBulkEmails');
+  
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [filterType, setFilterType] = useState('event'); // all, batch, event - default to event
@@ -188,6 +194,32 @@ const BulkEmailManager = () => {
       setSelectedRecipients(recipients.map(r => r.id));
     }
   };
+
+  // Access Denied Screen
+  if (!canSendBulkEmails) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4 sm:p-6">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-md">
+            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldAlert className="w-12 h-12 text-red-600" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h2>
+            <p className="text-gray-600 mb-6">
+              You don't have permission to send bulk emails. Contact your administrator to request access.
+            </p>
+            <Link
+              to="/admin/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4 sm:p-6">
