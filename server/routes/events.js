@@ -12,36 +12,14 @@ const router = express.Router();
 
 // ==================== PUBLIC ROUTES (No Auth Required) ====================
 
-// 1. GET all active/upcoming events (public)
+// 1. GET all active events (public) - includes past events for visibility
 router.get('/public/events', async (req, res) => {
   try {
-    const now = new Date();
-    
     const events = await prisma.event.findMany({
       where: {
-        isActive: true,
-        // Show events that are upcoming or ongoing based on dates
-        // OR have status set to upcoming/ongoing
-        OR: [
-          {
-            // Events where the event date hasn't passed yet
-            eventDate: {
-              gte: now
-            }
-          },
-          {
-            // Events with end date that hasn't passed yet
-            eventEndDate: {
-              gte: now
-            }
-          },
-          {
-            // Events with status manually set to upcoming or ongoing
-            status: {
-              in: ['upcoming', 'ongoing']
-            }
-          }
-        ]
+        isActive: true
+        // Return ALL active events (upcoming, ongoing, AND completed)
+        // Frontend will handle status filtering and sorting
       },
       select: {
         id: true,
@@ -67,7 +45,7 @@ router.get('/public/events', async (req, res) => {
         }
       },
       orderBy: {
-        eventDate: 'asc'
+        eventDate: 'desc' // Most recent first, frontend will re-sort by status
       }
     });
 
