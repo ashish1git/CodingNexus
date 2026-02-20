@@ -25,20 +25,27 @@ const getAutoStatus = (event) => {
   const now = new Date();
   const startDate = new Date(event.eventDate);
   const endDate = event.eventEndDate ? new Date(event.eventEndDate) : null;
-  const deadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
 
+  // If event has ended (endDate passed), it's completed
   if (endDate && now > endDate) {
     return 'completed';
   }
+  
+  // If event is currently running (between start and end), it's ongoing/live
   if (endDate && now >= startDate && now <= endDate) {
     return 'ongoing';
   }
+  
+  // If no end date and start date passed, assume 3-hour duration
   if (!endDate && now > startDate) {
+    const assumedEnd = new Date(startDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours
+    if (now <= assumedEnd) {
+      return 'ongoing';
+    }
     return 'completed';
   }
-  if (deadline && now > deadline) {
-    return 'completed';
-  }
+  
+  // Event hasn't started yet
   return 'upcoming';
 };
 
@@ -436,7 +443,16 @@ export default function EventsPage() {
                     </div>
 
                     {/* Action Button */}
-                    {deadlinePassed ? (
+                    {autoStatus === 'completed' ? (
+                      <div className="w-full py-4 rounded-2xl bg-gray-600/20 text-gray-400 text-center text-base font-semibold border border-gray-500/20">
+                        Event Ended
+                      </div>
+                    ) : autoStatus === 'ongoing' ? (
+                      <div className="w-full py-4 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white text-center text-base font-bold shadow-xl shadow-green-600/30 flex items-center justify-center gap-2">
+                        <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse" />
+                        Event is Live Now!
+                      </div>
+                    ) : deadlinePassed ? (
                       <div className="w-full py-4 rounded-2xl bg-white/5 text-gray-500 text-center text-base font-semibold border border-white/5">
                         Registration Closed
                       </div>
