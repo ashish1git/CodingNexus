@@ -450,15 +450,17 @@ model EventParticipant {
 }
 
 model EventRegistration {
-  id                 String             @id @default(uuid())
-  eventId            String
-  participantId      String
-  registrationDate   DateTime           @default(now())
-  attendanceMarked   Boolean            @default(false)
-  attendanceTime     DateTime?
-  certificateGenerated Boolean          @default(false)
-  certificateId      String?
-  registrationStatus String             @default("confirmed") // confirmed, waitlist, cancelled
+  id                        String             @id @default(uuid())
+  eventId                   String
+  participantId             String
+  registrationDate          DateTime           @default(now())
+  attendanceMarked          Boolean            @default(false)
+  attendanceTime            DateTime?
+  certificateGenerated      Boolean            @default(false)
+  certificateId             String?
+  registrationStatus        String             @default("confirmed") // confirmed, waitlist, cancelled
+  quizAttended              Boolean            @default(false)
+  certificateApprovedByAdmin Boolean           @default(false)
   event              Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   participant        EventParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
@@ -474,6 +476,7 @@ model EventCertificate {
   participantId     String
   registrationId    String?
   certificateNumber String           @unique
+  certificateName   String?          // The name used on the certificate (locked after first download)
   certificateUrl    String?          // PDF URL on Cloudinary
   issueDate         DateTime         @default(now())
   templateType      String           @default("participation") // participation, winner, runner_up, excellence
