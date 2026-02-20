@@ -369,18 +369,48 @@ CLOUDINARY_CLOUD_NAME="your-cloudinary"
 VITE_API_BASE_URL="http://localhost:21000/api"
 ```
 
-### Production Server (PM2):
+### Production Server (PM2) - YOUR CONFIG:
 ```env
-# Same .env on server (different values)
-DATABASE_URL="postgresql://user:pass@neon.tech/db"  # Production DB
-JWT_SECRET="your-production-secret-key"
+# Database (Neon PostgreSQL)
+DATABASE_URL="postgresql://neondb_owner:npg_e5z8TwcranYp@ep-purple-recipe-a19mlspg-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+
+# JWT
+JWT_SECRET="d23a24c17a9b54c6cfda1baa10409b0fce79dcd7d87373711bd482452bd859764e6253ee98aa085098f63907fc887baaa13ba644cd9608ca8c099af172994f30"
+JWT_EXPIRES_IN="7d"
+
+# Server
 PORT=21000
 NODE_ENV="production"
-FRONTEND_URL="https://your-domain.com"
+
+# CORS & Frontend (UPDATE WITH YOUR DOMAIN)
+FRONTEND_URL="https://yourdomain.com"
+VITE_API_BASE_URL="https://yourdomain.com/api"
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME="dtxktmolj"
+CLOUDINARY_API_KEY="857761858925618"
+CLOUDINARY_API_SECRET="LUUTr5swZFAzsu1F3jUOq0TBU94"
+VITE_CLOUDINARY_CLOUD_NAME="dtxktmolj"
+VITE_CLOUDINARY_UPLOAD_PRESET="profile_photos"
+VITE_CLOUDINARY_NOTES_PRESET="codingnexus_notes"
+
+# Judge0
 JUDGE0_URL="http://64.227.149.20:2358"
-BREVO_API_KEY="your-production-email-key"
-CLOUDINARY_CLOUD_NAME="your-cloudinary"
-VITE_API_BASE_URL="https://your-domain.com/api"
+VITE_JUDGE0_URL="http://64.227.149.20:2358"
+
+# Email (Brevo)
+BREVO_API_KEY="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"
+EMAIL_FROM="noreply@codingnexus.apsit.edu.in"
+EMAIL_FROM_NAME="Coding Nexus"
+EMAIL_SERVICE="brevo"
+
+# Polling (Disabled for Free Tier)
+ENABLE_POLLING=false
+POLL_INTERVAL=15000
+
+# Maintenance
+VITE_MAINTENANCE_MODE="false"
+MAINTENANCE_MODE="false"
 ```
 
 ---
