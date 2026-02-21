@@ -826,6 +826,46 @@ router.get('/admin/events/:id/registrations', authenticate, requireAdmin, async 
   }
 });
 
+// Delete event registration (admin)
+router.delete('/admin/events/:eventId/registrations/:participantId', authenticate, requireAdmin, async (req, res) => {
+  const { eventId, participantId } = req.params;
+
+  try {
+    // Check if registration exists
+    const registration = await prisma.eventRegistration.findFirst({
+      where: {
+        eventId,
+        participantId
+      }
+    });
+
+    if (!registration) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Registration not found' 
+      });
+    }
+
+    // Delete the registration
+    await prisma.eventRegistration.delete({
+      where: {
+        id: registration.id
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Registration deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting registration:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete registration' 
+    });
+  }
+});
+
 // 10. Mark attendance (admin)
 router.post('/admin/events/:eventId/attendance/:participantId', authenticate, requireAdmin, async (req, res) => {
   const { eventId, participantId } = req.params;

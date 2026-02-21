@@ -361,6 +361,17 @@ export default function EventManagement() {
     }
   };
 
+  const deleteRegistration = async (eventId, participantId, participantName) => {
+    if (!confirm(`Are you sure you want to delete the registration for ${participantName}? This action cannot be undone.`)) return;
+    try {
+      await axios.delete(`${API}/events/admin/events/${eventId}/registrations/${participantId}`, { headers });
+      toast.success('Registration deleted successfully');
+      openRegistrations(viewReg);
+    } catch (err) { 
+      toast.error(err.response?.data?.error || 'Failed to delete registration'); 
+    }
+  };
+
   // Media
   const openMedia = async (event) => {
     setViewMedia(event);
@@ -811,6 +822,7 @@ export default function EventManagement() {
                         <th className="py-2 px-3 hidden md:table-cell">Branch</th>
                         <th className="py-2 px-3 text-center">Attendance</th>
                         <th className="py-2 px-3 text-center">Certificate</th>
+                        <th className="py-2 px-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -875,6 +887,15 @@ export default function EventManagement() {
                               <button onClick={() => issueCertificate(viewReg.id, r.participant?.id)} disabled={!r.attendanceMarked}
                                 className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200 transition disabled:opacity-40 disabled:cursor-not-allowed">Approve</button>
                             )}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button 
+                              onClick={() => deleteRegistration(viewReg.id, r.participant?.id, r.participant?.name)}
+                              className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition" 
+                              title="Delete registration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
