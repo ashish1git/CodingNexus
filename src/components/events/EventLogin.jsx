@@ -7,14 +7,9 @@ export default function EventLogin() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   
-  const divisionOptions = Array.from({ length: 10 }, (_, i) => String.fromCharCode(65 + i)); // A-J
-  const branchOptions = ['AIML', 'COMPS', 'IT', 'DS', 'MECH'];
-
   const [formData, setFormData] = useState({
     email: '',
-    phone: '',
-    division: '',
-    branch: ''
+    phone: ''
   });
 
   const handleChange = (e) => {
@@ -29,7 +24,7 @@ export default function EventLogin() {
     e.preventDefault();
 
     // Validation
-    if (!formData.email || !formData.phone || !formData.division || !formData.branch) {
+    if (!formData.email || !formData.phone) {
       toast.error('Please fill in all fields');
       return;
     }
@@ -109,7 +104,7 @@ export default function EventLogin() {
           <div className="mb-6 sm:mb-8 p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-blue-800 border-2 border-blue-700 rounded-lg shadow-lg">
             <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
               <span className="text-lg mr-2">ℹ️</span>
-              Use your registration details to login. <strong>No password needed!</strong>
+              Use your <strong>email and phone number</strong> to login. No password needed!
             </p>
           </div>
 
@@ -150,46 +145,6 @@ export default function EventLogin() {
               />
             </div>
 
-            {/* Division */}
-            <div>
-              <label className="block text-gray-200 mb-2 text-sm font-semibold">
-                Division <span className="text-red-400">*</span>
-              </label>
-              <select
-                name="division"
-                value={formData.division}
-                onChange={handleChange}
-                disabled={loading}
-                className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer [&>option]:bg-gray-800 [&>option]:text-white [&>option]:py-1"
-                required
-              >
-                <option value="" className="text-gray-400">Select Division</option>
-                {divisionOptions.map(div => (
-                  <option key={div} value={div} className="text-white">{div}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Branch */}
-            <div>
-              <label className="block text-gray-200 mb-2 text-sm font-semibold">
-                Branch <span className="text-red-400">*</span>
-              </label>
-              <select
-                name="branch"
-                value={formData.branch}
-                onChange={handleChange}
-                disabled={loading}
-                className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer [&>option]:bg-gray-800 [&>option]:text-white [&>option]:py-1"
-                required
-              >
-                <option value="" className="text-gray-400">Select Branch</option>
-                {branchOptions.map(branch => (
-                  <option key={branch} value={branch} className="text-white">{branch}</option>
-                ))}
-              </select>
-            </div>
-
             {/* Submit Button */}
             <button
               type="submit"
@@ -222,7 +177,7 @@ export default function EventLogin() {
         {/* Footer Info */}
         <div className="mt-8 text-center">
           <p className="text-gray-300 text-sm sm:text-base">
-            💡 Use the same details you registered with
+            💡 Use the same email & phone you registered with
           </p>
         </div>
       </div>

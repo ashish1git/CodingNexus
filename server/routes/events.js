@@ -309,9 +309,44 @@ router.post('/public/events/:id/register', async (req, res) => {
         // Don't fail registration if email fails
       });
 
+    // Generate JWT token for auto-login after registration
+    const token = jwt.sign(
+      {
+        userId: participant.id,
+        email: participant.email,
+        role: 'event_guest',
+        userType: 'event_guest',
+        events: [eventId]
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Get the event details for the response
+    const eventDetails = {
+      id: event.id,
+      title: event.title,
+      eventDate: event.eventDate,
+      eventEndDate: event.eventEndDate,
+      venue: event.venue,
+      posterUrl: event.posterUrl,
+      description: event.description,
+      eventType: event.eventType,
+      status: event.status
+    };
+
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Check your email for confirmation.',
+      message: 'Registration successful!',
+      token,
+      user: {
+        id: participant.id,
+        name: participant.name,
+        email: participant.email,
+        role: 'event_guest',
+        userType: 'event_guest',
+        activeEvents: [eventDetails]
+      },
       participant: {
         id: participant.id,
         name: participant.name,
@@ -330,19 +365,25 @@ router.post('/public/events/:id/register', async (req, res) => {
 
 // 4. Event participant login
 router.post('/event-login', async (req, res) => {
-  const { email, phone, division, branch } = req.body;
+  const { email, phone } = req.body;
 
   try {
-    if (!email || !phone || !division || !branch) {
+    // Validate required fields - only email and phone
+    if (!email || !phone) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Email, phone, division, and branch are required' 
+        error: 'Email and phone number are required' 
       });
     }
 
-    // Find participant by email and verify phone + division + branch match
-    const participant = await prisma.eventParticipant.findUnique({
-      where: { email }
+    // Find participant by email (case-insensitive)
+    const participant = await prisma.eventParticipant.findFirst({
+      where: { 
+        email: { 
+          equals: email.toLowerCase().trim(),
+          mode: 'insensitive'
+        }
+      }
     });
 
     if (!participant || !participant.isActive) {
@@ -352,24 +393,62 @@ router.post('/event-login', async (req, res) => {
       });
     }
 
-    // Verify credentials match
-    if (participant.phone !== phone || participant.division !== division || participant.branch !== branch) {
+    // Verify only phone number matches
+    if (participant.phone !== phone) {
       return res.status(401).json({ 
         success: false, 
-        error: 'Email, phone, division, or branch does not match' 
+        error: 'Phone number does not match our records' 
       });
     }
 
-    // Get active event registrations (allow upcoming and ongoing events)
+    // Get active event registrations (only upcoming and ongoing - exclude completed events)
+    // Use date-based filtering for accuracy
+    const now = new Date();
     const activeRegistrations = await prisma.eventRegistration.findMany({
       where: {
         participantId: participant.id,
         registrationStatus: 'confirmed',
         event: {
-          status: {
-            in: ['upcoming', 'ongoing']
-          },
-          isActive: true
+          isActive: true,
+          OR: [
+            // Upcoming: event hasn't started yet
+            {
+              eventDate: {
+                gt: now
+              }
+            },
+            // Ongoing: event has started but not ended
+            {
+              AND: [
+                {
+                  eventDate: {
+                    lte: now
+                  }
+                },
+                {
+                  OR: [
+                    // Has end date and hasn't passed
+                    {
+                      eventEndDate: {
+                        gte: now
+                      }
+                    },
+                    // No end date but started today
+                    {
+                      AND: [
+                        { eventEndDate: null },
+                        {
+                          eventDate: {
+                            gte: new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       },
       include: {
@@ -389,14 +468,74 @@ router.post('/event-login', async (req, res) => {
       }
     });
 
-    // Check if participant has access to any registered event
-    if (activeRegistrations.length === 0) {
+    // Get past/completed events for this participant (for history)
+    const pastRegistrations = await prisma.eventRegistration.findMany({
+      where: {
+        participantId: participant.id,
+        registrationStatus: 'confirmed',
+        event: {
+          isActive: true,
+          AND: [
+            {
+              OR: [
+                // Has end date that has passed
+                {
+                  eventEndDate: {
+                    lt: now
+                  }
+                },
+                // No end date but event date has passed (not today)
+                {
+                  AND: [
+                    { eventEndDate: null },
+                    {
+                      eventDate: {
+                        lt: new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            eventDate: true,
+            eventEndDate: true,
+            venue: true,
+            posterUrl: true,
+            description: true,
+            eventType: true,
+            status: true
+          }
+        }
+      },
+      orderBy: {
+        event: {
+          eventDate: 'desc'
+        }
+      }
+    });
+
+    // Check if participant has access to any registered event (past or present)
+    if (activeRegistrations.length === 0 && pastRegistrations.length === 0) {
       return res.status(403).json({
         success: false,
         error: 'No registered events',
-        message: 'You don\'t have any active event registrations.'
+        message: 'You don\'t have any event registrations.'
       });
     }
+
+    // Collect all event IDs for token
+    const allEventIds = [
+      ...activeRegistrations.map(r => r.event.id),
+      ...pastRegistrations.map(r => r.event.id)
+    ];
 
     // Generate JWT token
     const token = jwt.sign(
@@ -405,7 +544,7 @@ router.post('/event-login', async (req, res) => {
         email: participant.email,
         role: 'event_guest',
         userType: 'event_guest',
-        events: activeRegistrations.map(r => r.event.id)
+        events: allEventIds
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' } // Shorter expiry for event guests
@@ -420,7 +559,8 @@ router.post('/event-login', async (req, res) => {
         email: participant.email,
         role: 'event_guest',
         userType: 'event_guest',
-        activeEvents: activeRegistrations.map(r => r.event)
+        activeEvents: activeRegistrations.map(r => r.event),
+        pastEvents: pastRegistrations.map(r => r.event)
       }
     });
   } catch (error) {

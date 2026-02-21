@@ -140,9 +140,21 @@ export default function EventRegistration() {
       );
 
       toast.success(response.data.message || 'Registration successful!');
-      setTimeout(() => {
-        navigate('/event-login');
-      }, 2000);
+      
+      // Auto-login: if token is returned, store it and redirect to dashboard
+      if (response.data.token && response.data.user) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        
+        setTimeout(() => {
+          navigate('/event-dashboard');
+        }, 1500);
+      } else {
+        // Fallback to login page if no token
+        setTimeout(() => {
+          navigate('/event-login');
+        }, 2000);
+      }
     } catch (error) {
       console.error('Registration error:', error);
       if (error.response?.data?.error === 'You have already registered for this event') {
@@ -499,7 +511,7 @@ export default function EventRegistration() {
                 <div className="mt-6 sm:mt-8 p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-blue-800 border-2 border-blue-700 rounded-lg shadow-lg">
                   <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
                     <span className="text-lg mr-2">ℹ️</span>
-                    <strong className="block sm:inline">No password needed!</strong> You'll login using your email, phone number, division, and branch during the event.
+                    <strong className="block sm:inline">No password needed!</strong> You'll login using your email and phone number during the event.
                   </p>
                 </div>
 
