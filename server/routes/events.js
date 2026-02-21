@@ -31,6 +31,7 @@ router.get('/public/events', async (req, res) => {
         venue: true,
         posterUrl: true,
         maxParticipants: true,
+        registrationStartTime: true,
         registrationDeadline: true,
         status: true,
         createdAt: true,
@@ -179,6 +180,23 @@ router.post('/public/events/:id/register', async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         error: 'Event is not active' 
+      });
+    }
+
+    // Check if registration has started
+    const now = new Date();
+    if (event.registrationStartTime && now < new Date(event.registrationStartTime)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Registration has not started yet' 
+      });
+    }
+
+    // Check if registration deadline has passed
+    if (now > new Date(event.registrationDeadline)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Registration deadline has passed' 
       });
     }
 
@@ -484,6 +502,7 @@ router.post('/admin/events', authenticate, requireAdmin, async (req, res) => {
       venue,
       posterUrl,
       maxParticipants,
+      registrationStartTime,
       registrationDeadline,
       batch
     } = req.body;
@@ -506,6 +525,7 @@ router.post('/admin/events', authenticate, requireAdmin, async (req, res) => {
         venue,
         posterUrl,
         maxParticipants: maxParticipants || 100,
+        registrationStartTime: registrationStartTime ? new Date(registrationStartTime) : null,
         registrationDeadline: new Date(registrationDeadline),
         batch,
         status: 'upcoming',
@@ -1043,6 +1063,7 @@ router.put('/admin/events/:id', authenticate, requireAdmin, async (req, res) => 
     venue,
     posterUrl,
     maxParticipants,
+    registrationStartTime,
     registrationDeadline,
     batch,
     isActive,
@@ -1061,6 +1082,9 @@ router.put('/admin/events/:id', authenticate, requireAdmin, async (req, res) => 
         ...(venue !== undefined && { venue }),
         ...(posterUrl !== undefined && { posterUrl }),
         ...(maxParticipants && { maxParticipants }),
+        ...(registrationStartTime !== undefined && { 
+          registrationStartTime: registrationStartTime ? new Date(registrationStartTime) : null 
+        }),
         ...(registrationDeadline && { registrationDeadline: new Date(registrationDeadline) }),
         ...(batch !== undefined && { batch }),
         ...(isActive !== undefined && { isActive }),

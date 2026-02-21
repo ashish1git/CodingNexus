@@ -10,6 +10,7 @@ export default function EventRegistration() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [countdown, setCountdown] = useState(null);
   
   const yearOptions = ['FE', 'SE', 'TE', 'BE'];
   const divisionOptions = Array.from({ length: 10 }, (_, i) => String.fromCharCode(65 + i)); // A-J
@@ -29,6 +30,42 @@ export default function EventRegistration() {
   useEffect(() => {
     fetchEventDetails();
   }, [eventId]);
+
+  // Countdown timer for registration start
+  useEffect(() => {
+    if (!event?.registrationStartTime) return;
+
+    const isRegistrationNotStarted = new Date() < new Date(event.registrationStartTime);
+    if (!isRegistrationNotStarted) {
+      setCountdown(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = new Date();
+      const startTime = new Date(event.registrationStartTime);
+      const diffMs = startTime - now;
+
+      if (diffMs <= 0) {
+        setCountdown(null);
+        // Refresh event details to update registration status
+        fetchEventDetails();
+        return;
+      }
+
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      setCountdown({ days, hours, minutes, seconds });
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(timer);
+  }, [event?.registrationStartTime]);
 
   const fetchEventDetails = async () => {
     try {
@@ -133,6 +170,7 @@ export default function EventRegistration() {
   // Check if registration is closed
   const isDeadlineOver = new Date() > new Date(event.registrationDeadline);
   const isEventFull = event.spotsLeft <= 0;
+  const isRegistrationNotStarted = event.registrationStartTime && new Date() < new Date(event.registrationStartTime);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black py-6 px-4 sm:py-12 event-dark-theme">
@@ -248,6 +286,54 @@ export default function EventRegistration() {
             <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
               <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">Register for Event</h2>
 
+              {isRegistrationNotStarted && countdown && (
+                <div className="mb-4 p-3 sm:p-6 bg-gradient-to-br from-orange-900 to-yellow-900 border border-orange-500 rounded-lg">
+                  <div className="text-center space-y-2 sm:space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-orange-200">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="font-bold text-sm sm:text-base md:text-lg">Registration Not Started</p>
+                    </div>
+                    <p className="text-white text-xs sm:text-sm">Registration opens in:</p>
+                    <div className="flex items-center justify-center gap-1.5 sm:gap-2 md:gap-4 text-white font-bold flex-wrap">
+                      {countdown.days > 0 && (
+                        <div className="flex flex-col items-center bg-black/20 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg min-w-[50px] sm:min-w-[60px]">
+                          <span className="text-xl sm:text-2xl md:text-3xl">{countdown.days}</span>
+                          <span className="text-[10px] sm:text-xs text-gray-300">days</span>
+                        </div>
+                      )}
+                      {(countdown.days > 0 || countdown.hours > 0) && (
+                        <>
+                          {countdown.days > 0 && <span className="text-xl sm:text-2xl md:text-3xl text-orange-400 px-1">:</span>}
+                          <div className="flex flex-col items-center bg-black/20 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg min-w-[50px] sm:min-w-[60px]">
+                            <span className="text-xl sm:text-2xl md:text-3xl">{String(countdown.hours).padStart(2, '0')}</span>
+                            <span className="text-[10px] sm:text-xs text-gray-300">hrs</span>
+                          </div>
+                        </>
+                      )}
+                      <span className="text-xl sm:text-2xl md:text-3xl text-orange-400 px-1">:</span>
+                      <div className="flex flex-col items-center bg-black/20 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg min-w-[50px] sm:min-w-[60px]">
+                        <span className="text-xl sm:text-2xl md:text-3xl">{String(countdown.minutes).padStart(2, '0')}</span>
+                        <span className="text-[10px] sm:text-xs text-gray-300">min</span>
+                      </div>
+                      <span className="text-xl sm:text-2xl md:text-3xl text-orange-400 px-1">:</span>
+                      <div className="flex flex-col items-center bg-black/20 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg min-w-[50px] sm:min-w-[60px]">
+                        <span className="text-xl sm:text-2xl md:text-3xl">{String(countdown.seconds).padStart(2, '0')}</span>
+                        <span className="text-[10px] sm:text-xs text-gray-300">sec</span>
+                      </div>
+                    </div>
+                    <p className="text-gray-200 text-xs sm:text-sm mt-2 sm:mt-3 px-2">
+                      Opens at {new Date(event.registrationStartTime).toLocaleString('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                        hour12: true
+                      })}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {isDeadlineOver && (
                 <div className="mb-4 p-3 sm:p-4 bg-red-900 border border-red-700 rounded-lg text-red-200 text-xs sm:text-sm">
                   ⏱️ Registration deadline has passed. No new registrations are being accepted.
@@ -272,7 +358,7 @@ export default function EventRegistration() {
                     required
                     value={formData.fullName}
                     onChange={handleChange}
-                    disabled={isDeadlineOver || isEventFull}
+                    disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                     className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Your full name"
                   />
@@ -289,7 +375,7 @@ export default function EventRegistration() {
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    disabled={isDeadlineOver || isEventFull}
+                    disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                     className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="your.email@example.com"
                   />
@@ -307,7 +393,7 @@ export default function EventRegistration() {
                     required
                     value={formData.phone}
                     onChange={handleChange}
-                    disabled={isDeadlineOver || isEventFull}
+                    disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                     className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder:text-gray-400"
                     placeholder="10-digit number"
                     pattern="[0-9]{10}"
@@ -325,7 +411,7 @@ export default function EventRegistration() {
                     name="moodleId"
                     value={formData.moodleId}
                     onChange={handleChange}
-                    disabled={isDeadlineOver || isEventFull}
+                    disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                     className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder:text-gray-400"
                     placeholder="Enter your Moodle ID"
                     required
@@ -344,7 +430,7 @@ export default function EventRegistration() {
                       name="year"
                       value={formData.year}
                       onChange={handleChange}
-                      disabled={isDeadlineOver || isEventFull}
+                      disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                       className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer [&>option]:bg-gray-700 [&>option]:text-white [&>option]:p-2"
                       required
                     >
@@ -364,7 +450,7 @@ export default function EventRegistration() {
                       name="division"
                       value={formData.division}
                       onChange={handleChange}
-                      disabled={isDeadlineOver || isEventFull}
+                      disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                       className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer [&>option]:bg-gray-800 [&>option]:text-white [&>option]:py-2"
                       required
                     >
@@ -384,7 +470,7 @@ export default function EventRegistration() {
                       name="branch"
                       value={formData.branch}
                       onChange={handleChange}
-                      disabled={isDeadlineOver || isEventFull}
+                      disabled={isRegistrationNotStarted || isDeadlineOver || isEventFull}
                       className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer [&>option]:bg-gray-800 [&>option]:text-white [&>option]:py-2"
                       required
                     >
@@ -420,7 +506,7 @@ export default function EventRegistration() {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={submitting || isDeadlineOver || isEventFull}
+                  disabled={submitting || isRegistrationNotStarted || isDeadlineOver || isEventFull}
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 active:from-purple-800 active:to-pink-800 text-white font-bold py-3 sm:py-4 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-base sm:text-lg shadow-lg mt-6 sm:mt-8"
                 >
                   {submitting ? (

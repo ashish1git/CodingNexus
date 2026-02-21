@@ -402,6 +402,7 @@ model Event {
   venue                String?
   posterUrl            String?               // Cloudinary URL for event poster
   maxParticipants      Int                   @default(100)
+  registrationStartTime DateTime?            // When registration opens (optional, immediate if not set)
   registrationDeadline DateTime
   status               String                @default("upcoming") // upcoming, ongoing, completed, cancelled
   isActive             Boolean               @default(true)

@@ -125,14 +125,14 @@ export default function EventManagement() {
   const [form, setForm] = useState({
     title: '', description: '', eventType: 'workshop', eventDate: '',
     eventEndDate: '', venue: '', posterUrl: '', maxParticipants: 100,
-    registrationDeadline: '', status: 'upcoming'
+    registrationStartTime: '', registrationDeadline: '', status: 'upcoming'
   });
 
   const resetForm = () => {
     setForm({
       title: '', description: '', eventType: 'workshop', eventDate: '',
       eventEndDate: '', venue: '', posterUrl: '', maxParticipants: 100,
-      registrationDeadline: '', status: 'upcoming'
+      registrationStartTime: '', registrationDeadline: '', status: 'upcoming'
     });
     setEditingEvent(null);
   };
@@ -161,6 +161,7 @@ export default function EventManagement() {
       venue: event.venue || '',
       posterUrl: event.posterUrl || '',
       maxParticipants: event.maxParticipants || 100,
+      registrationStartTime: toIndianDateTimeLocal(event.registrationStartTime),
       registrationDeadline: toIndianDateTimeLocal(event.registrationDeadline),
       status: event.status || 'upcoming'
     });
@@ -204,6 +205,7 @@ export default function EventManagement() {
         maxParticipants: parseInt(form.maxParticipants) || 100,
         eventDate: fromIndianDateTimeLocal(form.eventDate),
         eventEndDate: form.eventEndDate ? fromIndianDateTimeLocal(form.eventEndDate) : null,
+        registrationStartTime: form.registrationStartTime ? fromIndianDateTimeLocal(form.registrationStartTime) : null,
         registrationDeadline: fromIndianDateTimeLocal(form.registrationDeadline)
       };
       if (editingEvent) {
@@ -716,14 +718,40 @@ export default function EventManagement() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Deadline *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Registration Start</label>
+                  <div className="flex gap-2">
+                    <input type="datetime-local" value={form.registrationStartTime} onChange={e => setForm(p => ({ ...p, registrationStartTime: e.target.value }))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" 
+                      placeholder="Leave empty for immediate registration" />
+                    {form.registrationStartTime && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, registrationStartTime: '' }))}
+                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition text-sm font-medium"
+                        title="Clear registration start time"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Leave empty to start registration immediately</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Registration Deadline *</label>
                   <input type="datetime-local" value={form.registrationDeadline} onChange={e => setForm(p => ({ ...p, registrationDeadline: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
                   <input type="number" value={form.maxParticipants} onChange={e => setForm(p => ({ ...p, maxParticipants: e.target.value }))} min="1"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                  <input type="text" value={form.venue} onChange={e => setForm(p => ({ ...p, venue: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Event venue" />
                 </div>
               </div>
               <div>

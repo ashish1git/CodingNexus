@@ -132,6 +132,48 @@ export default function EventsPage() {
 
   const isDeadlinePassed = (event) => new Date() > new Date(event.registrationDeadline);
 
+  const isRegistrationNotStarted = (event) => {
+    if (!event.registrationStartTime) return false;
+    return new Date() < new Date(event.registrationStartTime);
+  };
+
+  const getRegistrationCountdown = (event) => {
+    if (!event.registrationStartTime) return null;
+    const now = new Date();
+    const startTime = new Date(event.registrationStartTime);
+    const diffMs = startTime - now;
+    
+    if (diffMs <= 0) return null;
+    
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    
+    return { days, hours, minutes, seconds, totalMs: diffMs };
+  };
+
+  // Countdown timer state
+  const [countdowns, setCountdowns] = useState({});
+
+  // Update countdown timers every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const newCountdowns = {};
+      events.forEach(event => {
+        if (event.registrationStartTime) {
+          const countdown = getRegistrationCountdown(event);
+          if (countdown) {
+            newCountdowns[event.id] = countdown;
+          }
+        }
+      });
+      setCountdowns(newCountdowns);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [events]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a1a] flex items-center justify-center">
@@ -450,6 +492,50 @@ export default function EventsPage() {
                       <div className="w-full py-4 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white text-center text-base font-bold shadow-xl shadow-green-600/30 flex items-center justify-center gap-2">
                         <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse" />
                         Event is Live Now!
+                      </div>
+                    ) : isRegistrationNotStarted(event) ? (
+                      <div className="w-full p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border border-orange-500/30">
+                        <div className="text-center space-y-1.5 sm:space-y-2">
+                          <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400" />
+                            <p className="text-orange-300 font-semibold text-xs sm:text-sm">Registration Not Started</p>
+                          </div>
+                          {countdowns[event.id] && (
+                            <>
+                              <p className="text-white text-[10px] sm:text-xs">Registration opens in:</p>
+                              <div className="flex items-center justify-center gap-1.5 sm:gap-3 text-white font-bold">
+                                {countdowns[event.id].days > 0 && (
+                                  <div className="flex flex-col items-center min-w-[35px] sm:min-w-[45px]">
+                                    <span className="text-lg sm:text-2xl">{countdowns[event.id].days}</span>
+                                    <span className="text-[9px] sm:text-xs text-gray-400">days</span>
+                                  </div>
+                                )}
+                                {(countdowns[event.id].days > 0 || countdowns[event.id].hours > 0) && (
+                                  <>
+                                    {countdowns[event.id].days > 0 && <span className="text-lg sm:text-2xl text-orange-400">:</span>}
+                                    <div className="flex flex-col items-center min-w-[35px] sm:min-w-[45px]">
+                                      <span className="text-lg sm:text-2xl">{String(countdowns[event.id].hours).padStart(2, '0')}</span>
+                                      <span className="text-[9px] sm:text-xs text-gray-400">hrs</span>
+                                    </div>
+                                  </>
+                                )}
+                                <span className="text-lg sm:text-2xl text-orange-400">:</span>
+                                <div className="flex flex-col items-center min-w-[35px] sm:min-w-[45px]">
+                                  <span className="text-lg sm:text-2xl">{String(countdowns[event.id].minutes).padStart(2, '0')}</span>
+                                  <span className="text-[9px] sm:text-xs text-gray-400">min</span>
+                                </div>
+                                <span className="text-lg sm:text-2xl text-orange-400">:</span>
+                                <div className="flex flex-col items-center min-w-[35px] sm:min-w-[45px]">
+                                  <span className="text-lg sm:text-2xl">{String(countdowns[event.id].seconds).padStart(2, '0')}</span>
+                                  <span className="text-[9px] sm:text-xs text-gray-400">sec</span>
+                                </div>
+                              </div>
+                              <p className="text-gray-400 text-[10px] sm:text-xs mt-1 sm:mt-2 px-2">
+                                Opens at {formatDate(event.registrationStartTime)} • {formatTime(event.registrationStartTime)}
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ) : deadlinePassed ? (
                       <div className="w-full py-4 rounded-2xl bg-white/5 text-gray-500 text-center text-base font-semibold border border-white/5">
