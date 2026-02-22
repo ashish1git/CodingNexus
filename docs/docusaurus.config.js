@@ -12,7 +12,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 const config = {
   title: 'Coding Nexus Web Dev Boot camp',
   tagline: 'Master Modern Web Development Practices',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -71,8 +71,8 @@ const config = {
       navbar: {
         title: 'Coding Nexus Web Dev Boot camp',
         logo: {
-          alt: 'Coding Nexus Logo',
-          src: 'img/logo.svg',
+          alt: 'Web Dev Bootcamp Logo',
+          src: 'img/favicon.svg',
         },
         items: [
           {

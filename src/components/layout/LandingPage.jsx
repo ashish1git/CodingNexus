@@ -385,8 +385,8 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16 md:h-20">
             <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer group">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50 group-hover:shadow-purple-500/80 transition-all duration-300 animate-glow shrink-0">
-                <Code className="w-4 h-4 sm:w-5 sm:h-5 md:w-7 md:h-7 text-white animate-pulse" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-transparent flex items-center justify-center shadow-lg shadow-purple-500/50 group-hover:shadow-purple-500/80 transition-all duration-300 animate-glow shrink-0">
+                <img src="/favicon.svg" alt="Coding Nexus Logo" className="w-full h-full object-contain" />
               </div>
               <span className="text-white text-base sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent animate-text-glow truncate">
                 Coding Nexus
