@@ -12,7 +12,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 const config = {
   title: 'Web Dev Bootcamp',
   tagline: 'Master Modern Web Development Practices',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -72,7 +72,7 @@ const config = {
         title: 'Web Dev Bootcamp',
         logo: {
           alt: 'Web Dev Bootcamp Logo',
-          src: 'img/logo.svg',
+          src: 'img/favicon.svg',
         },
         items: [
           {
