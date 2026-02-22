@@ -743,6 +743,7 @@ const LandingPage = () => {
                 {[
                   { label: 'Student Login', path: '/login' },
                   { label: 'Sign Up Free', path: '/signup' },
+                  { label: '📚 Documentation', path: '/docs' },
                   { label: 'About Us', path: '/about' },
                   { label: 'Contact', path: '/contact' }
                 ].map((link, i) => (
