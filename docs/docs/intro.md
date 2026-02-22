@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Welcome to Web Dev Bootcamp
 
-Welcome to the **A. P Shah Institute of Technology Web Development Bootcamp**! This comprehensive 3-day course will transform you into a confident full-stack developer using the **MERN stack** (MongoDB, Express, React, Node.js).
+Welcome to the **Coding Nexus Club Bootcamp**! This comprehensive 3-day course will transform you into a confident full-stack developer using the **MERN stack** (MongoDB, Express, React, Node.js).
 
 ## What You'll Learn
 

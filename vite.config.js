@@ -7,11 +7,43 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Helper function to copy directory recursively
+function copyDir(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'copy-docs-build',
+      closeBundle() {
+        const docsBuildPath = path.join(__dirname, 'docs/build');
+        const distDocsPath = path.join(__dirname, 'dist/docs');
+        
+        if (fs.existsSync(docsBuildPath)) {
+          console.log('📚 Copying docs to dist...');
+          copyDir(docsBuildPath, distDocsPath);
+          console.log('✅ Docs copied successfully!');
+        } else {
+          console.warn('⚠️  docs/build not found. Run npm run build-docs first.');
+        }
+      }
+    },
     {
       name: 'serve-docs',
       configureServer(server) {

@@ -10,7 +10,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Web Dev Bootcamp',
+  title: 'Coding Nexus Web Dev Boot camp',
   tagline: 'Master Modern Web Development Practices',
   favicon: 'img/favicon.ico',
 
@@ -69,9 +69,9 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'Web Dev Bootcamp',
+        title: 'Coding Nexus Web Dev Boot camp',
         logo: {
-          alt: 'Web Dev Bootcamp Logo',
+          alt: 'Coding Nexus Logo',
           src: 'img/logo.svg',
         },
         items: [
@@ -96,7 +96,7 @@ const config = {
             items: [
               {
                 label: 'Tutorial',
-                to: '/docs/intro',
+                to: 'docs/intro',
               },
             ],
           },
@@ -127,7 +127,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} A. P Shah Institute of technology. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Coding Nexus club`,
       },
       prism: {
         theme: prismThemes.github,
