@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
@@ -11,6 +13,8 @@ import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
 import eventRoutes from './routes/events.js';
 import prisma from './config/db.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 21000;

@@ -7,10 +7,12 @@
     "postinstall": "prisma generate",
     "dev": "vite",
     "server": "node server/index.js",
+    "dev:docs": "cd docs && npm start -- --port 3000",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "create-admin": "node scripts/create-admin.js",
     "check-admin": "node check-admin.js",
     "build": "vite build",
+    "build-docs": "cd docs && npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
