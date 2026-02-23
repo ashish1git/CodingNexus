@@ -231,7 +231,7 @@ export const CompetitionResults = () => {
                     <div>
                       <p className="text-sm text-gray-600">Submitted At</p>
                       <p className="text-sm text-gray-900">
-                        {new Date(mySubmission.submittedAt).toLocaleString()}
+                        {new Date(mySubmission.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}
                       </p>
                     </div>
                   </div>
@@ -292,7 +292,7 @@ export const CompetitionResults = () => {
                         <div>
                           <p className="text-xs text-gray-600">Submitted At</p>
                           <p className="text-xs text-gray-900">
-                            {problem.judgedAt ? new Date(problem.judgedAt).toLocaleString() : 'Pending'}
+                            {problem.judgedAt ? new Date(problem.judgedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' }) : 'Pending'}
                           </p>
                         </div>
                       </div>
@@ -427,7 +427,7 @@ export const CompetitionResults = () => {
                           {formatTime(entry.executionTime)}
                         </td> */}
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
-                          {new Date(entry.submittedAt).toLocaleString()}
+                          {new Date(entry.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}
                         </td>
                       </tr>
                     ))}

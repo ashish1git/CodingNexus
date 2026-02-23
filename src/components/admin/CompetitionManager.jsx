@@ -243,14 +243,26 @@ public:
     }
   };
 
+  // Helper functions for Indian time conversion
+  const toIndianDateTimeLocal = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    // Convert to IST by formatting properly
+    const istDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${istDate.getFullYear()}-${pad(istDate.getMonth() + 1)}-${pad(istDate.getDate())}T${pad(istDate.getHours())}:${pad(istDate.getMinutes())}`;
+  };
+
   const formatDateTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
       month: 'short', 
       day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -319,24 +331,12 @@ public:
       const data = await competitionService.getCompetition(id);
       setEditCompetition(data);
       
-      // Convert ISO datetime to datetime-local format (YYYY-MM-DDTHH:MM)
-      const formatForInput = (isoStr) => {
-        if (!isoStr) return '';
-        try {
-          const d = new Date(isoStr);
-          if (isNaN(d.getTime())) return '';
-          // Format as local time for datetime-local input
-          const pad = (n) => String(n).padStart(2, '0');
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        } catch { return ''; }
-      };
-      
       setFormData({
         title: data.title,
         description: data.description,
         difficulty: data.difficulty,
-        startTime: formatForInput(data.startTime),
-        endTime: formatForInput(data.endTime),
+        startTime: toIndianDateTimeLocal(data.startTime),
+        endTime: toIndianDateTimeLocal(data.endTime),
         duration: data.duration,
         prize: data.prizePool || data.prize || '',
         category: data.category,
@@ -1097,7 +1097,7 @@ public:
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time (IST)</label>
                       <input
                         type="datetime-local"
                         value={formData.startTime}
@@ -1107,7 +1107,7 @@ public:
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time (IST)</label>
                       <input
                         type="datetime-local"
                         value={formData.endTime}
@@ -1688,11 +1688,11 @@ public:
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Start Time</label>
-                  <p className="text-gray-900">{new Date(viewCompetition.startTime).toLocaleString()}</p>
+                  <p className="text-gray-900">{new Date(viewCompetition.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">End Time</label>
-                  <p className="text-gray-900">{new Date(viewCompetition.endTime).toLocaleString()}</p>
+                  <p className="text-gray-900">{new Date(viewCompetition.endTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Participants</label>
@@ -1831,7 +1831,7 @@ public:
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time (IST)</label>
                   <input
                     type="datetime-local"
                     value={formData.startTime}
@@ -1841,7 +1841,7 @@ public:
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time (IST)</label>
                   <input
                     type="datetime-local"
                     value={formData.endTime}
@@ -1974,7 +1974,7 @@ public:
                         <div>
                           <p className="text-xs text-gray-600">Submitted</p>
                           <p className="text-xs text-gray-900">
-                            {new Date(submission.submittedAt).toLocaleString()}
+                            {new Date(submission.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}
                           </p>
                         </div>
                         <button
