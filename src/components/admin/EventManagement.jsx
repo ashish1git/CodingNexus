@@ -996,12 +996,12 @@ export default function EventManagement() {
                 <div className="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
                   <div className="space-y-3">
                     <input type="text" value={mediaForm.title} onChange={e => setMediaForm(p => ({ ...p, title: e.target.value }))} placeholder="Title *"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900" />
                     <input type="text" value={mediaForm.description} onChange={e => setMediaForm(p => ({ ...p, description: e.target.value }))} placeholder="Description"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900" />
                     <div className="flex gap-2">
                       <select value={mediaForm.fileType} onChange={e => setMediaForm(p => ({ ...p, fileType: e.target.value }))}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900">
                         {MEDIA_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                       <label className="flex-1 flex items-center justify-center px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-400 text-sm">

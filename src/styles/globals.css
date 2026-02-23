@@ -8,6 +8,30 @@
   body {
     @apply bg-gray-50 text-gray-900;
   }
+
+  /* Force input text color in base layer */
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+  }
+
+  input[class*="bg-slate"],
+  input[class*="bg-gray-8"],
+  input[class*="bg-gray-9"],
+  input[class*="text-white"],
+  textarea[class*="bg-slate"],
+  textarea[class*="text-white"],
+  select[class*="bg-slate"],
+  select[class*="text-white"],
+  .code-editor-input,
+  .event-dark-theme input,
+  .event-dark-theme textarea,
+  .event-dark-theme select {
+    color: #f3f4f6 !important;
+    -webkit-text-fill-color: #f3f4f6 !important;
+  }
 }
 
 @layer components {

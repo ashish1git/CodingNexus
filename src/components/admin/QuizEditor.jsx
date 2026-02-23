@@ -293,7 +293,7 @@ const QuizEditor = () => {
                 <input
                   type="text"
                   placeholder="e.g., React JS Fundamentals"
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -303,7 +303,7 @@ const QuizEditor = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Target Batch</label>
                 <select
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                   value={batch}
                   onChange={(e) => setBatch(e.target.value)}
                 >
@@ -318,7 +318,7 @@ const QuizEditor = () => {
                   type="number"
                   min="1"
                   placeholder="60"
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   required
@@ -332,7 +332,7 @@ const QuizEditor = () => {
                   </label>
                   <input
                     type="datetime-local"
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                     required
@@ -344,7 +344,7 @@ const QuizEditor = () => {
                   </label>
                   <input
                     type="datetime-local"
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     required
@@ -379,7 +379,7 @@ const QuizEditor = () => {
                       <select
                         value={q.type}
                         onChange={(e) => updateQuestion(index, "type", e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm text-gray-900"
                       >
                         <option value="mcq">Multiple Choice</option>
                         <option value="coding">Coding Challenge</option>
@@ -390,7 +390,7 @@ const QuizEditor = () => {
                        <input
                         type="text"
                         placeholder="Enter the question here..."
-                        className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm text-gray-900"
                         value={q.question}
                         onChange={(e) => updateQuestion(index, "question", e.target.value)}
                       />
@@ -403,7 +403,7 @@ const QuizEditor = () => {
                     </label>
                     <textarea
                       placeholder="// const example = 'code';"
-                      className="w-full p-2 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50"
+                      className="w-full p-2 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50 text-gray-900"
                       rows="2"
                       value={q.codeSnippet}
                       onChange={(e) => updateQuestion(index, "codeSnippet", e.target.value)}
@@ -421,7 +421,7 @@ const QuizEditor = () => {
                             <input
                               type="text"
                               placeholder={`Option ${opt}`}
-                              className="w-full pl-8 p-2 border border-gray-300 rounded-lg text-sm"
+                              className="w-full pl-8 p-2 border border-gray-300 rounded-lg text-sm text-gray-900"
                               value={q.options[opt]}
                               onChange={(e) => updateOption(index, opt, e.target.value)}
                             />
@@ -432,7 +432,7 @@ const QuizEditor = () => {
                       <div className="flex items-center gap-3 mt-2">
                         <span className="text-sm font-medium text-gray-700">Correct Answer:</span>
                         <select
-                          className="p-2 border border-gray-300 rounded-lg text-sm bg-white"
+                          className="p-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                           value={q.correctAnswer}
                           onChange={(e) => updateQuestion(index, "correctAnswer", e.target.value)}
                         >

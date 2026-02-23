@@ -1240,7 +1240,7 @@ const AttendanceManager = () => {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Search students by name or roll number..."
-                        className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all shadow-sm"
+                        className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all shadow-sm text-gray-900"
                       />
                       {searchTerm && (
                         <button
@@ -1521,7 +1521,7 @@ const AttendanceManager = () => {
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
+                        className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-gray-900"
                       />
                       <button
                         onClick={() => setDate(new Date().toISOString().split('T')[0])}
@@ -1561,7 +1561,7 @@ const AttendanceManager = () => {
                       type="time"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
                     />
                   </div>
                   <div>
@@ -1570,7 +1570,7 @@ const AttendanceManager = () => {
                       type="time"
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
                     />
                   </div>
                   <div>
@@ -1578,7 +1578,7 @@ const AttendanceManager = () => {
                     <select
                       value={selectedBatch}
                       onChange={(e) => setSelectedBatch(e.target.value)}
-                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                      className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
                     >
                       <option value="Basic">Basic</option>
                       <option value="Advanced">Advanced</option>
@@ -1610,7 +1610,7 @@ const AttendanceManager = () => {
                   value={manualSearchTerm}
                   onChange={(e) => setManualSearchTerm(e.target.value)}
                   placeholder="Search by name or Moodle ID..."
-                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition"
+                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition text-gray-900"
                   autoFocus
                 />
                 {manualSearchTerm && (

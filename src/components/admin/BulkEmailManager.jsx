@@ -271,7 +271,7 @@ const BulkEmailManager = () => {
                       setEventInfo(null);
                       setSearchQuery('');
                     }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                   >
                     <option value="event">📅 By Event Registration (Recommended)</option>
                     <option value="batch">🎓 By Batch</option>
@@ -293,7 +293,7 @@ const BulkEmailManager = () => {
                     <select
                       value={filterValue}
                       onChange={(e) => setFilterValue(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                     >
                       <option value="">-- Select Batch --</option>
                       {batchOptions.map(batch => (
@@ -487,7 +487,7 @@ const BulkEmailManager = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by name, email, or phone..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                     />
                     {searchQuery && (
                       <button
@@ -626,7 +626,7 @@ const BulkEmailManager = () => {
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="Enter email subject"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                   />
                 </div>
 
@@ -655,7 +655,7 @@ const BulkEmailManager = () => {
                       onChange={(e) => setHtmlContent(e.target.value)}
                       placeholder="Enter HTML content for email body"
                       rows="12"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm text-gray-900"
                     />
                   </div>
                 ) : (
@@ -668,7 +668,7 @@ const BulkEmailManager = () => {
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="Enter your message here. It will be automatically formatted with a professional template."
                       rows="10"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                     />
                     <p className="mt-2 text-sm text-gray-500">
                       ℹ️ Your message will be wrapped in a professional email template automatically.

@@ -194,7 +194,7 @@ const QRCodeScanner = ({ onScan, onClose, isLoading }) => {
                   setError('');
                 }}
                 placeholder="e.g. NEXUS_1706..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-mono focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-mono focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition text-gray-900"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="characters"

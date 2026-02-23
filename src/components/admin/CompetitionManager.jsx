@@ -841,7 +841,7 @@ public:
                 placeholder="Search competitions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
               />
             </div>
 
@@ -1056,7 +1056,7 @@ public:
                       type="text"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                       required
                     />
                   </div>
@@ -1065,7 +1065,7 @@ public:
                     <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                       rows="3"
                       required
                     />
@@ -1077,7 +1077,7 @@ public:
                         type="text"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                         placeholder="e.g., Algorithm, DP, etc."
                         required
                       />
@@ -1087,7 +1087,7 @@ public:
                       <select
                         value={formData.difficulty}
                         onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                       >
                         <option value="easy">Easy</option>
                         <option value="medium">Medium</option>
@@ -1102,7 +1102,7 @@ public:
                         type="datetime-local"
                         value={formData.startTime}
                         onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                         required
                       />
                     </div>
@@ -1112,7 +1112,7 @@ public:
                         type="datetime-local"
                         value={formData.endTime}
                         onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                         required
                       />
                     </div>
@@ -1124,7 +1124,7 @@ public:
                         type="number"
                         value={formData.duration}
                         onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                         required
                       />
                     </div>
@@ -1133,7 +1133,7 @@ public:
                       <select
                         value={formData.type}
                         onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                       >
                         <option value="rated">Rated</option>
                         <option value="practice">Practice</option>
@@ -1146,7 +1146,7 @@ public:
                       type="text"
                       value={formData.prize}
                       onChange={(e) => setFormData({ ...formData, prize: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                       placeholder="e.g., ₹5000 or Certificates"
                       required
                     />
@@ -1213,7 +1213,7 @@ public:
                             type="text"
                             value={currentProblem.title}
                             onChange={(e) => setCurrentProblem({ ...currentProblem, title: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                             placeholder="e.g., Two Sum"
                           />
                         </div>
@@ -1223,7 +1223,7 @@ public:
                             type="number"
                             value={currentProblem.points}
                             onChange={(e) => setCurrentProblem({ ...currentProblem, points: parseInt(e.target.value) })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                           />
                         </div>
                       </div>
@@ -1233,7 +1233,7 @@ public:
                         <textarea
                           value={currentProblem.description}
                           onChange={(e) => setCurrentProblem({ ...currentProblem, description: e.target.value })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                           rows="4"
                           placeholder="Describe the problem statement..."
                         />
@@ -1244,7 +1244,7 @@ public:
                         <select
                           value={currentProblem.difficulty}
                           onChange={(e) => setCurrentProblem({ ...currentProblem, difficulty: e.target.value })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                         >
                           <option value="easy">Easy</option>
                           <option value="medium">Medium</option>
@@ -1266,7 +1266,7 @@ public:
                               type="text"
                               value={currentProblem.functionName}
                               onChange={(e) => setCurrentProblem({ ...currentProblem, functionName: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono text-gray-900"
                               placeholder="e.g., twoSum"
                             />
                           </div>
@@ -1275,7 +1275,7 @@ public:
                             <select
                               value={currentProblem.returnType}
                               onChange={(e) => setCurrentProblem({ ...currentProblem, returnType: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900"
                             >
                               {parameterTypes.map(type => (
                                 <option key={type} value={type}>{type}</option>
@@ -1302,13 +1302,13 @@ public:
                                 type="text"
                                 value={param.name}
                                 onChange={(e) => updateParameter(index, 'name', e.target.value)}
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono"
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm font-mono text-gray-900"
                                 placeholder="Parameter name (e.g., nums)"
                               />
                               <select
                                 value={param.type}
                                 onChange={(e) => updateParameter(index, 'type', e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                                className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900"
                               >
                                 {parameterTypes.map(type => (
                                   <option key={type} value={type}>{type}</option>
@@ -1407,7 +1407,7 @@ public:
                               type="text"
                               value={constraint}
                               onChange={(e) => updateConstraint(index, e.target.value)}
-                              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
                               placeholder="e.g., 1 <= nums.length <= 10^4"
                             />
                             {currentProblem.constraints.length > 1 && (
@@ -1454,21 +1454,21 @@ public:
                                 type="text"
                                 value={example.input}
                                 onChange={(e) => updateExample(index, 'input', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900"
                                 placeholder="Input: nums = [2,7,11,15], target = 9"
                               />
                               <input
                                 type="text"
                                 value={example.output}
                                 onChange={(e) => updateExample(index, 'output', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900"
                                 placeholder="Output: [0,1]"
                               />
                               <input
                                 type="text"
                                 value={example.explanation}
                                 onChange={(e) => updateExample(index, 'explanation', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900"
                                 placeholder="Explanation (optional)"
                               />
                             </div>
