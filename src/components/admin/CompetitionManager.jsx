@@ -246,11 +246,11 @@ public:
   // Helper functions for Indian time conversion
   const toIndianDateTimeLocal = (dateStr) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    // Convert to IST by formatting properly
-    const istDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    // Convert UTC to IST by adding 5:30 hours
+    const utcDate = new Date(dateStr);
+    const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
     const pad = (n) => String(n).padStart(2, '0');
-    return `${istDate.getFullYear()}-${pad(istDate.getMonth() + 1)}-${pad(istDate.getDate())}T${pad(istDate.getHours())}:${pad(istDate.getMinutes())}`;
+    return `${istDate.getUTCFullYear()}-${pad(istDate.getUTCMonth() + 1)}-${pad(istDate.getUTCDate())}T${pad(istDate.getUTCHours())}:${pad(istDate.getUTCMinutes())}`;
   };
 
   const formatDateTime = (dateString) => {
@@ -266,6 +266,22 @@ public:
     });
   };
 
+  // Convert IST datetime-local input to UTC for backend
+  const convertISTtoUTC = (istDateTimeLocal) => {
+    if (!istDateTimeLocal) return null;
+    // Parse: "2024-02-24T14:30" - treat this as IST explicitly
+    const [datePart, timePart] = istDateTimeLocal.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    
+    // Create UTC date by subtracting IST offset (UTC+5:30)
+    // IST time - 5:30 = UTC time
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    utcDate.setMinutes(utcDate.getMinutes() - 330); // Subtract 5:30 hours (330 minutes)
+    
+    return utcDate.toISOString();
+  };
+
   const handleCreateCompetition = async (e) => {
     e.preventDefault();
     if (currentStep === 1) {
@@ -276,6 +292,8 @@ public:
     try {
       const competitionData = {
         ...formData,
+        startTime: convertISTtoUTC(formData.startTime),
+        endTime: convertISTtoUTC(formData.endTime),
         problems: problems
       };
       
@@ -359,6 +377,8 @@ public:
     try {
       const competitionData = {
         ...formData,
+        startTime: convertISTtoUTC(formData.startTime),
+        endTime: convertISTtoUTC(formData.endTime),
         problems: problems.map((p, index) => ({
           ...p,
           orderIndex: index
