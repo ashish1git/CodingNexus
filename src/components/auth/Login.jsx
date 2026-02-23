@@ -1,7 +1,7 @@
 // src/components/auth/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Code, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
+import { Code, Eye, EyeOff, LogIn, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -74,12 +74,18 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+      <div className="w-full max-w-md">
+        <button
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-2 text-white hover:text-indigo-200 transition-all hover:translate-x-1 mb-6"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Home
+        </button>
+        <div className="bg-white rounded-2xl shadow-2xl w-full p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full mb-4">
-            <Code className="w-8 h-8 text-white" />
-          </div>
+          <img src="/favicon.svg" alt="Coding Nexus Logo" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg" />
           <Link to="/" className="block">
   <h1 className="text-3xl font-bold text-gray-800 mb-2 hover:text-indigo-600 transition-colors cursor-pointer">
     Coding Nexus
@@ -203,8 +209,7 @@ const Login = () => {
               Admin Login →
             </Link>
           </div>
-        </div>
-      </div>
+        </div>        </div>      </div>
     </div>
   );
 };

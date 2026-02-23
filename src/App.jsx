@@ -6,6 +6,8 @@ import { Toaster } from 'react-hot-toast';
 
 // Import actual components
 import LandingPage from './components/layout/LandingPage';
+import AboutPage from './components/layout/AboutPage';
+import ContactPage from './components/layout/ContactPage';
 import MaintenancePage from './components/layout/MaintenancePage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
@@ -103,6 +105,8 @@ function App() {
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/contact" element={<ContactPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />

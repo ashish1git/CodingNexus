@@ -8,24 +8,11 @@ const LandingPage = () => {
   const [typedText, setTypedText] = useState('');
   const [cursorVisible, setCursorVisible] = useState(true);
   const [clubFocus, setClubFocus] = useState({ dsa: 0, events: 0, workshops: 0, members: 0 });
-  const [particles, setParticles] = useState([]);
-  const canvasRef = useRef(null);
   
   const fullText = "const welcome = 'Coding Nexus';";
 
   useEffect(() => {
     setTimeout(() => setIsVisible(true), 100);
-    
-    // Create particles
-    const newParticles = Array.from({ length: 50 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      speedX: (Math.random() - 0.5) * 0.5,
-      speedY: (Math.random() - 0.5) * 0.5,
-    }));
-    setParticles(newParticles);
     
     // Typing effect
     let index = 0;
@@ -43,9 +30,9 @@ const LandingPage = () => {
       setCursorVisible(prev => !prev);
     }, 530);
 
-    // Animated counter for club focus areas
-    const duration = 2500;
-    const steps = 75;
+    // Animated counter for club focus areas - Updated stats
+    const duration = 2000;
+    const steps = 50;
     const increment = duration / steps;
     let currentStep = 0;
     
@@ -56,9 +43,9 @@ const LandingPage = () => {
       
       setClubFocus({
         dsa: Math.floor(easeOut * 100),
-        events: Math.floor(easeOut * 25),
-        workshops: Math.floor(easeOut * 15),
-        members: Math.floor(easeOut * 50)
+        events: Math.floor(easeOut * 5),
+        workshops: Math.floor(easeOut * 5),
+        members: Math.floor(easeOut * 20)
       });
       
       if (currentStep >= steps) clearInterval(counterInterval);
@@ -81,52 +68,7 @@ const LandingPage = () => {
     };
   }, []);
 
-  // Matrix rain effect
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン{}[]<>/=+-*%#';
-    const fontSize = 14;
-    const columns = canvas.width / fontSize;
-    const drops = Array(Math.floor(columns)).fill(1);
-    
-    const draw = () => {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      ctx.fillStyle = '#a855f7';
-      ctx.font = `${fontSize}px monospace`;
-      
-      for (let i = 0; i < drops.length; i++) {
-        const text = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-        
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-        drops[i]++;
-      }
-    };
-    
-    const interval = setInterval(draw, 50);
-    
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+  // Removed heavy matrix rain effect for better performance
 
   const handleNavigation = (path) => {
     window.location.href = path;
@@ -202,77 +144,46 @@ const LandingPage = () => {
         }}
       />
 
-      {/* Matrix Rain Canvas */}
-      <canvas 
-        ref={canvasRef} 
-        className="fixed inset-0 z-0 opacity-15 pointer-events-none"
-      />
+      {/* Simplified animated background for better performance */}
+      <div className="fixed inset-0 z-0 opacity-20 pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.15),transparent_60%)] animate-pulse" />
+      </div>
       
       {/* Animated Background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/30 via-black to-cyan-900/30"></div>
         
-        {/* Floating Orbs */}
+        {/* Optimized Floating Orbs - Reduced blur for performance */}
         <div 
-          className="absolute w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[120px] animate-pulse"
+          className="absolute w-96 h-96 bg-purple-500/15 rounded-full blur-3xl animate-pulse"
           style={{
-            top: '5%',
-            left: '5%',
-            transform: `translate(${mousePosition.x * 0.03}px, ${mousePosition.y * 0.03}px)`,
-            transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+            top: '10%',
+            left: '10%'
           }}
         />
         <div 
-          className="absolute w-[600px] h-[600px] bg-cyan-500/20 rounded-full blur-[120px] animate-pulse"
+          className="absolute w-96 h-96 bg-cyan-500/15 rounded-full blur-3xl animate-pulse"
           style={{
-            bottom: '5%',
-            right: '5%',
-            transform: `translate(${-mousePosition.x * 0.03}px, ${-mousePosition.y * 0.03}px)`,
-            transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+            bottom: '10%',
+            right: '10%',
             animationDelay: '1s'
           }}
         />
-        <div 
-          className="absolute w-[400px] h-[400px] bg-pink-500/15 rounded-full blur-[100px] animate-pulse"
-          style={{
-            top: '40%',
-            left: '40%',
-            transform: `translate(-50%, -50%) translate(${mousePosition.x * 0.02}px, ${mousePosition.y * 0.02}px)`,
-            transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-            animationDelay: '2s'
-          }}
-        />
         
-        {/* Animated Grid */}
+        {/* Simplified Animated Grid */}
         <div 
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-5"
           style={{
             backgroundImage: `
-              linear-gradient(rgba(168, 85, 247, 0.4) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(168, 85, 247, 0.4) 1px, transparent 1px)
+              linear-gradient(rgba(168, 85, 247, 0.3) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(168, 85, 247, 0.3) 1px, transparent 1px)
             `,
-            backgroundSize: '60px 60px',
-            transform: `translateY(${scrollY * 0.3}px)`,
-            animation: 'gridMove 20s linear infinite'
+            backgroundSize: '80px 80px'
           }}
         />
         
-        {/* Floating Particles */}
-        {particles.map((particle) => (
-          <div
-            key={particle.id}
-            className="absolute w-1 h-1 bg-purple-400 rounded-full opacity-60"
-            style={{
-              left: `${particle.x}%`,
-              top: `${particle.y}%`,
-              animation: `float ${10 + particle.id % 10}s ease-in-out infinite`,
-              animationDelay: `${particle.id * 0.1}s`
-            }}
-          />
-        ))}
-        
-        {/* Code Symbols */}
-        {[...Array(30)].map((_, i) => (
+        {/* Reduced Code Symbols for better performance */}
+        {[...Array(10)].map((_, i) => (
           <div
             key={i}
             className="absolute text-purple-500/10 font-mono font-bold text-xl md:text-3xl select-none"
@@ -381,7 +292,7 @@ const LandingPage = () => {
       `}</style>
 
       {/* Navbar */}
-      <nav className="glass sticky top-0 z-50 shadow-lg shadow-purple-500/10">
+      <nav className="glass fixed top-0 left-0 right-0 w-full z-50 shadow-lg shadow-purple-500/10">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16 md:h-20">
             <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 hover:scale-105 transition-transform duration-300 cursor-pointer group">
@@ -418,7 +329,7 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-32 pb-12 md:pb-20">
         <div className="text-center mb-12 md:mb-20">
           {/* Terminal Window */}
           <div className={`max-w-3xl mx-auto mb-8 md:mb-12 ${isVisible ? 'animate-scale-in' : 'opacity-0'}`}>
@@ -502,25 +413,25 @@ const LandingPage = () => {
                 description: 'Master Data Structures & Algorithms'
               },
               { 
-                value: `+${clubFocus.events}`, 
+                value: `${clubFocus.events}+`, 
                 label: 'Events', 
                 icon: <Calendar className="w-5 h-5 md:w-6 md:h-6" />, 
                 color: 'from-cyan-500 to-blue-500',
                 description: 'Hackathons & Coding Contests'
               },
               { 
-                value: `${clubFocus.workshops}`, 
+                value: `${clubFocus.workshops}+`, 
                 label: 'Workshops', 
                 icon: <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />, 
                 color: 'from-yellow-500 to-orange-500',
-                description: 'Emerging Tech Sessions'
+                description: 'Tech Learning Sessions'
               },
               { 
                 value: `${clubFocus.members}+`, 
                 label: 'Active Members', 
                 icon: <UsersIcon className="w-5 h-5 md:w-6 md:h-6" />, 
                 color: 'from-green-500 to-emerald-500',
-                description: 'Growing Community'
+                description: 'Passionate Learners'
               }
             ].map((focus, i) => (
               <div key={i} className="glass-hover rounded-lg md:rounded-xl p-4 md:p-6 hover:scale-105 transition-all duration-300 group">
@@ -741,8 +652,6 @@ const LandingPage = () => {
               </h3>
               <div className="space-y-2 md:space-y-3">
                 {[
-                  { label: 'Student Login', path: '/login' },
-                  { label: 'Sign Up Free', path: '/signup' },
                   { label: '📚 Documentation', path: '/docs' },
                   { label: 'About Us', path: '/about' },
                   { label: 'Contact', path: '/contact' }

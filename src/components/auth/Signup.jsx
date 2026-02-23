@@ -1,7 +1,7 @@
 // src/components/auth/Signup.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Code, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Code, Eye, EyeOff, UserPlus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -99,10 +99,19 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 my-8">
+      <div className="w-full max-w-2xl">
+        <button
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-2 text-white hover:text-indigo-200 transition-all hover:translate-x-1 mb-6"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Home
+        </button>
+        <div className="bg-white rounded-2xl shadow-2xl w-full p-8 my-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full mb-4">
+          <img src="/favicon.svg" alt="Coding Nexus Logo" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full mb-4 hidden">
             <Code className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Join Coding Nexus Club</h1>
@@ -279,6 +288,7 @@ const Signup = () => {
           >
             Login here
           </Link>
+        </div>
         </div>
       </div>
     </div>

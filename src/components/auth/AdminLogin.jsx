@@ -84,9 +84,7 @@ const AdminLogin = () => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-gray-700 to-indigo-700 rounded-full mb-4">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
+          <img src="/favicon.svg" alt="Coding Nexus Logo" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg" />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Portal</h1>
           <p className="text-gray-600">Secure access for administrators</p>
         </div>
