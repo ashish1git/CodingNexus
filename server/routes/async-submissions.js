@@ -119,7 +119,13 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
           break; // Stop on compilation error
         }
 
-        const passed = statusId === 3;
+        // Compare actual output with expected output AND check status
+        const stdout = (result.stdout || '').trim();
+        const expected = (testCase.output || testCase.expectedOutput || '').trim();
+        const passed = stdout === expected && statusId === 3;
+        
+        console.log(`Test ${i + 1}: Expected="${expected}", Actual="${stdout}", Status=${statusId}, Passed=${passed}`);
+        
         if (passed) passedCount++;
 
         totalTime += parseFloat(result.time || 0) * 1000;
