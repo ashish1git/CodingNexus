@@ -58,11 +58,10 @@ export const CompetitionResults = () => {
       // Load leaderboard
       const lbResponse = await competitionService.getLeaderboard(id);
       console.log('Leaderboard response:', lbResponse);
-      // Filter out excluded students (additional safety layer)
-      const excludedRollNos = ['23106025', '23106064', '23106031'];
-      const filteredLeaderboard = Array.isArray(lbResponse) 
-        ? lbResponse.filter(entry => !excludedRollNos.includes(entry.rollNo))
-        : [];
+      console.log('First entry:', lbResponse[0]);
+      console.log('First entry moodleId:', lbResponse[0]?.moodleId);
+      // Filter is already done on backend via email exclusion
+      const filteredLeaderboard = Array.isArray(lbResponse) ? lbResponse : [];
       setLeaderboard(filteredLeaderboard);
     } catch (error) {
       console.error('Error loading results:', error);
@@ -371,7 +370,7 @@ export const CompetitionResults = () => {
                         Name
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                        Roll No
+                        Moodle ID
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                         Score
@@ -389,6 +388,7 @@ export const CompetitionResults = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {leaderboard.map((entry) => (
+                      console.log('Leaderboard entry:', entry) ||
                       <tr
                         key={entry.userId}
                         className={entry.userId === mySubmission?.userId ? 'bg-blue-50' : ''}
@@ -413,7 +413,7 @@ export const CompetitionResults = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {entry.rollNo || 'N/A'}
+                          {entry.moodleId || 'N/A'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="text-lg font-bold text-gray-900">

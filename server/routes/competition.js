@@ -189,11 +189,13 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       },
       include: {
         user: {
-          include: {
+          select: {
+            id: true,
+            email: true,
+            moodleId: true,
             studentProfile: {
               select: {
                 name: true,
-                rollNo: true,
                 batch: true
               }
             }
@@ -218,7 +220,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       rank: index + 1,
       userId: sub.userId,
       name: sub.user.studentProfile?.name || sub.user.email,
-      rollNo: sub.user.studentProfile?.rollNo,
+      moodleId: sub.user.moodleId || sub.user.email.split('@')[0], // Fallback to email prefix if moodleId is null
       batch: sub.user.studentProfile?.batch,
       totalScore: sub.totalScore,
       // Count problems that are either accepted OR evaluated (have score > 0)
@@ -227,6 +229,9 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       executionTime: sub.totalTime,
       submittedAt: sub.submittedAt
     }));
+
+    console.log('🔍 Leaderboard data sample:', leaderboard[0]);
+    console.log('📊 Total entries:', leaderboard.length);
 
     res.json(leaderboard);
   } catch (error) {
