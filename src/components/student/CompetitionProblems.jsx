@@ -214,6 +214,15 @@ public:
     return () => clearInterval(interval);
   }, [competition?.endTime]);
 
+  // Force re-render every second for "time until start" display
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     // Load saved code when switching problems
     if (selectedProblem && problemSolutions[selectedProblem.id]) {
@@ -514,6 +523,39 @@ public:
     }
   };
 
+  // Check if competition has started
+  const getCompetitionStatus = () => {
+    if (!competition) return 'unknown';
+    const now = new Date();
+    const start = new Date(competition.startTime);
+    const end = new Date(competition.endTime);
+    
+    if (now < start) return 'not-started';
+    if (now > end) return 'ended';
+    return 'ongoing';
+  };
+
+  // Get time until start (for not-started competitions)
+  const getTimeUntilStart = () => {
+    if (!competition) return '';
+    const now = new Date();
+    const start = new Date(competition.startTime);
+    const diff = start - now;
+    
+    if (diff <= 0) return '';
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `Starts in ${days}d ${hours % 24}h`;
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    return `Starts in ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
   // Format time remaining with live countdown
   const getTimeRemainingDisplay = () => {
     if (timeRemaining.expired) {
@@ -635,6 +677,39 @@ public:
           </div>
         </div>
       </div>
+
+      {/* Competition Status Banner */}
+      {getCompetitionStatus() === 'not-started' && (
+        <div className="bg-blue-600/20 border-b border-blue-600/50 px-4 py-3">
+          <div className="flex items-center justify-center gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-400" />
+            <p className="text-blue-300 font-semibold">
+              Competition hasn't started yet. {getTimeUntilStart()}
+            </p>
+            <span className="text-blue-400 text-sm">
+              Start Time: {new Date(competition.startTime).toLocaleString('en-IN', { 
+                timeZone: 'Asia/Kolkata', 
+                dateStyle: 'medium', 
+                timeStyle: 'short' 
+              })}
+            </span>
+          </div>
+        </div>
+      )}
+      {getCompetitionStatus() === 'ended' && (
+        <div className="bg-red-600/20 border-b border-red-600/50 px-4 py-3">
+          <div className="flex items-center justify-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <p className="text-red-300 font-semibold">Competition has ended</p>
+            <Link
+              to={`/student/competition/${competitionId}/results`}
+              className="ml-4 px-4 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition"
+            >
+              View Results
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="flex h-[calc(100vh-57px)]">
         {/* Left Sidebar - Problem List */}
