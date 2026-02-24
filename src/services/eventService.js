@@ -119,7 +119,65 @@ class EventService {
   async adminRevokeCertificate(eventId, participantId) {
     return apiClient.delete(`/events/admin/events/${eventId}/certificate/${participantId}`);
   }
+
+  // ==================== HACKATHON REGISTRATION ENDPOINTS ====================
+
+  // Participant: Submit/Update hackathon registration
+  async submitHackathonRegistration(eventId, data) {
+    return apiClient.post(`/events/participant/events/${eventId}/hackathon-registration`, data);
+  }
+
+  // Participant: Get own hackathon registrations
+  async getHackathonRegistrations() {
+    return apiClient.get('/events/participant/hackathon-registrations');
+  }
+
+  // Participant: Get hackathon registration for specific event
+  async getHackathonRegistration(eventId) {
+    return apiClient.get(`/events/participant/events/${eventId}/hackathon-registration`);
+  }
+
+  // Participant: Delete hackathon registration
+  async deleteHackathonRegistration(eventId) {
+    return apiClient.delete(`/events/participant/events/${eventId}/hackathon-registration`);
+  }
+
+  // Admin: Get all hackathon registrations for an event
+  async adminGetHackathonRegistrations(eventId) {
+    return apiClient.get(`/events/admin/events/${eventId}/hackathon-registrations`);
+  }
+
+  // Admin: Update hackathon registration
+  async adminUpdateHackathonRegistration(eventId, registrationId, data) {
+    return apiClient.put(`/events/admin/events/${eventId}/hackathon-registrations/${registrationId}`, data);
+  }
+
+  // Admin: Download hackathon registrations as CSV
+  async adminDownloadHackathonCSV(eventId, selectedColumns = null) {
+    const token = localStorage.getItem('token');
+    let url = `${API_URL}/events/admin/events/${eventId}/hackathon-registrations/download-csv`;
+    
+    if (selectedColumns && selectedColumns.length > 0) {
+      const params = new URLSearchParams();
+      params.append('columns', selectedColumns.join(','));
+      url += `?${params.toString()}`;
+    }
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download CSV');
+    }
+
+    return response.blob();
+  }
 }
 
 export const eventService = new EventService();
 export default eventService;
+

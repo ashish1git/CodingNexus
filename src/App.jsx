@@ -62,8 +62,10 @@ import EventQuizList from './components/events/EventQuizList';
 import EventQuizAttempt from './components/events/EventQuizAttempt';
 import EventQuizResults from './components/events/EventQuizResults';
 import EventCertificates from './components/events/EventCertificates';
+import HackathonRegistration from './components/events/HackathonRegistration';
 import EventManagement from './components/admin/EventManagement';
 import EventQuizManager from './components/admin/EventQuizManager';
+import AdminHackathonRegistrations from './components/admin/AdminHackathonRegistrations';
 
 function App() {
   // Check if maintenance mode is enabled
@@ -121,6 +123,7 @@ function App() {
               <Route path="/event-dashboard/quiz/:quizId" element={<EventQuizAttempt />} />
               <Route path="/event-dashboard/quiz/:quizId/results" element={<EventQuizResults />} />
               <Route path="/event-dashboard/certificates" element={<EventCertificates />} />
+              <Route path="/event-dashboard/hackathon-registration" element={<HackathonRegistration />} />
               <Route path="/verify-email" element={<EventLogin />} />
               
               {/* Club Members Page - Share this route directly with selected members */}
@@ -351,6 +354,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <EventManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/events/:eventId/hackathon-registrations" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <AdminHackathonRegistrations />
                   </ProtectedRoute>
                 } 
               />

@@ -417,6 +417,7 @@ model Event {
   emailLogs            EventEmailLog[]
   quizzes              EventQuiz[]
   mediaFiles           EventMedia[]
+  hackathonRegistrations HackathonRegistration[]
 
   @@index([status])
   @@index([eventDate])
@@ -445,6 +446,7 @@ model EventParticipant {
   certificates           EventCertificate[]
   emailLogs              EventEmailLog[]
   quizAttempts           EventQuizAttempt[]
+  hackathonRegistrations HackathonRegistration[]
 
   @@index([email])
   @@index([userType])
@@ -591,4 +593,30 @@ model EventMedia {
 
   @@index([eventId])
   @@index([fileType])
+}
+
+// Hackathon Registration System - For hackathon problem statement selections
+model HackathonRegistration {
+  id                     String           @id @default(uuid())
+  eventId                String
+  participantId          String
+  problemStatementNo     Int              // Problem statement number (1, 2, or 3)
+  teamMember1Name        String           // Primary team member (could be the participant themselves)
+  teamMember1Email       String
+  teamMember1Phone       String
+  teamMember2Name        String?          // Optional second team member
+  teamMember2Email       String?
+  teamMember2Phone       String?
+  teamType               String           @default("individual") // individual or team
+  additionalInfo         String?          // Any additional notes
+  registrationDate       DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  event                  Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant            EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, participantId])
+  @@index([eventId])
+  @@index([participantId])
+  @@index([problemStatementNo])
+  @@index([teamType])
 }

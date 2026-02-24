@@ -62,7 +62,7 @@ export default function EventLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black flex items-center justify-center px-4 py-8 event-dark-theme">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black flex items-center justify-center px-4 py-8">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse delay-700"></div>
@@ -72,18 +72,18 @@ export default function EventLogin() {
         {/* Back Button */}
         <button
           onClick={() => navigate('/events')}
-          className="mb-6 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition text-sm sm:text-base"
+          className="mb-6 px-5 py-2.5 bg-gray-800/80 backdrop-blur-sm text-white rounded-xl hover:bg-gray-700 transition-all duration-200 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl border border-gray-700 hover:border-gray-600"
         >
           ← Back to Events
         </button>
 
         {/* Login Card */}
-        <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 border border-gray-700">
+        <div className="bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl p-6 sm:p-8 border-2 border-gray-700/50">
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
-            <div className="inline-block p-3 bg-purple-900 rounded-full mb-4">
+            <div className="inline-block p-4 bg-gradient-to-br from-purple-600 to-purple-800 rounded-full mb-4 shadow-xl">
               <svg
-                className="w-10 sm:w-12 h-10 sm:h-12 text-purple-400"
+                className="w-10 sm:w-12 h-10 sm:h-12 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -101,10 +101,10 @@ export default function EventLogin() {
           </div>
 
           {/* Info Box */}
-          <div className="mb-6 sm:mb-8 p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-blue-800 border-2 border-blue-700 rounded-lg shadow-lg">
-            <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
-              <span className="text-lg mr-2">ℹ️</span>
-              Use your <strong>email and phone number</strong> to login. No password needed!
+          <div className="mb-6 sm:mb-8 p-4 sm:p-5 bg-gradient-to-r from-blue-600/90 to-blue-700/90 border-2 border-blue-500/50 rounded-xl shadow-lg backdrop-blur-sm">
+            <p className="text-white text-sm sm:text-base leading-relaxed flex items-start gap-3">
+              <span className="text-2xl flex-shrink-0">ℹ️</span>
+              <span>Use your <strong className="font-bold">email and phone number</strong> to login. <strong className="font-bold">No password needed!</strong></span>
             </p>
           </div>
 
@@ -112,7 +112,7 @@ export default function EventLogin() {
           <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
             {/* Email */}
             <div>
-              <label className="block text-gray-200 mb-2 text-sm font-semibold">
+              <label className="block text-gray-200 mb-2.5 text-sm font-bold">
                 Email Address <span className="text-red-400">*</span>
               </label>
               <input
@@ -122,14 +122,14 @@ export default function EventLogin() {
                 value={formData.email}
                 onChange={handleChange}
                 disabled={loading}
-                className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3.5 rounded-xl bg-gray-700/80 text-white border-2 border-gray-600 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all duration-200 text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder-gray-500"
                 placeholder="your.email@example.com"
               />
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-gray-200 mb-2 text-sm font-semibold">
+              <label className="block text-gray-200 mb-2.5 text-sm font-bold">
                 Phone Number <span className="text-red-400">*</span>
               </label>
               <input
@@ -139,7 +139,7 @@ export default function EventLogin() {
                 value={formData.phone}
                 onChange={handleChange}
                 disabled={loading}
-                className="w-full px-4 py-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 hover:border-purple-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 transition text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3.5 rounded-xl bg-gray-700/80 text-white border-2 border-gray-600 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all duration-200 text-base disabled:opacity-60 disabled:cursor-not-allowed placeholder-gray-500"
                 placeholder="10-digit number"
                 pattern="[0-9]{10}"
               />
@@ -149,24 +149,28 @@ export default function EventLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 active:from-purple-800 active:to-pink-800 text-white font-bold py-3 sm:py-4 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-base sm:text-lg shadow-lg mt-6 sm:mt-8"
+              className="w-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-600 hover:from-purple-700 hover:via-purple-600 hover:to-pink-700 active:from-purple-800 active:to-pink-800 text-white font-bold py-3.5 sm:py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-base sm:text-lg shadow-xl hover:shadow-2xl mt-6 sm:mt-8"
             >
               {loading ? (
-                <span className="flex items-center justify-center">
-                  <span className="animate-spin mr-2">⏳</span>Logging in...
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Logging in...</span>
                 </span>
               ) : (
-                '✓ Login to Event'
+                <span className="flex items-center justify-center gap-2">
+                  <span className="text-xl">✓</span>
+                  <span>Login to Event</span>
+                </span>
               )}
             </button>
 
             {/* Don't have an account link */}
-            <p className="text-sm sm:text-base text-gray-300 text-center mt-4 sm:mt-6">
+            <p className="text-sm sm:text-base text-gray-300 text-center mt-4 sm:mt-6 pt-4 border-t border-gray-700">
               Not registered yet?{' '}
               <button
                 type="button"
                 onClick={() => navigate('/events')}
-                className="text-purple-400 hover:text-purple-300 font-bold underline transition"
+                className="text-purple-400 hover:text-purple-300 font-bold underline transition-colors duration-200"
               >
                 Register now →
               </button>
@@ -176,8 +180,9 @@ export default function EventLogin() {
 
         {/* Footer Info */}
         <div className="mt-8 text-center">
-          <p className="text-gray-300 text-sm sm:text-base">
-            💡 Use the same email & phone you registered with
+          <p className="text-gray-300 text-sm sm:text-base bg-gray-800/60 backdrop-blur-sm px-4 py-3 rounded-xl border border-gray-700/50 inline-block">
+            <span className="text-xl mr-2">💡</span>
+            Use the same email & phone you registered with
           </p>
         </div>
       </div>

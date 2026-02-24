@@ -11,7 +11,30 @@ export const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Fetch user from database
+    // Check if this is an event guest (event participant)
+    if (decoded.role === 'event_guest' || decoded.userType === 'event_guest') {
+      // Fetch event participant from database
+      const participant = await prisma.eventParticipant.findUnique({
+        where: { id: decoded.userId }
+      });
+
+      if (!participant || !participant.isActive) {
+        return res.status(401).json({ success: false, error: 'Participant not found or inactive' });
+      }
+
+      req.user = {
+        id: participant.id,
+        email: participant.email,
+        role: 'event_guest',
+        name: participant.name,
+        phone: participant.phone,
+        userType: 'event_guest'
+      };
+      next();
+      return;
+    }
+    
+    // Fetch regular user from database
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {

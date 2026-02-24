@@ -640,8 +640,16 @@ export default function EventManagement() {
                       <Award className="w-4 h-4" /> Quiz
                     </button>
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    {canEditEvents && (
+                  {event.eventType === 'hackathon' && (
+                    <div className="flex gap-2 mt-2">
+                      <button 
+                        onClick={() => navigate(`/admin/events/${event.id}/hackathon-registrations`)} 
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 rounded-lg hover:from-purple-100 hover:to-pink-100 transition text-sm font-semibold border border-purple-200">
+                        💻 Hackathon Registrations
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-2">{canEditEvents && (
                       <button onClick={() => openEdit(event)} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-xs font-medium">
                         <Edit2 className="w-3.5 h-3.5" /> Edit
                       </button>

@@ -173,14 +173,18 @@ export default function EventDashboard() {
         </div>
 
         {/* Quick Actions - Compact */}
-        <div className="flex gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <button onClick={() => navigate('/event-dashboard/quizzes')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-purple-500/50 transition text-sm font-medium">
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-purple-500/50 transition text-sm font-medium">
             <span className="text-lg">📝</span> My Quizzes
           </button>
           <button onClick={() => navigate('/event-dashboard/certificates')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-amber-500/50 transition text-sm font-medium">
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-amber-500/50 transition text-sm font-medium">
             <span className="text-lg">🎓</span> Certificates
+          </button>
+          <button onClick={() => navigate('/event-dashboard/hackathon-registration')}
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-pink-500/50 transition text-sm font-medium">
+            <span className="text-lg">💻</span> Hackathons
           </button>
         </div>
 

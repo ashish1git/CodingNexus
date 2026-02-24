@@ -630,6 +630,17 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Middleware to check if user is event participant
+const requireEventParticipant = (req, res, next) => {
+  if (req.user.role !== 'event_guest') {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Event participant access required' 
+    });
+  }
+  next();
+};
+
 // 6. Create event (admin only)
 router.post('/admin/events', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -2535,4 +2546,584 @@ router.get('/admin/events/:eventId/registrations-with-eligibility', authenticate
   }
 });
 
+// ==================== HACKATHON REGISTRATION ROUTES ====================
+
+// 37. Participant: Submit hackathon registration
+router.post('/participant/events/:eventId/hackathon-registration', authenticate, requireEventParticipant, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const participantId = req.user.id;
+    const {
+      problemStatementNo,
+      teamMember1Name,
+      teamMember1Email,
+      teamMember1Phone,
+      teamMember2Name,
+      teamMember2Email,
+      teamMember2Phone,
+      additionalInfo
+    } = req.body;
+
+    // Validate required fields
+    if (!problemStatementNo || !teamMember1Name || !teamMember1Email || !teamMember1Phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Problem statement number and Team Member 1 details are required'
+      });
+    }
+
+    // Validate problem statement number
+    if (![1, 2, 3].includes(parseInt(problemStatementNo))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Problem statement number must be 1, 2, or 3'
+      });
+    }
+
+    // Validate email formats
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(teamMember1Email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format for Team Member 1'
+      });
+    }
+
+    if (teamMember2Email && !emailRegex.test(teamMember2Email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format for Team Member 2'
+      });
+    }
+
+    // Validate phone formats
+    if (!/^\d{10}$/.test(teamMember1Phone)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone must be 10 digits for Team Member 1'
+      });
+    }
+
+    if (teamMember2Phone && !/^\d{10}$/.test(teamMember2Phone)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone must be 10 digits for Team Member 2'
+      });
+    }
+
+    // Check if event exists and is a hackathon
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+
+    if (event.eventType !== 'hackathon') {
+      return res.status(400).json({
+        success: false,
+        error: 'This event is not a hackathon'
+      });
+    }
+
+    // Check if participant is registered for the event
+    const eventRegistration = await prisma.eventRegistration.findUnique({
+      where: {
+        eventId_participantId: {
+          eventId,
+          participantId
+        }
+      }
+    });
+
+    if (!eventRegistration) {
+      return res.status(400).json({
+        success: false,
+        error: 'You must register for the event first before submitting hackathon details'
+      });
+    }
+
+    // Determine team type
+    const teamType = (teamMember2Name && teamMember2Email && teamMember2Phone) ? 'team' : 'individual';
+
+    // Check if registration already exists
+    const existingRegistration = await prisma.hackathonRegistration.findUnique({
+      where: {
+        eventId_participantId: {
+          eventId,
+          participantId
+        }
+      }
+    });
+
+    let registration;
+    if (existingRegistration) {
+      // Update existing registration
+      registration = await prisma.hackathonRegistration.update({
+        where: {
+          eventId_participantId: {
+            eventId,
+            participantId
+          }
+        },
+        data: {
+          problemStatementNo: parseInt(problemStatementNo),
+          teamMember1Name,
+          teamMember1Email,
+          teamMember1Phone,
+          teamMember2Name: teamMember2Name || null,
+          teamMember2Email: teamMember2Email || null,
+          teamMember2Phone: teamMember2Phone || null,
+          teamType,
+          additionalInfo: additionalInfo || null
+        }
+      });
+    } else {
+      // Create new registration
+      registration = await prisma.hackathonRegistration.create({
+        data: {
+          eventId,
+          participantId,
+          problemStatementNo: parseInt(problemStatementNo),
+          teamMember1Name,
+          teamMember1Email,
+          teamMember1Phone,
+          teamMember2Name: teamMember2Name || null,
+          teamMember2Email: teamMember2Email || null,
+          teamMember2Phone: teamMember2Phone || null,
+          teamType,
+          additionalInfo: additionalInfo || null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: existingRegistration ? 'Hackathon registration updated successfully' : 'Hackathon registration submitted successfully',
+      registration
+    });
+  } catch (error) {
+    console.error('Error submitting hackathon registration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit hackathon registration'
+    });
+  }
+});
+
+// 38. Participant: Get own hackathon registrations
+router.get('/participant/hackathon-registrations', authenticate, requireEventParticipant, async (req, res) => {
+  try {
+    const participantId = req.user.id;
+
+    const registrations = await prisma.hackathonRegistration.findMany({
+      where: { participantId },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            eventDate: true,
+            eventEndDate: true,
+            venue: true,
+            status: true
+          }
+        }
+      },
+      orderBy: {
+        registrationDate: 'desc'
+      }
+    });
+
+    res.json({
+      success: true,
+      registrations
+    });
+  } catch (error) {
+    console.error('Error fetching hackathon registrations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch hackathon registrations'
+    });
+  }
+});
+
+// 39. Participant: Get hackathon registration for specific event
+router.get('/participant/events/:eventId/hackathon-registration', authenticate, requireEventParticipant, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const participantId = req.user.id;
+
+    const registration = await prisma.hackathonRegistration.findUnique({
+      where: {
+        eventId_participantId: {
+          eventId,
+          participantId
+        }
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            eventDate: true,
+            eventEndDate: true,
+            venue: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      registration: registration || null
+    });
+  } catch (error) {
+    console.error('Error fetching hackathon registration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch hackathon registration'
+    });
+  }
+});
+
+// 40. Participant: Delete hackathon registration
+router.delete('/participant/events/:eventId/hackathon-registration', authenticate, requireEventParticipant, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const participantId = req.user.id;
+
+    const registration = await prisma.hackathonRegistration.findUnique({
+      where: {
+        eventId_participantId: {
+          eventId,
+          participantId
+        }
+      }
+    });
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hackathon registration not found'
+      });
+    }
+
+    await prisma.hackathonRegistration.delete({
+      where: {
+        eventId_participantId: {
+          eventId,
+          participantId
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Hackathon registration deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting hackathon registration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete hackathon registration'
+    });
+  }
+});
+
+// 41. Admin: Get all hackathon registrations for an event
+router.get('/admin/events/:eventId/hackathon-registrations', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+
+    const registrations = await prisma.hackathonRegistration.findMany({
+      where: { eventId },
+      include: {
+        participant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            year: true,
+            branch: true,
+            division: true,
+            moodleId: true
+          }
+        }
+      },
+      orderBy: [
+        { problemStatementNo: 'asc' },
+        { registrationDate: 'asc' }
+      ]
+    });
+
+    // Group by problem statement
+    const groupedByProblem = {
+      problem1: registrations.filter(r => r.problemStatementNo === 1),
+      problem2: registrations.filter(r => r.problemStatementNo === 2),
+      problem3: registrations.filter(r => r.problemStatementNo === 3)
+    };
+
+    const stats = {
+      total: registrations.length,
+      individual: registrations.filter(r => r.teamType === 'individual').length,
+      team: registrations.filter(r => r.teamType === 'team').length,
+      problem1: groupedByProblem.problem1.length,
+      problem2: groupedByProblem.problem2.length,
+      problem3: groupedByProblem.problem3.length
+    };
+
+    res.json({
+      success: true,
+      registrations,
+      groupedByProblem,
+      stats,
+      event: {
+        id: event.id,
+        title: event.title,
+        eventDate: event.eventDate
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching hackathon registrations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch hackathon registrations'
+    });
+  }
+});
+
+// 42. Admin: Edit hackathon registration
+router.put('/admin/events/:eventId/hackathon-registrations/:registrationId', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId, registrationId } = req.params;
+    const {
+      problemStatementNo,
+      teamMember1Name,
+      teamMember1Email,
+      teamMember1Phone,
+      teamMember2Name,
+      teamMember2Email,
+      teamMember2Phone,
+      additionalInfo
+    } = req.body;
+
+    // Validate required fields
+    if (!problemStatementNo || !teamMember1Name || !teamMember1Email || !teamMember1Phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Problem statement number and Team Member 1 details are required'
+      });
+    }
+
+    // Validate phone numbers
+    if (!/^\d{10}$/.test(teamMember1Phone)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Team Member 1 phone number must be 10 digits'
+      });
+    }
+
+    if (teamMember2Phone && !/^\d{10}$/.test(teamMember2Phone)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Team Member 2 phone number must be 10 digits'
+      });
+    }
+
+    // Check if registration exists
+    const existingRegistration = await prisma.hackathonRegistration.findUnique({
+      where: { id: registrationId }
+    });
+
+    if (!existingRegistration) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hackathon registration not found'
+      });
+    }
+
+    if (existingRegistration.eventId !== eventId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Registration does not belong to this event'
+      });
+    }
+
+    // Determine team type
+    const teamType = (teamMember2Name && teamMember2Email && teamMember2Phone) ? 'team' : 'individual';
+
+    // Update registration
+    const updatedRegistration = await prisma.hackathonRegistration.update({
+      where: { id: registrationId },
+      data: {
+        problemStatementNo: parseInt(problemStatementNo),
+        teamMember1Name,
+        teamMember1Email,
+        teamMember1Phone,
+        teamMember2Name: teamMember2Name || null,
+        teamMember2Email: teamMember2Email || null,
+        teamMember2Phone: teamMember2Phone || null,
+        teamType,
+        additionalInfo: additionalInfo || null
+      },
+      include: {
+        participant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            year: true,
+            branch: true,
+            division: true,
+            moodleId: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Hackathon registration updated successfully',
+      registration: updatedRegistration
+    });
+  } catch (error) {
+    console.error('Error updating hackathon registration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update hackathon registration'
+    });
+  }
+});
+
+// 43. Admin: Download hackathon registrations as CSV
+router.get('/admin/events/:eventId/hackathon-registrations/download-csv', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { columns } = req.query;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+
+    const registrations = await prisma.hackathonRegistration.findMany({
+      where: { eventId },
+      include: {
+        participant: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+            year: true,
+            branch: true,
+            division: true,
+            moodleId: true
+          }
+        }
+      },
+      orderBy: [
+        { problemStatementNo: 'asc' },
+        { registrationDate: 'asc' }
+      ]
+    });
+
+    // Column mapping - All fields quoted for proper CSV formatting
+    const allColumns = {
+      serialNo: { header: 'Serial No', getValue: (reg, index) => `"${index + 1}"` },
+      registrationDate: { 
+        header: 'Registration Date', 
+        getValue: (reg) => {
+          const date = new Date(reg.registrationDate);
+          const formatted = date.toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }).replace(/,/g, ' ');
+          return `"${formatted}"`;
+        }
+      },
+      participantName: { header: 'Participant Name', getValue: (reg) => `"${reg.participant.name}"` },
+      participantEmail: { header: 'Participant Email', getValue: (reg) => `"${reg.participant.email}"` },
+      participantPhone: { header: 'Participant Phone', getValue: (reg) => `"${reg.participant.phone}"` },
+      moodleId: { header: 'Moodle ID', getValue: (reg) => `"${reg.participant.moodleId || ''}"` },
+      year: { header: 'Year', getValue: (reg) => `"${reg.participant.year || ''}"` },
+      branch: { header: 'Branch', getValue: (reg) => `"${reg.participant.branch || ''}"` },
+      division: { header: 'Division', getValue: (reg) => `"${reg.participant.division || ''}"` },
+      problemStatementNo: { header: 'Problem Statement No', getValue: (reg) => `"${reg.problemStatementNo}"` },
+      teamType: { header: 'Team Type', getValue: (reg) => `"${reg.teamType}"` },
+      teamMember1Name: { header: 'Team Member 1 Name', getValue: (reg) => `"${reg.teamMember1Name}"` },
+      teamMember1Email: { header: 'Team Member 1 Email', getValue: (reg) => `"${reg.teamMember1Email}"` },
+      teamMember1Phone: { header: 'Team Member 1 Phone', getValue: (reg) => `"${reg.teamMember1Phone}"` },
+      teamMember2Name: { header: 'Team Member 2 Name', getValue: (reg) => reg.teamMember2Name ? `"${reg.teamMember2Name}"` : '""' },
+      teamMember2Email: { header: 'Team Member 2 Email', getValue: (reg) => reg.teamMember2Email ? `"${reg.teamMember2Email}"` : '""' },
+      teamMember2Phone: { header: 'Team Member 2 Phone', getValue: (reg) => reg.teamMember2Phone ? `"${reg.teamMember2Phone}"` : '""' },
+      additionalInfo: { 
+        header: 'Additional Info', 
+        getValue: (reg) => reg.additionalInfo ? `"${reg.additionalInfo.replace(/"/g, '""')}"` : '""' 
+      }
+    };
+
+    // Determine which columns to include
+    let selectedColumns = Object.keys(allColumns);
+    if (columns) {
+      const requestedColumns = columns.split(',').map(c => c.trim());
+      selectedColumns = selectedColumns.filter(col => requestedColumns.includes(col));
+    }
+
+    // Create CSV content
+    const headers = selectedColumns.map(col => allColumns[col].header);
+    const csvRows = [headers.join(',')];
+
+    registrations.forEach((reg, index) => {
+      const row = selectedColumns.map(col => allColumns[col].getValue(reg, index));
+      csvRows.push(row.join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+
+    // Set headers for file download
+    const fileName = `hackathon_registrations_${event.title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send('\uFEFF' + csvContent); // Add BOM for proper UTF-8 encoding in Excel
+  } catch (error) {
+    console.error('Error downloading hackathon registrations CSV:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to download hackathon registrations CSV'
+    });
+  }
+});
+
 export default router;
+
