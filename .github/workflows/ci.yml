@@ -83,7 +83,7 @@ jobs:
       - name: Run Prisma Migrations
         run: npx prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/codingnexus_test
+          DATABASE_URL: postgresql://neondb_owner:npg_yxUfo1NaIA7s@ep-spring-dream-ain6awhq-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
       - name: Check server can start
         run: |
@@ -94,7 +94,7 @@ jobs:
           fi
           echo "Server started successfully"
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/codingnexus_test
+          DATABASE_URL: postgresql://neondb_owner:npg_yxUfo1NaIA7s@ep-spring-dream-ain6awhq-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
           JWT_SECRET: test-secret-key
           NODE_ENV: test
           PORT: 5000
