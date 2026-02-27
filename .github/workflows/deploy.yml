@@ -54,8 +54,7 @@ jobs:
             git fetch origin
             git reset --hard origin/main
 
-            # Write .env from GitHub Secrets
-            rm -f .env
+            # Write .env from GitHub Secrets (old root-owned file already removed)
             printf 'DATABASE_URL=%s\n' '${{ secrets.DATABASE_URL }}' > .env
             printf 'JWT_SECRET=%s\n' '${{ secrets.JWT_SECRET }}' >> .env
             printf 'JWT_EXPIRES_IN=7d\n' >> .env
