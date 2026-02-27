@@ -321,7 +321,7 @@ const LandingPage = () => {
                 onClick={() => handleNavigation('/signup')}
                 className="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-2.5 text-xs sm:text-sm md:text-base bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-cyan-700 transition-all duration-300 shadow-lg shadow-purple-500/50 hover:shadow-purple-500/80 hover:scale-105"
               >
-                Sign Up
+                Sumit
               </button>
             </div>
           </div>
