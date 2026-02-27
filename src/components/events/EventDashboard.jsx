@@ -173,6 +173,11 @@ export default function EventDashboard() {
         </div>
 
         {/* Quick Actions - Compact */}
+
+
+
+
+3333.
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <button onClick={() => navigate('/event-dashboard/quizzes')}
             className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white hover:bg-gray-700 hover:border-purple-500/50 transition text-sm font-medium">
