@@ -50,9 +50,9 @@ jobs:
             # Navigate to application directory
             cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
 
-            # Pull latest changes
-            git reset --hard
-            git pull origin main
+            # Pull latest changes (works even after force push)
+            git fetch origin
+            git reset --hard origin/main
 
             # Install dependencies
             npm install
