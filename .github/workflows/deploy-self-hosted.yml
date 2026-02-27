@@ -38,12 +38,9 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
 
-      - name: Install PM2 globally
-        run: npm install -g pm2
-
       - name: Restart pm2 start ecosystem.config.js
         run: |
-          pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs
+          pm2 restart codingnexus || pm2 start ecosystem.config.js
           pm2 save
 
       - name: Verify Deployment
