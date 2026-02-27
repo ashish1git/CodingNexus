@@ -97,6 +97,10 @@ jobs:
             # Save PM2 configuration
             pm2 save
 
+            # Show last 30 lines of server logs to diagnose crashes
+            sleep 3
+            pm2 logs codingnexus-server --lines 30 --nostream
+
       - name: Verify Deployment
         run: |
           sleep 10
