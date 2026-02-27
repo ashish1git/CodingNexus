@@ -1,5 +1,5 @@
 name: CD - Deploy to College Server
-
+#hello
 on:
   push:
     branches: [ main ]
@@ -46,8 +46,8 @@ jobs:
             cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
             
             # Pull latest changes
-            git pull origin main
-            
+              git reset --hard
+              git pull origin main            
             # Install dependencies
             npm install
             
