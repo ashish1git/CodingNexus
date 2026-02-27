@@ -42,27 +42,33 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
+            # Load NVM and set PATH so npm/npx/pm2 are available in non-login SSH shell
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            export PATH="$PATH:/usr/local/bin:/usr/bin"
+
             # Navigate to application directory
             cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
-            
+
             # Pull latest changes
-              git reset --hard
-              git pull origin main            
+            git reset --hard
+            git pull origin main
+
             # Install dependencies
             npm install
-            
+
             # Generate Prisma Client
             npx prisma generate
-            
+
             # Run database migrations
             npx prisma migrate deploy
-            
+
             # Build frontend with production API URL
             npm run build
-            
+
             # Restart the application using PM2
-            pm2 restart ecosystem.config.js || pm2 start ecosystem.config.cjs ||  pm2 restart codingnexus
-            
+            pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs || pm2 restart codingnexus
+
             # Save PM2 configuration
             pm2 save
 
