@@ -67,7 +67,8 @@ jobs:
             npm run build
 
             # Restart the application using PM2
-            pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs || pm2 restart codingnexus
+            pm2 restart codingnexus-server --update-env || pm2 start ecosystem.config.cjs
+            pm2 restart codingnexus --update-env || true
 
             # Save PM2 configuration
             pm2 save
