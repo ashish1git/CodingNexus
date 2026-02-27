@@ -1,10 +1,11 @@
-name: CD - Deploy to Server
+name: CD - Deploy to College Server
 
 on:
-  # Disabled - deploying manually on college server
-  # Uncomment if you want auto-deployment via SSH
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -39,17 +40,16 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          port: 22
           script: |
             # Navigate to application directory
             cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
             
             # Pull latest changes
-            git fetch origin
-            git reset --hard origin/main
+            git pull origin main
             
             # Install dependencies
-            npm ci
+            npm install
             
             # Generate Prisma Client
             npx prisma generate
@@ -57,7 +57,7 @@ jobs:
             # Run database migrations
             npx prisma migrate deploy
             
-            # Build frontend
+            # Build frontend with production API URL
             npm run build
             
             # Restart the application using PM2
