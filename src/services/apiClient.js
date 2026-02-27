@@ -1,6 +1,30 @@
 // API client utility for making authenticated requests
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:21000/api';
+// Get API URL from multiple sources (in order of priority):
+// 1. Window config (set by server via index.html script)
+// 2. Environment variable (build time)
+// 3. Default fallback
+function getApiUrl() {
+  // Try window config first (runtime - preferred for deployment)
+  if (typeof window !== 'undefined' && window.CONFIG && window.CONFIG.API_URL) {
+    console.log('🔌 Using API URL from window.CONFIG:', window.CONFIG.API_URL);
+    return window.CONFIG.API_URL;
+  }
+  
+  // Fall back to environment variable (build time)
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    console.log('🔌 Using API URL from environment:', envUrl);
+    return envUrl;
+  }
+  
+  // Final fallback
+  const defaultUrl = 'http://localhost:21000/api';
+  console.log('🔌 Using default API URL:', defaultUrl);
+  return defaultUrl;
+}
+
+const API_URL = getApiUrl();
 
 class ApiClient {
   constructor() {
@@ -46,9 +70,26 @@ class ApiClient {
       config.body = JSON.stringify(options.body);
     }
 
+    console.log(`📡 Calling: ${config.method || 'GET'} ${url}`);
+
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Server returned HTML (error page), not JSON
+        const text = await response.text();
+        console.error('❌ Server returned non-JSON response');
+        console.error('   Status:', response.status);
+        console.error('   Content-Type:', contentType);
+        console.error('   Response:', text.substring(0, 200));
+        throw new Error(`API server error - got ${contentType || 'HTML'} instead of JSON. Check if backend is running at: ${url}`);
+      }
 
       if (!response.ok) {
         // Handle 401 specifically - token issues
@@ -70,7 +111,7 @@ class ApiClient {
 
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('API request failed:', error.message);
       throw error;
     }
   }

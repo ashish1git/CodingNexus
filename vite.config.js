@@ -99,7 +99,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:21000',
         changeOrigin: true,
-        secure: false,
+        secure: false
+        // Don't modify the path - let /api/auth/login pass through as-is
       }
     }
   },

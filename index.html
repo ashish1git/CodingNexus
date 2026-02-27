@@ -8,6 +8,28 @@
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- Runtime API Configuration -->
+    <!-- Set window.CONFIG.API_URL before React loads -->
+    <script>
+      // Initialize CONFIG object
+      window.CONFIG = window.CONFIG || {};
+      
+      // Try to load config from meta tag (set by server)
+      const apiUrlMeta = document.querySelector('meta[name="api-url"]');
+      if (apiUrlMeta) {
+        window.CONFIG.API_URL = apiUrlMeta.content;
+        console.log('✅ API URL loaded from meta tag:', window.CONFIG.API_URL);
+      }
+      
+      // You can also set it from query parameter for debugging
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('api-url')) {
+        window.CONFIG.API_URL = params.get('api-url');
+        console.log('✅ API URL loaded from query param:', window.CONFIG.API_URL);
+      }
+    </script>
+    
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

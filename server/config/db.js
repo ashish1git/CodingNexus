@@ -30,6 +30,7 @@ const pool = new pg.Pool({
   min: 1,  // Keep at least 1 connection active
   idleTimeoutMillis: 30000,  // Release unused connections after 30 seconds (was 10s - too aggressive)
   connectionTimeoutMillis: 5000,  // Increase timeout to handle slower connections
+  statement_timeout: 30000,  // 30 second timeout for queries
   application_name: 'coding-nexus-server',  // Identify connections in database logs
 });
 
@@ -44,10 +45,9 @@ pool.on('error', (error, client) => {
     console.warn('⚠️  Pool error (non-critical):', error.message);
   }
   
-  // If client is still active, attempt to remove it from pool
-  if (client) {
-    client.release(true); // Force remove from pool to prevent stale connections
-  }
+  // NOTE: Do NOT manually release the client here!
+  // pg-pool handles connection cleanup internally
+  // Manual release causes "double-release" errors
 });
 
 // Reset error counter after 60 seconds of no errors
