@@ -128,22 +128,28 @@ function extractStudentsFromXML(xmlData) {
 
 async function createStudent(moodleId, name, password) {
   try {
-    // Generate email from moodle ID
-    const email = `${moodleId}@student.mu.ac.in`;
+    // Use moodleId as email
+    const email = moodleId;
     
-    // Check if student already exists
-    const existing = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email },
-          { moodleId }
-        ]
+    // Delete existing user if they exist
+    try {
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email },
+            { moodleId }
+          ]
+        }
+      });
+      
+      if (existing) {
+        await prisma.user.delete({
+          where: { id: existing.id }
+        });
+        console.log(`🗑️  Deleted existing user: ${name} (${moodleId})`);
       }
-    });
-    
-    if (existing) {
-      console.log(`⚠️  Skipping ${name} (${moodleId}) - Already exists`);
-      return { success: false, reason: 'already_exists' };
+    } catch (err) {
+      // User doesn't exist, that's fine
     }
     
     // Hash password
@@ -172,7 +178,7 @@ async function createStudent(moodleId, name, password) {
       }
     });
     
-    console.log(`✅ Created: ${name} (${moodleId}) - ${email}`);
+    console.log(`✅ Created: ${name} (${moodleId}) with username ${email}`);
     return { success: true, user };
   } catch (error) {
     console.error(`❌ Error creating ${name} (${moodleId}):`, error.message);
