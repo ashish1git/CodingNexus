@@ -81,7 +81,11 @@ jobs:
             # Install dependencies
             npm install
 
-            # Generate Prisma Client
+            # Clean old Prisma client cache (CRITICAL after DB_URL change)
+            rm -rf node_modules/.prisma
+            rm -rf node_modules/@prisma/client
+
+            # Generate Prisma Client with new DATABASE_URL
             npx prisma generate
 
             # Run database migrations
@@ -90,9 +94,10 @@ jobs:
             # Build frontend with production API URL
             npm run build
 
-            # Restart the application using PM2
-            pm2 restart codingnexus-server --update-env || pm2 start ecosystem.config.cjs
-            pm2 restart codingnexus --update-env || true
+            # HARD RESTART: Delete PM2 process and start fresh (ensures new Prisma client is loaded)
+            pm2 delete codingnexus-server || true
+            pm2 delete codingnexus || true
+            pm2 start ecosystem.config.cjs
 
             # Save PM2 configuration
             pm2 save
