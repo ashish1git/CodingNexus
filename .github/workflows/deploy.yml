@@ -78,15 +78,23 @@ jobs:
             printf 'MAINTENANCE_MODE=false\n' >> .env
             printf 'VITE_MAINTENANCE_MODE=false\n' >> .env
 
-            # Install dependencies
-            npm install
-
-            # Clean old Prisma client cache (CRITICAL after DB_URL change)
+            # Complete Prisma cleanup (nuclear option)
             rm -rf node_modules/.prisma
             rm -rf node_modules/@prisma/client
+            rm -rf prisma/generated
+            rm -rf dist
+            
+            # Skip postinstall temporarily to prevent auto-generation with old cache
+            export PRISMA_SKIP_POSTINSTALL_GENERATE=true
+            
+            # Fresh install WITHOUT running postinstall
+            npm ci
 
-            # Generate Prisma Client with new DATABASE_URL
-            npx prisma generate
+            # NOW generate Prisma with correct DATABASE_URL from .env
+            npx prisma generate --force
+            
+            # Unset the skip flag
+            unset PRISMA_SKIP_POSTINSTALL_GENERATE
 
             # Run database migrations
             npx prisma migrate deploy
