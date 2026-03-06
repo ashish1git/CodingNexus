@@ -153,7 +153,7 @@ const LandingPage = () => {
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/30 via-black to-cyan-900/30"></div>
         
-        {/* Optimized Floating Orbs - Reduced blur for performance */}
+        {/* Optimized Floating Orbs - Reduced blur for performances */}
         <div 
           className="absolute w-96 h-96 bg-purple-500/15 rounded-full blur-3xl animate-pulse"
           style={{
