@@ -9,7 +9,6 @@
 # Documentation
 *.md
 !README.md
-docs/
 
 # Dependencies
 node_modules
