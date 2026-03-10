@@ -19,7 +19,7 @@ function getApiUrl() {
   }
   
   // Final fallback
-  const defaultUrl = 'http://localhost:21000/api';
+  const defaultUrl = 'http://202.179.85.68:3000/api';
   console.log('🔌 Using default API URL:', defaultUrl);
   return defaultUrl;
 }

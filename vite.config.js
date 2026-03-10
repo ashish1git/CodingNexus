@@ -93,11 +93,11 @@ export default defineConfig({
     }
   ],
   server: {
-    port: 22000,
+    port: 5000,
     host: true, // Listen on all addresses (0.0.0.0)
     proxy: {
       '/api': {
-        target: 'http://localhost:21000',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false
         // Don't modify the path - let /api/auth/login pass through as-is
@@ -105,7 +105,7 @@ export default defineConfig({
     }
   },
   preview: {
-    port: 22000,
+    port: 5000,
     host: true,
   },
 })

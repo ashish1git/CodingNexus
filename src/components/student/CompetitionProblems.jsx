@@ -11,7 +11,7 @@ import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
 
 // API URL for backend calls
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:21000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 import Loading from '../shared/Loading';
 import AsyncSubmissionHandler, { SubmissionStatusUI } from './AsyncSubmissionHandler';
 import Editor from '@monaco-editor/react';

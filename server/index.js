@@ -15,11 +15,9 @@ import eventRoutes from './routes/events.js';
 import prisma from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-//chetan ashish sumit
 const app = express();
-const PORT = process.env.PORT || 21000;
+const PORT = process.env.PORT || 3000;
 
-// Test database connection on startup (don't await - run async)
 testDatabaseConnection();
 
 function testDatabaseConnection() {
@@ -32,10 +30,7 @@ function testDatabaseConnection() {
       console.error('Server will continue but database operations will fail');
     });
 }
-//chetan ashish sumit Aachal dhruv love
 
-// CORS configuration - allow all origins for now
-// Middleware
 app.use(cors({
   origin: '*',
   credentials: false
@@ -44,7 +39,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Maintenance Mode Middleware
 app.use((req, res, next) => {
   if (process.env.MAINTENANCE_MODE === 'true') {
     return res.status(503).json({
@@ -58,7 +52,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔍 DEBUG LOGGING: Log ALL API requests
 app.use('/api', (req, res, next) => {
   console.log(`\n📨 [API REQUEST] ${req.method} ${req.path}`);
   console.log('   Competition path:', req.path.includes('/competitions'));
@@ -73,8 +66,8 @@ app.use('/api/student', studentRoutes);
 app.use('/api/competitions', competitionRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/certificates', certificateRoutes);
-app.use('/api/submissions', asyncSubmissionRoutes);  // ✅ NEW: Async submissions
-app.use('/api/events', eventRoutes);  // ✅ NEW: Event management
+app.use('/api/submissions', asyncSubmissionRoutes);
+app.use('/api/events', eventRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -84,6 +77,16 @@ app.get('/api/health', (req, res) => {
 // Serve frontend static files
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
+
+// ✅ DOCS ROUTE - SERVE DOCS BEFORE SPA FALLBACK
+app.use('/docs', express.static(path.join(distPath, 'docs'), {
+  index: 'index.html'
+}));
+
+// ✅ DOCS SPA FALLBACK - For client-side routing in docs
+app.get('/docs/*', (req, res) => {
+  res.sendFile(path.join(distPath, 'docs', 'index.html'));
+});
 
 // SPA fallback — serve index.html for all non-API routes
 app.get('/*path', (req, res, next) => {
@@ -96,40 +99,35 @@ app.get('/*path', (req, res, next) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    error: err.message || 'Internal server error' 
+  res.status(500).json({
+    success: false,
+    error: err.message || 'Internal server error'
   });
 });
 
 const server = app.listen(PORT,'0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Server is listening and will stay alive...`);
-  
-  // ✅ OPTIONAL Background polling job - disabled by default on free tier
-  // Set ENABLE_POLLING=true in .env to enable
+
   const pollingEnabled = process.env.ENABLE_POLLING === 'true';
-  
+
   if (!pollingEnabled) {
     console.log('⏸️  Polling job disabled (set ENABLE_POLLING=true to enable)');
     console.log('   Submissions will still work - results will be fetched on-demand');
     return;
   }
-  
-  // Only enable polling if explicitly configured (for paid tier)
-  const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '15000', 10); // Default 15 seconds, more conservative
+
+  const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '15000', 10);
   console.log(`⏱️  Background polling job configured (${POLL_INTERVAL}ms intervals)`);
-  
-  // Wait 2 seconds before starting polling to ensure database is ready
+
   setTimeout(() => {
     console.log('🎯 Starting background polling job...');
-    
+
     setInterval(async () => {
       try {
         await checkPendingSubmissions();
       } catch (error) {
         console.error('❌ Background job error:', error.message);
-        // Continue running - don't crash
       }
     }, POLL_INTERVAL);
   }, 2000);
@@ -145,14 +143,10 @@ server.on('error', (error) => {
 
 console.log(`✅ Server initialization complete - process will stay alive`);
 
-
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit - keep server running
 });
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  // Don't exit - keep server running
 });
