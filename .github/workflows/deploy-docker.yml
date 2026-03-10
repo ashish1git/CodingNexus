@@ -1,13 +1,11 @@
 name: CD - Deploy with Docker
 
 on:
-  # Disabled - using PM2 deployment instead
-  # Uncomment when you want to use Docker deployment
-  # push:
-  #   branches: [ main ]
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'docs/**'
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:
@@ -22,30 +20,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub (Optional)
-        if: secrets.DOCKER_USERNAME != ''
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build Docker image
         run: |
-          docker build -t codingnexus:latest \
-            --build-arg VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }} \
+          docker build \
+            --tag codingnexus:latest \
+            --tag codingnexus:${{ github.sha }} \
+            --build-arg VITE_API_URL="${{ secrets.VITE_API_URL }}" \
             .
 
       - name: Save Docker image
-        run: docker save codingnexus:latest | gzip > codingnexus-image.tar.gz
+        run: |
+          mkdir -p docker-export
+          docker save codingnexus:latest | gzip > docker-export/codingnexus-latest.tar.gz
+          docker save codingnexus:${{ github.sha }} | gzip > docker-export/codingnexus-${{ github.sha }}.tar.gz
 
-      - name: Copy Docker image to server
+      - name: Copy Docker image and configs to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          source: "codingnexus-image.tar.gz,docker-compose.yml,.env.production"
+          source: "docker-export/,docker-compose.yml,nginx.conf,.env.docker"
           target: ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
 
       - name: Deploy with Docker Compose
@@ -56,36 +52,110 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
+            set -e
+            
             cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
             
-            # Load Docker image
-            docker load < codingnexus-image.tar.gz
+            echo "🐳 Docker Deployment Started..."
             
-            # Stop existing containers
-            docker-compose down
+            # Load Docker images
+            echo "📦 Loading Docker images..."
+            docker load < docker-export/codingnexus-latest.tar.gz
+            
+            # Create .env.docker if it doesn't exist or update it with secrets
+            echo "⚙️  Setting up environment variables..."
+            cat > .env.docker << 'DOCKER_ENV'
+            NODE_ENV=production
+            PORT=3000
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES_IN=7d
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+            CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+            CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+            VITE_CLOUDINARY_UPLOAD_PRESET=${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
+            VITE_CLOUDINARY_NOTES_PRESET=${{ secrets.VITE_CLOUDINARY_NOTES_PRESET }}
+            JUDGE0_URL=${{ secrets.JUDGE0_URL }}
+            VITE_JUDGE0_URL=${{ secrets.VITE_JUDGE0_URL }}
+            BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+            EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+            EMAIL_FROM_NAME=${{ secrets.EMAIL_FROM_NAME }}
+            EMAIL_SERVICE=brevo
+            ENABLE_POLLING=${{ secrets.ENABLE_POLLING || 'false' }}
+            POLL_INTERVAL=${{ secrets.POLL_INTERVAL || '15000' }}
+            MAINTENANCE_MODE=${{ secrets.MAINTENANCE_MODE || 'false' }}
+            VITE_MAINTENANCE_MODE=${{ secrets.VITE_MAINTENANCE_MODE || 'false' }}
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            DOCKER_ENV
+            
+            chmod 600 .env.docker
+            
+            # Pull latest code for configs
+            echo "📥 Pulling latest configuration..."
+            git pull origin main || true
+            
+            # Stop existing containers gracefully
+            echo "🛑 Stopping existing containers..."
+            docker-compose down --remove-orphans || true
             
             # Start new containers
+            echo "🚀 Starting containers..."
             docker-compose up -d
             
-            # Run migrations
-            docker-compose exec -T app npx prisma migrate deploy
+            # Wait for containers to be ready
+            echo "⏳ Waiting for containers to be ready..."
+            sleep 15
             
-            # Clean up
-            rm codingnexus-image.tar.gz
+            # Run database migrations
+            echo "🗄️  Running database migrations..."
+            docker-compose exec -T app npx prisma migrate deploy || true
             
-            # Show status
+            # Verify containers are running
+            echo "✅ Verifying container status..."
             docker-compose ps
+            
+            # Clean up exported images
+            echo "🧹 Cleaning up..."
+            rm -rf docker-export
+            
+            echo "✅ Deployment complete!"
 
       - name: Health Check
         run: |
-          sleep 15
-          for i in {1..5}; do
-            if curl -f ${{ secrets.DEPLOYMENT_URL }}/api/health; then
+          echo "🏥 Running health checks..."
+          DEPLOYMENT_URL="${{ secrets.DEPLOYMENT_URL }}"
+          
+          for i in {1..10}; do
+            echo "Attempt $i/10..."
+            if curl -f --connect-timeout 5 "$DEPLOYMENT_URL/api/health" 2>/dev/null; then
               echo "✅ Health check passed"
               exit 0
             fi
-            echo "Attempt $i failed, retrying..."
-            sleep 5
+            if [ $i -lt 10 ]; then
+              echo "⏳ Waiting before retry..."
+              sleep 10
+            fi
           done
-          echo "❌ Health check failed after 5 attempts"
+          
+          echo "❌ Health check failed after 10 attempts"
           exit 1
+
+      - name: Notify Deployment Status
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd ${{ secrets.APP_DIRECTORY || '~/codingnexus' }}
+            echo "📋 Deployment Summary:"
+            echo "---"
+            docker-compose ps
+            echo "---"
+            echo "Latest Docker Images:"
+            docker images | grep codingnexus | head -5
+

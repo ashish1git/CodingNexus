@@ -4,62 +4,51 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Error: VITE_API_BASE_URL is required}
     container_name: codingnexus-app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
+    
+    # Allow container to access host's localhost services (PostgreSQL on server)
+    # Using host.docker.internal works on Linux, Mac, Windows Docker Desktop
+    # For Linux servers, set DATABASE_URL to use server IP instead
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
 
     env_file:
       - .env.docker
 
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - PORT=${PORT:-3000}
-
-      # JWT Configuration
-      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=${NODE_ENV:?Error: NODE_ENV is required}
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL:?Error: DATABASE_URL is required}
+      - JWT_SECRET=${JWT_SECRET:?Error: JWT_SECRET is required}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
-
-      # CORS Configuration
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5000}
-
-      # Cloudinary Configuration
+      - FRONTEND_URL=${FRONTEND_URL:?Error: FRONTEND_URL is required}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
       - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME}
       - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET}
       - VITE_CLOUDINARY_NOTES_PRESET=${VITE_CLOUDINARY_NOTES_PRESET}
-
-      # Judge0 Configuration
-      - JUDGE0_URL=${JUDGE0_URL:-http://64.227.149.20:2358}
-      - VITE_JUDGE0_URL=${VITE_JUDGE0_URL:-http://64.227.149.20:2358}
-
-      # Brevo Email Configuration
+      - JUDGE0_URL=${JUDGE0_URL:?Error: JUDGE0_URL is required}
+      - VITE_JUDGE0_URL=${VITE_JUDGE0_URL:?Error: VITE_JUDGE0_URL is required}
       - BREVO_API_KEY=${BREVO_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM}
-      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
+      - EMAIL_FROM=${EMAIL_FROM:?Error: EMAIL_FROM is required}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Coding Nexus}
       - EMAIL_SERVICE=${EMAIL_SERVICE:-brevo}
-
-      # Async Submissions
       - ENABLE_POLLING=${ENABLE_POLLING:-false}
       - POLL_INTERVAL=${POLL_INTERVAL:-15000}
-
-      # Maintenance Mode
       - MAINTENANCE_MODE=${MAINTENANCE_MODE:-false}
       - VITE_MAINTENANCE_MODE=${VITE_MAINTENANCE_MODE:-false}
-
-      # AI APIs
       - USE_GEMINI_DIRECT=${USE_GEMINI_DIRECT:-false}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
-
-      # Frontend API URL
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}
-
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      - VITE_API_URL=${VITE_API_URL:?Error: VITE_API_URL is required}
 
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
@@ -67,6 +56,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    
+    networks:
+      - codingnexus-network
 
   nginx:
     image: nginx:alpine
@@ -80,14 +72,21 @@ services:
       - ./dist:/usr/share/nginx/html:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - app
-    profiles:
-      - with-nginx
+      app:
+        condition: service_healthy
+    networks:
+      - codingnexus-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
-     driver: local
+    driver: local
 
 networks:
-  default:
-    name: codingnexus-network
+  codingnexus-network:
+    driver: bridge

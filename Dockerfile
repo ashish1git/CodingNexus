@@ -18,9 +18,10 @@ RUN npx prisma generate
 # Copy application code
 COPY . .
 
-# Build frontend
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3000/api}
+# Build frontend with API base URL
+# These are required build arguments from CI/CD or manual build
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm run build
 
@@ -30,10 +31,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install utilities
-RUN apk add --no-cache dumb-init wget
+# Install utilities for health checks and monitoring
+RUN apk add --no-cache dumb-init wget curl
 
-# Create non-root user
+# Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
@@ -44,17 +45,16 @@ COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 
-# Switch user
+# Switch to non-root user
 USER nodejs
 
-# Expose port
+# Expose port (matches docker-compose.yml)
 EXPOSE 3000
 
-# Healthcheck
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:21000/api/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1
 
-# Start container
+# Start application with dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
-
 CMD ["node", "server/index.js"]
