@@ -94,15 +94,17 @@ jobs:
             
             # Pull latest code for configs
             echo "📥 Pulling latest configuration..."
+            git reset --hard HEAD || true
+            git clean -fd || true
             git pull origin main || true
             
             # Stop existing containers gracefully
             echo "🛑 Stopping existing containers..."
-            docker-compose down --remove-orphans || true
+            docker compose down --remove-orphans || true
             
             # Start new containers
             echo "🚀 Starting containers..."
-            docker-compose up -d
+            docker compose up -d
             
             # Wait for containers to be ready
             echo "⏳ Waiting for containers to be ready..."
@@ -110,11 +112,11 @@ jobs:
             
             # Run database migrations
             echo "🗄️  Running database migrations..."
-            docker-compose exec -T app npx prisma migrate deploy || true
+            docker compose exec -T app npx prisma migrate deploy || true
             
             # Verify containers are running
             echo "✅ Verifying container status..."
-            docker-compose ps
+            docker compose ps
             
             # Clean up exported images
             echo "🧹 Cleaning up..."
