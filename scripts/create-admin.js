@@ -8,16 +8,13 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import readline from 'readline';
 
-// Parse connection string to add SSL if it's a Render database
 const connectionString = process.env.DATABASE_URL;
 const isRenderDB = connectionString && connectionString.includes('render.com');
 
-// Create PostgreSQL pool with SSL for Render
 const poolConfig = {
   connectionString: process.env.DATABASE_URL
 };
 
-// Add SSL only for Render databases
 if (isRenderDB) {
   poolConfig.ssl = { rejectUnauthorized: false };
 }
@@ -31,7 +28,9 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-const question = (query) => new Promise((resolve) => rl.question(query, resolve));
+const question = (query) => new Promise((resolve) => rl.question(query, (answer) => {
+  resolve(String(answer).trim());
+}));
 
 async function createAdmin() {
   try {
@@ -42,24 +41,26 @@ async function createAdmin() {
     const password = await question('Password: ');
 
     if (!name || !email || !password) {
-      console.error('All fields are required!');
+      console.error('❌ All fields are required!');
       process.exit(1);
     }
 
-    // Check if admin already exists
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+      console.error('❌ Invalid input types!');
+      process.exit(1);
+    }
+
     const existing = await prisma.user.findUnique({
       where: { email }
     });
 
     if (existing) {
-      console.error(`User with email ${email} already exists!`);
+      console.error(`❌ User with email ${email} already exists!`);
       process.exit(1);
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create admin user
     const user = await prisma.user.create({
       data: {
         email,
@@ -83,7 +84,8 @@ async function createAdmin() {
     console.log(`   Name: ${user.adminProfile.name}`);
     console.log(`   Role: ${user.role}\n`);
   } catch (error) {
-    console.error('Error creating admin:', error.message);
+    console.error('❌ Error creating admin:', error.message);
+    process.exit(1);
   } finally {
     await prisma.$disconnect();
     await pool.end();

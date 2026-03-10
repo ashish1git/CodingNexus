@@ -1,0 +1,61 @@
+ngvents {
+    worker_connections 1024;
+}
+
+http {
+    # Mime types
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/json;
+
+    # Upstream app service
+    upstream app {
+        server app:3000;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name _;
+        
+        location / {
+            proxy_pass http://app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_redirect off;
+        }
+
+        # Static files
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            proxy_pass http://app;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # HTTPS server (if you have SSL certificates)
+    # server {
+    #     listen 443 ssl http2;
+    #     server_name _;
+    #     
+    #     ssl_certificate /etc/nginx/ssl/cert.pem;
+    #     ssl_certificate_key /etc/nginx/ssl/key.pem;
+    #     
+    #     location / {
+    #         proxy_pass http://app;
+    #         proxy_set_header Host $host;
+    #         proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #         proxy_set_header X-Forwarded-Proto $scheme;
+    #     }
+    # }
+}

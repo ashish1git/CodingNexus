@@ -1,7 +1,7 @@
 // Event service for guest participants - completely separate from batch student services
 import apiClient from './apiClient';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:21000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 class EventService {
   // ==================== QUIZ ENDPOINTS (Guest) ====================
