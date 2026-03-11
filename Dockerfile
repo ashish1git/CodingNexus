@@ -1,3 +1,4 @@
+#Sumit
 # Multi-stage build for production
 FROM node:20-alpine AS builder
 
@@ -19,8 +20,8 @@ RUN npx prisma generate
 COPY . .
 
 # Build frontend
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3000/api}
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm run build
 

@@ -8,7 +8,7 @@ import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 const router = express.Router();
 
 // Judge0 Configuration
-const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
+const JUDGE0_URL = process.env.JUDGE0_URL || 'http://202.179.85.68:2358';
 
 // Language mapping for Judge0
 const LANGUAGE_MAP = {

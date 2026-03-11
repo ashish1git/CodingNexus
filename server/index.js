@@ -12,6 +12,7 @@ import contestRoutes from './routes/contest.js';
 import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
 import eventRoutes from './routes/events.js';
+import codeRoutes from './routes/code.js';
 import prisma from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,7 @@ app.use('/api/contest', contestRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/submissions', asyncSubmissionRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/code', codeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -84,9 +86,7 @@ app.use('/docs', express.static(path.join(distPath, 'docs'), {
 }));
 
 // ✅ DOCS SPA FALLBACK - For client-side routing in docs
-app.get('/docs/*', (req, res) => {
-  res.sendFile(path.join(distPath, 'docs', 'index.html'));
-});
+app.use('/docs', express.static(path.join(process.cwd(), 'docs')));
 
 // SPA fallback — serve index.html for all non-API routes
 app.get('/*path', (req, res, next) => {
