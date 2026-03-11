@@ -46,8 +46,10 @@ const CompetitionProblems = () => {
   // Refs so protection handlers always see latest values (avoids stale closures)
   const submittedRef = useRef(false);
   const problemSolutionsRef = useRef({});
+  const selectedProblemRef = useRef(null);
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
+  useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
 
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
@@ -263,6 +265,24 @@ public:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
+  // Auto-save code as user types (debounced 500ms) so switching problems never loses work
+  useEffect(() => {
+    if (!selectedProblemRef.current || !code) return;
+    const problemId = selectedProblemRef.current.id;
+    const timer = setTimeout(() => {
+      setProblemSolutions(prev => ({
+        ...prev,
+        [problemId]: {
+          ...prev[problemId], // preserve saved: true if already manually saved
+          code,
+          language,
+        }
+      }));
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, language]);
+
   // ✅ FULLSCREEN & TAB-SWITCH PREVENTION FOR ONGOING COMPETITIONS
   useEffect(() => {
     if (!competition) return;
@@ -279,20 +299,22 @@ public:
 
     // Auto-submit saved solutions then redirect
     const kickStudent = async (count) => {
+      submittedRef.current = true; // MUST set first — prevents beforeunload from blocking the redirect
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      if (!submittedRef.current) {
-        const solutions = Object.entries(problemSolutionsRef.current)
-          .filter(([, s]) => s?.saved)
-          .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
-        if (solutions.length > 0) {
-          try {
-            await competitionService.submitSolutions(competitionId, solutions);
-            toast.success('⚠️ Solutions auto-submitted due to violations');
-          } catch (e) {
-            console.error('Auto-submit failed:', e);
-          }
+
+      const solutions = Object.entries(problemSolutionsRef.current)
+        .filter(([, s]) => s?.saved || s?.code?.trim())
+        .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
+      if (solutions.length > 0) {
+        try {
+          await competitionService.submitSolutions(competitionId, solutions);
+          toast.success('⚠️ Solutions auto-submitted due to violations');
+        } catch (e) {
+          console.error('Auto-submit failed:', e);
         }
       }
+
+      console.log(`🚨 Kicking student after ${count} violations — redirecting...`);
       window.location.href = `/student/competitions?kicked=true&violations=${count}`;
     };
 
@@ -583,6 +605,21 @@ public:
     return response.json();
   };
 
+  // Switch to a different problem, saving current code immediately before switching
+  const switchProblem = (newProblem) => {
+    if (selectedProblem && code) {
+      setProblemSolutions(prev => ({
+        ...prev,
+        [selectedProblem.id]: {
+          ...prev[selectedProblem.id], // preserve saved: true flag
+          code,
+          language,
+        }
+      }));
+    }
+    setSelectedProblem(newProblem);
+  };
+
   const handleSaveSolution = () => {
     if (!code.trim()) {
       toast.error('Please write some code first');
@@ -605,27 +642,30 @@ public:
   const handleSubmitAll = async () => {
     submittedRef.current = true; // stop all violations immediately (confirm dialog causes blur)
 
-    const solvedCount = Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length;
+    // Count problems that either have been manually saved OR have any code written (auto-saved)
+    const solvedCount = Object.keys(problemSolutions).filter(
+      id => problemSolutions[id]?.saved || problemSolutions[id]?.code?.trim()
+    ).length;
     const totalProblems = competition.problems.length;
 
     if (solvedCount === 0) {
       submittedRef.current = false; // not actually submitting
-      toast.error('You have not saved any solutions yet. Please save at least one solution before submitting.');
+      toast.error('You have not written any code yet. Please write at least one solution before submitting.');
       return;
     }
 
     if (solvedCount < totalProblems) {
       const unsolvedProblems = competition.problems.filter(
-        problem => !problemSolutions[problem.id]?.saved
+        problem => !problemSolutions[problem.id]?.saved && !problemSolutions[problem.id]?.code?.trim()
       );
-      const confirmMessage = `Warning: You have only solved ${solvedCount}/${totalProblems} problems.\n\nUnsolved problems:\n${unsolvedProblems.map(p => `• ${p.title}`).join('\n')}\n\nAre you sure you want to submit? You can only submit once and this action cannot be undone.`;
+      const confirmMessage = `Warning: You have only attempted ${solvedCount}/${totalProblems} problems.\n\nUnattempted problems:\n${unsolvedProblems.map(p => `• ${p.title}`).join('\n')}\n\nAre you sure you want to submit? You can only submit once and this action cannot be undone.`;
       
       if (!window.confirm(confirmMessage)) {
         submittedRef.current = false; // user cancelled
         return;
       }
     } else {
-      if (!window.confirm(`You have completed all ${totalProblems} problems! Are you sure you want to submit? You can only submit once and this action cannot be undone.`)) {
+      if (!window.confirm(`You have attempted all ${totalProblems} problems! Are you sure you want to submit? You can only submit once and this action cannot be undone.`)) {
         submittedRef.current = false; // user cancelled
         return;
       }
@@ -635,9 +675,9 @@ public:
     toast.loading('Submitting all solutions...');
     
     try {
-      // Prepare solutions array
+      // Include all problems with any code (auto-saved or manually saved)
       const solutions = Object.entries(problemSolutions)
-        .filter(([, solution]) => solution?.saved)
+        .filter(([, solution]) => solution?.saved || solution?.code?.trim())
         .map(([problemId, solution]) => ({
           problemId,
           code: solution.code,
@@ -647,15 +687,17 @@ public:
       await competitionService.submitSolutions(competitionId, solutions);
       
       setSubmitted(true);
+      setSubmitting(false);
       toast.dismiss();
       toast.success(`Submitted ${solvedCount}/${totalProblems} solutions successfully! 🎉`);
       
-      // Show option to view results or go back
+      // Exit fullscreen and redirect to results after 2 seconds
       setTimeout(() => {
         if (document.fullscreenElement) {
           document.exitFullscreen();
         }
-      }, 1000);
+        navigate(`/student/competition/${competitionId}/results`);
+      }, 2000);
     } catch (error) {
       console.error('Error submitting solutions:', error);
       toast.dismiss();
@@ -955,7 +997,7 @@ public:
               {competition.problems.map((problem, index) => (
                 <button
                   key={problem.id}
-                  onClick={() => setSelectedProblem(problem)}
+                  onClick={() => switchProblem(problem)}
                   className={`w-full text-left px-4 py-3 rounded-lg transition-all group ${
                     selectedProblem?.id === problem.id
                       ? 'bg-[#3e3e3e] text-white shadow-md border border-[#4e4e4e]'
