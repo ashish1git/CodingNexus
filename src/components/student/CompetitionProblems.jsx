@@ -43,6 +43,12 @@ const CompetitionProblems = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
 
+  // Refs so protection handlers always see latest values (avoids stale closures)
+  const submittedRef = useRef(false);
+  const problemSolutionsRef = useRef({});
+  useEffect(() => { submittedRef.current = submitted; }, [submitted]);
+  useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
+
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
     if (!problem) return '';
@@ -146,6 +152,7 @@ public:
   const fetchCompetition = async () => {
     try {
       setLoading(true);
+
       const data = await competitionService.getCompetition(competitionId);
       setCompetition(data);
       if (data.problems && data.problems.length > 0) {
@@ -261,26 +268,40 @@ public:
     if (!competition) return;
 
     const now = new Date();
-    // FIX: Convert strings to Date objects before comparing
     const isOngoing = new Date(competition.startTime) <= now && new Date(competition.endTime) > now;
-
     if (!isOngoing) return;
 
     console.log('🔒 Activating competition protections...');
 
     let kickTimeout = null;
-    let violationCooldown = false; // prevents blur + visibilitychange from double-counting
-    const MAX_VIOLATIONS = 5;
+    let violationCooldown = false;
+    const MAX_VIOLATIONS = 3;
 
-    const kickStudent = (count) => {
+    // Auto-submit saved solutions then redirect
+    const kickStudent = async (count) => {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (!submittedRef.current) {
+        const solutions = Object.entries(problemSolutionsRef.current)
+          .filter(([, s]) => s?.saved)
+          .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
+        if (solutions.length > 0) {
+          try {
+            await competitionService.submitSolutions(competitionId, solutions);
+            toast.success('⚠️ Solutions auto-submitted due to violations');
+          } catch (e) {
+            console.error('Auto-submit failed:', e);
+          }
+        }
+      }
       window.location.href = `/student/competitions?kicked=true&violations=${count}`;
     };
 
     const recordViolation = (reason) => {
-      if (violationCooldown) return; // same event already counted
+      // Don't fire after student has already submitted
+      if (submittedRef.current) return;
+      if (violationCooldown) return;
       violationCooldown = true;
-      setTimeout(() => { violationCooldown = false; }, 1000); // 1s cooldown
+      setTimeout(() => { violationCooldown = false; }, 1000);
 
       setTabSwitchCount(prev => {
         const newCount = prev + 1;
@@ -294,64 +315,56 @@ public:
       });
     };
 
-    // 1️⃣ Window BLUR - fires when student does Alt+Tab, clicks another app, minimizes
+    // 1️⃣ Window BLUR — Alt+Tab, minimize, click another app
     const handleWindowBlur = () => {
-      // Immediately try to pull focus back before the switch completes
-      window.focus();
+      window.focus(); // try to snap focus back immediately
       recordViolation('window lost focus (Alt+Tab/minimize)');
     };
 
-    // 2️⃣ Window FOCUS - fires when student returns
+    // 2️⃣ Window FOCUS — student returned
     const handleWindowFocus = () => {
       if (kickTimeout) { clearTimeout(kickTimeout); kickTimeout = null; }
     };
 
-    // 3️⃣ Page visibility change — most reliable for browser tab switching
+    // 3️⃣ Visibility change — most reliable for browser tab switching
     const handleVisibilityChange = () => {
       if (document.hidden) {
         recordViolation('page hidden (tab switched)');
-        // If away for >15 seconds → immediate kick regardless of violation count
+        // Away for >15 seconds = immediate kick
         kickTimeout = setTimeout(() => {
-          setTabSwitchCount(prev => kickStudent(prev) || prev);
+          setTabSwitchCount(prev => { kickStudent(prev); return prev; });
         }, 15000);
       } else {
         if (kickTimeout) { clearTimeout(kickTimeout); kickTimeout = null; }
       }
     };
 
-    // 4️⃣ PREVENT NAVIGATION AWAY
+    // 4️⃣ Prevent navigation away
     const handleBeforeUnload = (e) => {
+      if (submittedRef.current) return;
       e.preventDefault();
       e.returnValue = 'Are you sure? Leaving will end your competition!';
       return 'Are you sure? Leaving will end your competition!';
     };
 
-    // 5️⃣ Block Ctrl+W and other shortcuts
+    // 5️⃣ Block Ctrl+W
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault();
         toast.error('🚫 Cannot close tab during competition');
         return false;
       }
-      if (e.key === 'F11') {
-        e.preventDefault();
-        return false;
-      }
+      if (e.key === 'F11') { e.preventDefault(); return false; }
     };
 
-    // 6️⃣ Fullscreen change — if student presses Escape to exit fullscreen, it's a violation
+    // 6️⃣ Fullscreen exit = violation
     const handleFullscreenChange = () => {
       const inFullscreen = !!document.fullscreenElement;
       setIsFullscreen(inFullscreen);
-      if (!inFullscreen) {
-        recordViolation('exited fullscreen (pressed Escape)');
-      }
+      if (!inFullscreen) recordViolation('exited fullscreen (pressed Escape)');
     };
 
-    // Show fullscreen prompt if not already in fullscreen when competition starts
-    if (!document.fullscreenElement) {
-      setShowFullscreenPrompt(true);
-    }
+    if (!document.fullscreenElement) setShowFullscreenPrompt(true);
 
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
@@ -359,8 +372,6 @@ public:
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-    console.log('✅ Competition protections activated (blur + fullscreen lock)');
 
     return () => {
       if (kickTimeout) clearTimeout(kickTimeout);
@@ -592,10 +603,13 @@ public:
   };
 
   const handleSubmitAll = async () => {
+    submittedRef.current = true; // stop all violations immediately (confirm dialog causes blur)
+
     const solvedCount = Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length;
     const totalProblems = competition.problems.length;
 
     if (solvedCount === 0) {
+      submittedRef.current = false; // not actually submitting
       toast.error('You have not saved any solutions yet. Please save at least one solution before submitting.');
       return;
     }
@@ -607,10 +621,12 @@ public:
       const confirmMessage = `Warning: You have only solved ${solvedCount}/${totalProblems} problems.\n\nUnsolved problems:\n${unsolvedProblems.map(p => `• ${p.title}`).join('\n')}\n\nAre you sure you want to submit? You can only submit once and this action cannot be undone.`;
       
       if (!window.confirm(confirmMessage)) {
+        submittedRef.current = false; // user cancelled
         return;
       }
     } else {
       if (!window.confirm(`You have completed all ${totalProblems} problems! Are you sure you want to submit? You can only submit once and this action cannot be undone.`)) {
+        submittedRef.current = false; // user cancelled
         return;
       }
     }
@@ -644,6 +660,7 @@ public:
       console.error('Error submitting solutions:', error);
       toast.dismiss();
       toast.error(error.response?.data?.error || 'Failed to submit solutions');
+      submittedRef.current = false; // re-enable violation tracking if submit failed
       setSubmitting(false);
     }
   };
@@ -720,10 +737,10 @@ public:
               You switched away from the competition window.
             </p>
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 mb-4 inline-block">
-              <span className="text-red-400 font-bold text-lg">Violations: {tabSwitchCount} / 5</span>
+              <span className="text-red-400 font-bold text-lg">Violations: {tabSwitchCount} / 3</span>
             </div>
             <p className="text-yellow-400 text-sm font-semibold mb-2">
-              ⚠️ After 5 violations you will be automatically removed from the competition.
+              ⚠️ After 3 violations your solutions will be auto-submitted and you will be removed.
             </p>
             <p className="text-gray-500 text-sm mb-6">
               All tab switches are logged and reviewed by administrators.
