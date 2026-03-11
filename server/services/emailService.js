@@ -27,7 +27,7 @@ export const sendRegistrationConfirmation = async (event, participant, verificat
   if (!transporter) return { status: 'skipped', message: 'Email not configured' };
 
   try {
-    const frontendUrl = process.env.FRONTEND_URL?.split(',')[0] || 'http://localhost:22000';
+    const frontendUrl = process.env.FRONTEND_URL?.split(',')[0] || 'http://localhost:22000'|| 'https://codingnexus.apsit.edu.in';
     
     const mailOptions = {
       from: `Coding Nexus <${process.env.EMAIL_USER}>`,

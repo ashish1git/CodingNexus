@@ -248,11 +248,11 @@ export const sendBulkEmail = async (options) => {
 export const sendEventRegistrationEmail = async (event, participant) => {
   try {
     // Smart URL selection: Use production URL if in production, otherwise use local
-    let frontendUrl = 'http://localhost:22000';
+    let frontendUrl = 'http://localhost:22000'|| 'https://codingnexus.apsit.edu.in';
     
     if (process.env.NODE_ENV === 'production') {
       // In production, use the production/live URL
-      frontendUrl = 'https://codingnexus.vercel.app';
+      frontendUrl = 'https://codingnexus.vercel.app'|| 'https://codingnexus.apsit.edu.in';
     } else if (process.env.FRONTEND_URL) {
       // In development, try to parse the configured URLs
       // Prefer https URLs (production) or use the first one

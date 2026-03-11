@@ -61,7 +61,7 @@ console.log('     use http://localhost:22000\n');
 console.log('─'.repeat(60));
 console.log('\n📧 Example Production Email Portal Link:\n');
 
-const productionUrl = 'https://codingnexus.vercel.app';
+const productionUrl = 'https://codingnexus.vercel.app'||'https://codingnexus.aspit.edu.in';
 console.log(`   🔐 Visit Event Portal: ${productionUrl}`);
 console.log(`   📱 Mobile accessible: Yes`);
 console.log(`   🔒 HTTPS secured: Yes`);

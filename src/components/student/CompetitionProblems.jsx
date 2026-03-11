@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../services/apiClient';
 import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
-
+//sumit
 // API URL for backend calls
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 import Loading from '../shared/Loading';
@@ -38,6 +38,10 @@ const CompetitionProblems = () => {
   const [asyncResult, setAsyncResult] = useState(null);
   const [pollCount, setPollCount] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [showWarningOverlay, setShowWarningOverlay] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
 
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
@@ -252,16 +256,146 @@ public:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
+  // ✅ FULLSCREEN & TAB-SWITCH PREVENTION FOR ONGOING COMPETITIONS
+  useEffect(() => {
+    if (!competition) return;
+
+    const now = new Date();
+    // FIX: Convert strings to Date objects before comparing
+    const isOngoing = new Date(competition.startTime) <= now && new Date(competition.endTime) > now;
+
+    if (!isOngoing) return;
+
+    console.log('🔒 Activating competition protections...');
+
+    let kickTimeout = null;
+    let violationCooldown = false; // prevents blur + visibilitychange from double-counting
+    const MAX_VIOLATIONS = 5;
+
+    const kickStudent = (count) => {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      window.location.href = `/student/competitions?kicked=true&violations=${count}`;
+    };
+
+    const recordViolation = (reason) => {
+      if (violationCooldown) return; // same event already counted
+      violationCooldown = true;
+      setTimeout(() => { violationCooldown = false; }, 1000); // 1s cooldown
+
+      setTabSwitchCount(prev => {
+        const newCount = prev + 1;
+        console.warn(`⚠️ Violation #${newCount}: ${reason}`);
+        if (newCount >= MAX_VIOLATIONS) {
+          setTimeout(() => kickStudent(newCount), 1500);
+        } else {
+          setShowWarningOverlay(true);
+        }
+        return newCount;
+      });
+    };
+
+    // 1️⃣ Window BLUR - fires when student does Alt+Tab, clicks another app, minimizes
+    const handleWindowBlur = () => {
+      // Immediately try to pull focus back before the switch completes
+      window.focus();
+      recordViolation('window lost focus (Alt+Tab/minimize)');
+    };
+
+    // 2️⃣ Window FOCUS - fires when student returns
+    const handleWindowFocus = () => {
+      if (kickTimeout) { clearTimeout(kickTimeout); kickTimeout = null; }
+    };
+
+    // 3️⃣ Page visibility change — most reliable for browser tab switching
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordViolation('page hidden (tab switched)');
+        // If away for >15 seconds → immediate kick regardless of violation count
+        kickTimeout = setTimeout(() => {
+          setTabSwitchCount(prev => kickStudent(prev) || prev);
+        }, 15000);
+      } else {
+        if (kickTimeout) { clearTimeout(kickTimeout); kickTimeout = null; }
+      }
+    };
+
+    // 4️⃣ PREVENT NAVIGATION AWAY
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'Are you sure? Leaving will end your competition!';
+      return 'Are you sure? Leaving will end your competition!';
+    };
+
+    // 5️⃣ Block Ctrl+W and other shortcuts
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        toast.error('🚫 Cannot close tab during competition');
+        return false;
+      }
+      if (e.key === 'F11') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // 6️⃣ Fullscreen change — if student presses Escape to exit fullscreen, it's a violation
+    const handleFullscreenChange = () => {
+      const inFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(inFullscreen);
+      if (!inFullscreen) {
+        recordViolation('exited fullscreen (pressed Escape)');
+      }
+    };
+
+    // Show fullscreen prompt if not already in fullscreen when competition starts
+    if (!document.fullscreenElement) {
+      setShowFullscreenPrompt(true);
+    }
+
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    console.log('✅ Competition protections activated (blur + fullscreen lock)');
+
+    return () => {
+      if (kickTimeout) clearTimeout(kickTimeout);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [competition]);
+
   const enterFullscreen = () => {
     const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(err => {
-        console.log('Error attempting to enable fullscreen:', err);
-      });
-    } else if (elem.webkitRequestFullscreen) {
-      elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) {
-      elem.msRequestFullscreen();
+    try {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().then(() => {
+          toast.success('✅ Fullscreen enabled - tab switching is locked');
+          console.log('🔒 Fullscreen activated');
+        }).catch(err => {
+          console.error('Fullscreen error:', err);
+          toast.error('Could not enable fullscreen: ' + err.message);
+        });
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+        toast.success('✅ Fullscreen enabled');
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+        toast.success('✅ Fullscreen enabled');
+      } else {
+        toast.error('Fullscreen not supported in this browser');
+      }
+    } catch (err) {
+      console.error('Error entering fullscreen:', err);
+      toast.error('Could not enter fullscreen: ' + err.message);
     }
   };
 
@@ -575,6 +709,70 @@ public:
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] text-white">
+
+      {/* ⚠️ TAB SWITCH WARNING OVERLAY */}
+      {showWarningOverlay && (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center">
+          <div className="bg-[#1e1e1e] border-2 border-red-500 rounded-2xl p-10 max-w-md w-full mx-4 text-center shadow-2xl shadow-red-500/20">
+            <div className="text-6xl mb-4">🚨</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-2">Tab Switch Detected!</h2>
+            <p className="text-gray-300 mb-2">
+              You switched away from the competition window.
+            </p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 mb-4 inline-block">
+              <span className="text-red-400 font-bold text-lg">Violations: {tabSwitchCount} / 5</span>
+            </div>
+            <p className="text-yellow-400 text-sm font-semibold mb-2">
+              ⚠️ After 5 violations you will be automatically removed from the competition.
+            </p>
+            <p className="text-gray-500 text-sm mb-6">
+              All tab switches are logged and reviewed by administrators.
+              Repeated violations may result in disqualification.
+            </p>
+            <button
+              onClick={() => {
+                document.documentElement.requestFullscreen?.().then(() => {
+                  setIsFullscreen(true);
+                  setShowFullscreenPrompt(false);
+                }).catch(() => {});
+                setShowWarningOverlay(false);
+                window.focus();
+              }}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-lg"
+            >
+              🔒 Re-enter Fullscreen &amp; Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 FULLSCREEN REQUIRED BANNER */}
+      {showFullscreenPrompt && !showWarningOverlay && getCompetitionStatus() === 'ongoing' && (
+        <div className="fixed inset-0 z-[9998] bg-black/90 flex items-center justify-center">
+          <div className="bg-[#1e1e1e] border-2 border-yellow-500 rounded-2xl p-10 max-w-md w-full mx-4 text-center shadow-2xl shadow-yellow-500/20">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-2">Fullscreen Required</h2>
+            <p className="text-gray-300 mb-6">
+              This competition must be taken in fullscreen mode.<br />
+              Tab switching is monitored and all violations are logged.
+            </p>
+            <button
+              onClick={() => {
+                document.documentElement.requestFullscreen?.().then(() => {
+                  setIsFullscreen(true);
+                  setShowFullscreenPrompt(false);
+                }).catch(() => {
+                  toast.error('Could not enter fullscreen. Please allow fullscreen in your browser.');
+                });
+              }}
+              className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors text-lg"
+            >
+              🖥️ Enter Fullscreen &amp; Start Competition
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Custom Scrollbar Styles */}
       <style>{`
         .scrollbar-thin::-webkit-scrollbar {
@@ -608,9 +806,11 @@ public:
               <div className="flex items-center gap-3">
                 <Trophy className="w-5 h-5 text-yellow-400" />
                 <h1 className="text-base font-semibold text-white">{competition.title}</h1>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(competition.difficulty)}`}>
-                  {competition.difficulty.charAt(0).toUpperCase() + competition.difficulty.slice(1)}
-                </span>
+                {competition.difficulty && (
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(competition.difficulty)}`}>
+                    {competition.difficulty.charAt(0).toUpperCase() + competition.difficulty.slice(1)}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -641,6 +841,12 @@ public:
                   {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length}
                 </span>
               </div>
+              {tabSwitchCount > 0 && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <span className="text-red-400 text-xs font-bold">Violations: {tabSwitchCount}</span>
+                </div>
+              )}
               <button
                 onClick={enterFullscreen}
                 className="p-2 text-gray-400 hover:text-white transition-colors hover:bg-[#3e3e3e] rounded-lg"
@@ -796,21 +1002,29 @@ public:
                   <div className="flex gap-6 border-b border-[#3e3e3e]">
                     <button
                       onClick={() => setActiveTab('description')}
+                      disabled={getCompetitionStatus() === 'ongoing'}
                       className={`pb-3 px-1 text-sm font-semibold transition-all ${
+                        getCompetitionStatus() === 'ongoing' ? 'cursor-not-allowed opacity-50' : ''
+                      } ${
                         activeTab === 'description'
                           ? 'text-white border-b-2 border-blue-500'
                           : 'text-gray-400 hover:text-gray-300'
                       }`}
+                      title={getCompetitionStatus() === 'ongoing' ? 'Tab switching is disabled during competition' : ''}
                     >
                       Description
                     </button>
                     <button
                       onClick={() => setActiveTab('submissions')}
+                      disabled={getCompetitionStatus() === 'ongoing'}
                       className={`pb-3 px-1 text-sm font-semibold transition-all ${
+                        getCompetitionStatus() === 'ongoing' ? 'cursor-not-allowed opacity-50' : ''
+                      } ${
                         activeTab === 'submissions'
                           ? 'text-white border-b-2 border-blue-500'
                           : 'text-gray-400 hover:text-gray-300'
                       }`}
+                      title={getCompetitionStatus() === 'ongoing' ? 'Tab switching is disabled during competition' : ''}
                     >
                       Submissions
                     </button>
