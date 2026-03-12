@@ -205,12 +205,18 @@ public:
       const end = new Date(competition.endTime);
       const now = new Date();
       const diff = end - now;
-
-      if (diff <= 0) {
+  if (diff <= 0) {
         setTimeRemaining({ hours: 0, minutes: 0, seconds: 0, expired: true });
         return;
       }
+      
 
+  if (diff <= 5000 && !submitted) {
+    toast("⏰ Contest ending... Auto submitting your solutions");
+
+    handleSubmitAll();
+  }
+  
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -226,6 +232,17 @@ public:
 
     return () => clearInterval(interval);
   }, [competition?.endTime]);
+
+// 🔥 ADD THIS chetan 
+useEffect(() => {
+  if (timeRemaining?.expired && !submitted) {
+    toast("⏰ Time is up! Auto submitting your solutions...");
+
+    setTimeout(() => {
+      handleSubmitAll();
+    }, 1000);
+  }
+}, [timeRemaining?.expired]);
 
   // Force re-render every second for "time until start" display
   const [, setTick] = useState(0);
@@ -640,6 +657,11 @@ public:
   };
 
   const handleSubmitAll = async () => {
+
+ 
+      if (submitted) return;
+ setSubmitted(true); 
+
     submittedRef.current = true; // stop all violations immediately (confirm dialog causes blur)
 
     // Count problems that either have been manually saved OR have any code written (auto-saved)

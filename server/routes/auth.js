@@ -48,7 +48,7 @@ router.post('/signup', async (req, res) => {
         password: hashedPassword,
         role: 'student',
         moodleId,
-        isActive: false, // Requires admin activation
+        isActive: true, // Requires admin activation
         studentProfile: {
           create: {
             name,
@@ -64,7 +64,7 @@ router.post('/signup', async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Account created. Awaiting admin activation.',
+      message: 'Account created.',
       user: {
         id: user.id,
         email: user.email,
@@ -123,13 +123,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    if (!user.isActive) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Account not activated. Please contact admin.' 
-      });
-    }
-
+    
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {

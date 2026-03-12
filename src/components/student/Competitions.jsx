@@ -393,7 +393,13 @@ const Competitions = () => {
                   </div>
                 ) : (
                   <Link
-                    to={`/student/competition/${competition.id}`}
+  to={competition.status === "upcoming" ? "#" : `/student/competition/${competition.id}`}
+  onClick={(e) => {
+    if (competition.status === "upcoming") {
+      e.preventDefault();
+      toast("📖 Competition is read-only until it starts");
+    }
+  }}
                     className={`mt-4 w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                       competition.status === 'ongoing'
                         ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -411,7 +417,7 @@ const Competitions = () => {
                     {competition.status === 'upcoming' && (
                       <>
                         <Calendar className="w-5 h-5" />
-                        View Details
+                        View Details(read-only)
                       </>
                     )}
                     {competition.status === 'past' && (

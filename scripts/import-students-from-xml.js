@@ -241,8 +241,12 @@ async function activateExistingStudents() {
 }
 
 function findUsersFile() {
-  const possibleFiles = ['users.ods', 'users.xlsx', 'users.xls', 'users.xml', 'users (1).xml'];
-
+   const possibleFiles = [
+    'users.ods', 'users.xlsx', 'users.xls', 'users.xml', 'users (1).xml',
+    'SE_A_Theory attendance.xlsx',
+    'SE B_Theory Attendance.xlsx',
+    'SE_C Sem IV Theory Attendance.xlsx',
+  ];
   for (const file of possibleFiles) {
     if (fs.existsSync(file)) {
       return file;
