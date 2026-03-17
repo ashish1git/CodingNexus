@@ -71,7 +71,13 @@ const LandingPage = () => {
   // Removed heavy matrix rain effect for better performance
 
   const handleNavigation = (path) => {
-    window.location.href = path;
+    // For docs, navigate as external link since it's served separately
+    if (path === '/docs') {
+      window.location.href = path;
+    } else {
+      // For other routes, use internal navigation
+      window.location.href = path;
+    }
   };
 
   const features = [
@@ -655,15 +661,27 @@ const LandingPage = () => {
                   { label: '📚 Documentation', path: '/docs' },
                   { label: 'About Us', path: '/about' },
                   { label: 'Contact', path: '/contact' }
-                ].map((link, i) => (
-                  <button 
-                    key={i}
-                    onClick={() => handleNavigation(link.path)}
-                    className="block text-gray-400 hover:text-purple-400 transition-all duration-300 text-sm md:text-base hover:translate-x-2 transform"
-                  >
-                    → {link.label}
-                  </button>
-                ))}
+                ].map((link, i) => 
+                  link.path === '/docs' ? (
+                    // Docs link as external anchor
+                    <a
+                      key={i}
+                      href="/docs"
+                      className="block text-gray-400 hover:text-purple-400 transition-all duration-300 text-sm md:text-base hover:translate-x-2 transform"
+                    >
+                      → {link.label}
+                    </a>
+                  ) : (
+                    // Internal routes as button
+                    <button 
+                      key={i}
+                      onClick={() => handleNavigation(link.path)}
+                      className="block text-gray-400 hover:text-purple-400 transition-all duration-300 text-sm md:text-base hover:translate-x-2 transform"
+                    >
+                      → {link.label}
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
