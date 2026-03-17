@@ -241,7 +241,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
 });
 
 // Get all submissions for a competition (Admin only)
-router.get('/:id/submissions', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:id/submissions', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -887,7 +887,7 @@ router.delete('/:id', authenticate, authorizeRole('superadmin'), async (req, res
 });
 
 // Get all problems for a competition (Admin only - for evaluation)
-router.get('/:id/problems', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:id/problems', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -912,7 +912,7 @@ router.get('/:id/problems', authenticate, authorizeRole('admin', 'superadmin'), 
 });
 
 // Get all submissions for a specific problem (Admin only - for evaluation)
-router.get('/:competitionId/problems/:problemId/submissions', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:competitionId/problems/:problemId/submissions', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { competitionId, problemId } = req.params;
 
@@ -965,7 +965,7 @@ router.get('/:competitionId/problems/:problemId/submissions', authenticate, auth
 });
 
 // Save manual evaluation for a submission (Admin only) - OPTIMIZED WITH TRANSACTIONS
-router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evaluate', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evaluate', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { submissionId } = req.params;
     const { marks, comments } = req.body;
@@ -1094,7 +1094,7 @@ async function updateCompetitionScoreAsync(competitionSubmissionId) {
 }
 
 // Get evaluation history for a submission (Admin only)
-router.get('/:competitionId/problems/:problemId/submissions/:submissionId/history', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:competitionId/problems/:problemId/submissions/:submissionId/history', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { submissionId } = req.params;
 
@@ -1111,7 +1111,7 @@ router.get('/:competitionId/problems/:problemId/submissions/:submissionId/histor
 });
 
 // Get all evaluations for a competition (Admin only) - See who evaluated what
-router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { competitionId } = req.params;
 
@@ -1171,7 +1171,7 @@ router.get('/:competitionId/evaluations', authenticate, authorizeRole('admin', '
 });
 
 // Get evaluator activity summary (Admin only) - Who evaluated how many
-router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { competitionId } = req.params;
 
