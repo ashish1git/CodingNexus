@@ -131,7 +131,7 @@ const Login = () => {
               value={formData.moodleId}
               onChange={handleChange}
               style={{ color: '#111827' }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-gray-900 placeholder-gray-400"
               placeholder="e.g., 23106031"
               required
             />
@@ -159,7 +159,7 @@ const Login = () => {
                 value={formData.password}
                 onChange={handleChange}
                 style={{ color: '#111827' }}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition pr-12 text-gray-900"
+                className="w-full px-4 py-3 border border-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition pr-12 text-gray-900 placeholder-gray-400"
                 placeholder="Enter your password"
                 required
               />

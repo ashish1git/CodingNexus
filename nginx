@@ -1,4 +1,4 @@
-ngvents {
+events {
     worker_connections 1024;
 }
 
@@ -24,6 +24,16 @@ http {
     server {
         listen 80;
         server_name _;
+
+        # Docs route
+        location = /docs {
+            return 301 /docs/;
+        }
+
+        location ^~ /docs/ {
+            root /usr/share/nginx/html;
+            try_files $uri $uri/ /docs/index.html;
+        }
         
         location / {
             proxy_pass http://app;
@@ -58,4 +68,7 @@ http {
     #         proxy_set_header X-Forwarded-Proto $scheme;
     #     }
     # }
+
+
 }
+  

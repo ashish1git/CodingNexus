@@ -76,17 +76,53 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
-// Serve frontend static files
 const distPath = path.join(__dirname, '../dist');
+const docsDistPath = path.join(distPath, 'docs');
+
+// Serve docs on same frontend port at /docs and /api/docs
+if (process.env.MAINTENANCE_MODE !== 'true') {
+  app.get('/api/docs', (req, res, next) => {
+    const docsIndexPath = path.join(docsDistPath, 'index.html');
+    res.sendFile(docsIndexPath, (err) => {
+      if (err) next();
+    });
+  });
+
+  app.use('/api/docs', express.static(docsDistPath, {
+    index: false,
+    fallthrough: true
+  }));
+
+  app.get('/api/docs/*path', (req, res, next) => {
+    const docsIndexPath = path.join(docsDistPath, 'index.html');
+    res.sendFile(docsIndexPath, (err) => {
+      if (err) next();
+    });
+  });
+
+  app.get('/docs', (req, res, next) => {
+    const docsIndexPath = path.join(docsDistPath, 'index.html');
+    res.sendFile(docsIndexPath, (err) => {
+      if (err) next();
+    });
+  });
+
+  app.use('/docs', express.static(docsDistPath, {
+    index: false,
+    fallthrough: true
+  }));
+
+  // Docs SPA fallback for nested docs routes
+  app.get('/docs/*path', (req, res, next) => {
+    const docsIndexPath = path.join(docsDistPath, 'index.html');
+    res.sendFile(docsIndexPath, (err) => {
+      if (err) next();
+    });
+  });
+}
+
+// Serve frontend static files
 app.use(express.static(distPath));
-
-// ✅ DOCS ROUTE - SERVE DOCS BEFORE SPA FALLBACK
-app.use('/docs', express.static(path.join(distPath, 'docs'), {
-  index: 'index.html'
-}));
-
-// ✅ DOCS SPA FALLBACK - For client-side routing in docs
-app.use('/docs', express.static(path.join(process.cwd(), 'docs')));
 
 // SPA fallback — serve index.html for all non-API routes
 app.get('/*path', (req, res, next) => {

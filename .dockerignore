@@ -9,7 +9,7 @@
 # Documentation
 *.md
 !README.md
-docs/
+!docs/**
 
 # Dependencies
 node_modules

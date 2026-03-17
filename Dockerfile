@@ -21,18 +21,17 @@ COPY . .
 # Build frontend
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
-
 RUN npm run build
 
-# Build Docusaurus docs
+# Build Docusaurus docs and ensure dist/docs exists
 WORKDIR /app/docs
 RUN npm ci && npm cache clean --force
-
-# Build docs and copy to dist, or create placeholder if build fails
-RUN npm run build && cp -r /app/docs/build /app/dist/docs || (mkdir -p /app/dist/docs && echo "Docs build skipped" > /app/dist/docs/index.html)
+RUN npm run build || true
+RUN mkdir -p /app/dist/docs && \
+    if [ -d "/app/docs/build" ]; then cp -r /app/docs/build/. /app/dist/docs/; \
+    else echo "<html><body><h1>Docs build not available</h1></body></html>" > /app/dist/docs/index.html; fi
 
 WORKDIR /app
-
 
 # Production stage
 FROM node:20-alpine
@@ -61,75 +60,8 @@ EXPOSE 3000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:21000/api/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1
 
 # Start container
 ENTRYPOINT ["dumb-init", "--"]
-
-CMD ["node", "server/index.js"]# Multi-stage build for production
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Copy prisma schema first
-COPY prisma ./prisma
-
-# Install dependencies
-RUN npm ci && npm cache clean --force
-
-# Generate Prisma Client
-RUN npx prisma generate
-
-# Copy application code
-COPY . .
-
-# Build frontend
-ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
-
-RUN npm run build
-
-# Build Docusaurus docs
-WORKDIR /app/docs
-RUN npm ci && npm cache clean --force && npm run build || echo "Docs build failed, continuing..."
-RUN if [ -d "/app/docs/build" ]; then cp -r /app/docs/build /app/dist/docs; else echo "Docs build output not found"; fi
-
-WORKDIR /app
-
-
-# Production stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Install utilities
-RUN apk add --no-cache dumb-init wget
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Copy files from builder
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/server ./server
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
-
-# Switch user
-USER nodejs
-
-# Expose port
-EXPOSE 3000
-
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:21000/api/health || exit 1
-
-# Start container
-ENTRYPOINT ["dumb-init", "--"]
-
 CMD ["node", "server/index.js"]

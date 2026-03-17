@@ -9,26 +9,98 @@
     @apply bg-gray-50 text-gray-900;
   }
 
-  /* Force input text color in base layer */
+  /* ========================================
+     UNIVERSAL INPUT STYLING
+     ======================================== */
+  
+  /* CATCH ALL INPUTS - Default styling for any input */
   input:not([type="checkbox"]):not([type="radio"]),
   textarea,
   select {
-    color: #111827 !important;
-    -webkit-text-fill-color: #111827 !important;
+    /* Default: Dark text on any background */
+    color: rgb(17, 24, 39) !important; /* gray-900 */
+    -webkit-text-fill-color: rgb(17, 24, 39) !important;
   }
 
+  /* Dark theme inputs - white/light text OVERRIDE */
+  /* ANY input with dark background classes - explicitly handled */
   input[class*="bg-slate"],
-  input[class*="bg-gray-8"],
-  input[class*="bg-gray-9"],
-  input[class*="text-white"],
   textarea[class*="bg-slate"],
-  textarea[class*="text-white"],
   select[class*="bg-slate"],
-  select[class*="text-white"],
+  input[class*="bg-gray-7"],
+  textarea[class*="bg-gray-7"],
+  select[class*="bg-gray-7"],
+  input[class*="bg-gray-8"],
+  textarea[class*="bg-gray-8"],
+  select[class*="bg-gray-8"],
+  input[class*="bg-gray-9"],
+  textarea[class*="bg-gray-9"],
+  select[class*="bg-gray-9"],
+  input[class*="bg-slate-700"],
+  textarea[class*="bg-slate-700"],
+  select[class*="bg-slate-700"],
+  input[class*="bg-slate-800"],
+  textarea[class*="bg-slate-800"],
+  select[class*="bg-slate-800"],
+  input[class*="bg-slate-900"],
+  textarea[class*="bg-slate-900"],
+  select[class*="bg-slate-900"],
+  /* Event and dark theme classes */
+  input.event-dark-theme,
+  input.dark-input,
+  textarea.event-dark-theme,
+  textarea.dark-input,
+  select.event-dark-theme,
+  select.dark-input,
   .code-editor-input,
   .event-dark-theme input,
   .event-dark-theme textarea,
   .event-dark-theme select {
+    color: #f3f4f6 !important; /* Light text for dark backgrounds */
+    -webkit-text-fill-color: #f3f4f6 !important;
+  }
+
+  /* GLOBAL PLACEHOLDER STYLING - Very faint for all inputs */
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(107, 114, 128) !important; /* gray-500 */
+    opacity: 0.5 !important;
+    font-weight: 400 !important;
+  }
+
+  /* SELECT OPTIONS - Ensure readability in all contexts */
+  select option {
+    background-color: #1e293b;
+    color: #f3f4f6;
+  }
+
+  select option:checked {
+    background: linear-gradient(rgb(99, 102, 241), rgb(99, 102, 241));
+    color: white;
+  }
+
+  /* Default input focus states - light background */
+  input:not([type="checkbox"]):not([type="radio"]):not(.event-dark-theme):not(.dark-input):not([class*="bg-slate"]):not([class*="bg-gray-7"]):not([class*="bg-gray-8"]):not([class*="bg-gray-9"]):not([class*="text-white"]):focus,
+  textarea:not(.event-dark-theme):not(.dark-input):not([class*="bg-slate"]):not([class*="bg-gray-7"]):not([class*="bg-gray-8"]):not([class*="bg-gray-9"]):not([class*="text-white"]):focus,
+  select:not(.event-dark-theme):not(.dark-input):not([class*="bg-slate"]):not([class*="bg-gray-7"]):not([class*="bg-gray-8"]):not([class*="bg-gray-9"]):not([class*="text-white"]):focus {
+    border-color: rgb(99, 102, 241) !important; /* indigo-500 */
+    outline: none !important;
+  }
+
+  /* Dark theme input focus states */
+  .event-dark-theme input:focus,
+  .event-dark-theme textarea:focus,
+  .event-dark-theme select:focus,
+  input.dark-input:focus,
+  textarea.dark-input:focus,
+  select.dark-input:focus {
+    border-color: rgb(168, 85, 247) !important; /* purple-500 */
+  }
+
+  /* EVENT DARK THEME DARK BG INPUTS - Explicit light text */
+  .event-dark-theme input[class*="bg-gray"],
+  .event-dark-theme textarea[class*="bg-gray"],
+  .event-dark-theme select[class*="bg-gray"] {
     color: #f3f4f6 !important;
     -webkit-text-fill-color: #f3f4f6 !important;
   }
@@ -289,3 +361,21 @@ input:autofill:focus-visible {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* EXPLICIT DARK BACKGROUND TEXT COLOR - Ensure all dark inputs are visible */
+input[class*="bg-slate"],
+textarea[class*="bg-slate"],
+select[class*="bg-slate"],
+input[class*="bg-gray-9"],
+textarea[class*="bg-gray-9"],
+select[class*="bg-gray-9"],
+input[class*="bg-slate-900"],
+textarea[class*="bg-slate-900"],
+select[class*="bg-slate-900"],
+input[class*="bg-slate-800"],
+textarea[class*="bg-slate-800"],
+select[class*="bg-slate-800"] {
+  color: #f3f4f6 !important;
+  -webkit-text-fill-color: #f3f4f6 !important;
+  caret-color: #f3f4f6 !important;
+} 

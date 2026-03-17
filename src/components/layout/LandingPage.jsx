@@ -658,15 +658,15 @@ const LandingPage = () => {
               </h3>
               <div className="space-y-2 md:space-y-3">
                 {[
-                  { label: '📚 Documentation', path: '/docs' },
+                  { label: '📚 Documentation', path: '/api/docs' },
                   { label: 'About Us', path: '/about' },
                   { label: 'Contact', path: '/contact' }
                 ].map((link, i) => 
-                  link.path === '/docs' ? (
+                  link.path === '/api/docs' ? (
                     // Docs link as external anchor
                     <a
                       key={i}
-                      href="/docs"
+                      href="/api/docs"
                       className="block text-gray-400 hover:text-purple-400 transition-all duration-300 text-sm md:text-base hover:translate-x-2 transform"
                     >
                       → {link.label}
