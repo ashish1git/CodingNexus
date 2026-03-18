@@ -10,8 +10,8 @@ import {themes as prismThemes} from 'prism-react-renderer';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Coding Nexus Web Dev Boot camp',
-  tagline: 'Master Modern Web Development Practices',
+  title: 'Coding Nexus Docs',
+  tagline: '',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -28,7 +28,7 @@ const config = {
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
   organizationName: 'A. P Shah Institute of technology', // Usually your GitHub org/user name.
-  projectName: 'web-dev-bootcamp', // Usually your repo name.
+  projectName: 'Coding Nexus Docs', // Usually your repo name.
 
   onBrokenLinks: 'warn',
 
@@ -68,9 +68,9 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'Coding Nexus Web Dev Boot camp',
+        title: 'Coding Nexus Docs',
         logo: {
-          alt: 'Web Dev Bootcamp Logo',
+          alt: 'Coding Nexus Logo',
           src: 'img/favicon.svg',
         },
         items: [

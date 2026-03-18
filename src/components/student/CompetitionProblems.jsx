@@ -47,9 +47,11 @@ const CompetitionProblems = () => {
   const submittedRef = useRef(false);
   const problemSolutionsRef = useRef({});
   const selectedProblemRef = useRef(null);
+  const expiryAutoSubmitTriggeredRef = useRef(false);
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
+  useEffect(() => { expiryAutoSubmitTriggeredRef.current = false; }, [competitionId]);
 
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
@@ -207,16 +209,18 @@ public:
       const diff = end - now;
   if (diff <= 0) {
         setTimeRemaining({ hours: 0, minutes: 0, seconds: 0, expired: true });
+
+        if (!submittedRef.current && !expiryAutoSubmitTriggeredRef.current) {
+          expiryAutoSubmitTriggeredRef.current = true;
+          toast("⏰ Time is up! Auto submitting your solutions...");
+          setTimeout(() => {
+            handleSubmitAll(true);
+          }, 1000);
+        }
         return;
       }
       
 
-  if (diff <= 5000 && !submitted) {
-    toast("⏰ Contest ending... Auto submitting your solutions");
-
-    handleSubmitAll();
-  }
-  
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -232,17 +236,6 @@ public:
 
     return () => clearInterval(interval);
   }, [competition?.endTime]);
-
-// 🔥 ADD THIS chetan 
-useEffect(() => {
-  if (timeRemaining?.expired && !submitted) {
-    toast("⏰ Time is up! Auto submitting your solutions...");
-
-    setTimeout(() => {
-      handleSubmitAll();
-    }, 1000);
-  }
-}, [timeRemaining?.expired]);
 
   // Force re-render every second for "time until start" display
   const [, setTick] = useState(0);
@@ -656,49 +649,62 @@ useEffect(() => {
     toast.success('Solution saved!');
   };
 
-  const handleSubmitAll = async () => {
+  const handleSubmitAll = async (isAutoSubmit = false) => {
 
  
-      if (submitted) return;
- setSubmitted(true); 
+      if (submitted || submitting) return;
 
-    submittedRef.current = true; // stop all violations immediately (confirm dialog causes blur)
+    submittedRef.current = true; // stop violation hooks while submitting
+
+    // Ensure current editor code is included even if debounce auto-save hasn't run yet
+    const latestSolutions = { ...problemSolutions };
+    if (selectedProblem && code?.trim()) {
+      latestSolutions[selectedProblem.id] = {
+        ...latestSolutions[selectedProblem.id],
+        code,
+        language,
+      };
+    }
 
     // Count problems that either have been manually saved OR have any code written (auto-saved)
-    const solvedCount = Object.keys(problemSolutions).filter(
-      id => problemSolutions[id]?.saved || problemSolutions[id]?.code?.trim()
+    const solvedCount = Object.keys(latestSolutions).filter(
+      id => latestSolutions[id]?.saved || latestSolutions[id]?.code?.trim()
     ).length;
     const totalProblems = competition.problems.length;
 
     if (solvedCount === 0) {
       submittedRef.current = false; // not actually submitting
+      setSubmitted(false);
       toast.error('You have not written any code yet. Please write at least one solution before submitting.');
       return;
     }
 
-    if (solvedCount < totalProblems) {
+    if (!isAutoSubmit && solvedCount < totalProblems) {
       const unsolvedProblems = competition.problems.filter(
-        problem => !problemSolutions[problem.id]?.saved && !problemSolutions[problem.id]?.code?.trim()
+        problem => !latestSolutions[problem.id]?.saved && !latestSolutions[problem.id]?.code?.trim()
       );
       const confirmMessage = `Warning: You have only attempted ${solvedCount}/${totalProblems} problems.\n\nUnattempted problems:\n${unsolvedProblems.map(p => `• ${p.title}`).join('\n')}\n\nAre you sure you want to submit? You can only submit once and this action cannot be undone.`;
       
       if (!window.confirm(confirmMessage)) {
         submittedRef.current = false; // user cancelled
+        setSubmitted(false);
         return;
       }
-    } else {
+    } else if (!isAutoSubmit) {
       if (!window.confirm(`You have attempted all ${totalProblems} problems! Are you sure you want to submit? You can only submit once and this action cannot be undone.`)) {
         submittedRef.current = false; // user cancelled
+        setSubmitted(false);
         return;
       }
     }
 
+    setSubmitted(true);
     setSubmitting(true);
-    toast.loading('Submitting all solutions...');
+    toast.loading(isAutoSubmit ? 'Auto-submitting solutions...' : 'Submitting all solutions...');
     
     try {
       // Include all problems with any code (auto-saved or manually saved)
-      const solutions = Object.entries(problemSolutions)
+      const solutions = Object.entries(latestSolutions)
         .filter(([, solution]) => solution?.saved || solution?.code?.trim())
         .map(([problemId, solution]) => ({
           problemId,
@@ -725,6 +731,7 @@ useEffect(() => {
       toast.dismiss();
       toast.error(error.response?.data?.error || 'Failed to submit solutions');
       submittedRef.current = false; // re-enable violation tracking if submit failed
+      setSubmitted(false);
       setSubmitting(false);
     }
   };
