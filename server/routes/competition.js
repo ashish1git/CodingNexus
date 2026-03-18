@@ -1244,5 +1244,3 @@ router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('ad
 });
 
 export default router;
-
-
