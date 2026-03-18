@@ -486,7 +486,10 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Competition has not started yet' });
     }
 
-    if (competition.endTime < now) {
+    // Allow submissions for 15 seconds after endTime (grace period for timeout auto-submit)
+    const GRACE_PERIOD = 15000; // 15 seconds in milliseconds
+    const timeAfterEnd = now - competition.endTime;
+    if (timeAfterEnd > GRACE_PERIOD) {
       return res.status(400).json({ error: 'Competition has ended' });
     }
 

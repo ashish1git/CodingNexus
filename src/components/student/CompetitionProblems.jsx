@@ -199,6 +199,48 @@ public:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-submit on timeout with same logic as violation auto-submit
+  const autoSubmitOnTimeout = async () => {
+    submittedRef.current = true; // MUST set first — prevents beforeunload from blocking
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+
+    // Merge current editor code + all saved solutions from ref
+    const latestSolutions = { ...problemSolutionsRef.current };
+    
+    // Include current editor code if user is actively editing a problem
+    if (selectedProblemRef.current && code?.trim()) {
+      console.log(`📝 Adding current editor code for problem ${selectedProblemRef.current.id}`);
+      latestSolutions[selectedProblemRef.current.id] = {
+        ...latestSolutions[selectedProblemRef.current.id],
+        code,
+        language
+      };
+    }
+
+    const solutions = Object.entries(latestSolutions)
+      .filter(([, s]) => s?.saved || s?.code?.trim())
+      .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
+    
+    console.log(`📦 Timeout auto-submit collecting ${solutions.length} solutions:`, solutions);
+
+    if (solutions.length > 0) {
+      try {
+        await competitionService.submitSolutions(competitionId, solutions);
+        toast.success('⏰ Solutions auto-submitted - time expired');
+      } catch (e) {
+        console.error('❌ Auto-submit on timeout failed:', e);
+        toast.error(e.response?.data?.error || 'Auto-submit failed, redirecting...');
+      }
+    } else {
+      console.warn('⚠️ No solutions to submit on timeout');
+    }
+
+    console.log('⏰ Auto-submitting due to timeout — redirecting to results...');
+    setTimeout(() => {
+      navigate(`/student/competition/${competitionId}/results`);
+    }, 500);
+  };
+
   // Live countdown timer effect
   useEffect(() => {
     if (!competition?.endTime) return;
@@ -214,7 +256,7 @@ public:
           expiryAutoSubmitTriggeredRef.current = true;
           toast("⏰ Time is up! Auto submitting your solutions...");
           setTimeout(() => {
-            handleSubmitAll(true);
+            autoSubmitOnTimeout();
           }, 1000);
         }
         return;
