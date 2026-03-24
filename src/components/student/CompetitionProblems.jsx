@@ -11,7 +11,7 @@ import competitionService from '../../services/competitionService';
 import toast from 'react-hot-toast';
 //sumit
 // API URL for backend calls
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 import Loading from '../shared/Loading';
 import AsyncSubmissionHandler, { SubmissionStatusUI } from './AsyncSubmissionHandler';
 import Editor from '@monaco-editor/react';
@@ -48,6 +48,10 @@ const CompetitionProblems = () => {
   const problemSolutionsRef = useRef({});
   const selectedProblemRef = useRef(null);
   const expiryAutoSubmitTriggeredRef = useRef(false);
+  const competitionOngoingRef = useRef(false);
+  const monacoRef = useRef(null);
+  const editorGuardsCleanupRef = useRef(null);
+  const lastClipboardToastAtRef = useRef(0);
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
@@ -128,6 +132,7 @@ public:
   // Handle Monaco Editor mount
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     
     // Configure editor options
     editor.updateOptions({
@@ -143,8 +148,11 @@ public:
       glyphMargin: false,
       autoClosingBrackets: 'always',
       autoClosingQuotes: 'always',
-      formatOnPaste: true,
-      formatOnType: true
+      formatOnPaste: false,
+      formatOnType: true,
+      selectionClipboard: false,
+      contextmenu: false,
+      dragAndDrop: false
     });
   };
 
@@ -198,6 +206,107 @@ public:
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep this ref fresh so handlers always check current status.
+  useEffect(() => {
+    if (!competition) {
+      competitionOngoingRef.current = false;
+      return;
+    }
+    const now = new Date();
+    competitionOngoingRef.current =
+      new Date(competition.startTime) <= now && new Date(competition.endTime) > now;
+  }, [competition, timeRemaining]);
+
+  // Install strict Monaco-side clipboard guards (copy/paste/cut/drop) for ongoing competitions.
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+
+    if (editorGuardsCleanupRef.current) {
+      editorGuardsCleanupRef.current();
+      editorGuardsCleanupRef.current = null;
+    }
+
+    const shouldBlock = () => competitionOngoingRef.current && !submittedRef.current;
+    const notifyBlocked = () => {
+      const now = Date.now();
+      if (now - lastClipboardToastAtRef.current > 800) {
+        lastClipboardToastAtRef.current = now;
+        toast.error('Copy/Paste/Cut is disabled during competition');
+      }
+    };
+
+    const domNode = editor.getDomNode();
+    if (!domNode) return;
+
+    const blockDomEvent = (event) => {
+      if (!shouldBlock()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      notifyBlocked();
+    };
+
+    const keydownCapture = (event) => {
+      if (!shouldBlock()) return;
+      const key = (event.key || '').toLowerCase();
+      const ctrlOrMeta = event.ctrlKey || event.metaKey;
+      const blockCombo =
+        (ctrlOrMeta && (key === 'c' || key === 'v' || key === 'x' || key === 'insert')) ||
+        (event.shiftKey && key === 'insert') ||
+        (event.shiftKey && key === 'delete');
+
+      if (blockCombo) {
+        event.preventDefault();
+        event.stopPropagation();
+        notifyBlocked();
+      }
+    };
+
+    domNode.addEventListener('copy', blockDomEvent, true);
+    domNode.addEventListener('cut', blockDomEvent, true);
+    domNode.addEventListener('paste', blockDomEvent, true);
+    domNode.addEventListener('drop', blockDomEvent, true);
+    domNode.addEventListener('contextmenu', blockDomEvent, true);
+    domNode.addEventListener('keydown', keydownCapture, true);
+
+    const blockAction = () => {
+      if (!shouldBlock()) return null;
+      notifyBlocked();
+      return null;
+    };
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, blockAction, '!editorReadonly');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, blockAction, '!editorReadonly');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, blockAction, '!editorReadonly');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, blockAction, '!editorReadonly');
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, blockAction, '!editorReadonly');
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Delete, blockAction, '!editorReadonly');
+
+    const pasteDisposable = editor.onDidPaste(() => {
+      if (!shouldBlock()) return;
+      editor.trigger('competition-guard', 'undo', null);
+      notifyBlocked();
+    });
+
+    editorGuardsCleanupRef.current = () => {
+      pasteDisposable.dispose();
+      domNode.removeEventListener('copy', blockDomEvent, true);
+      domNode.removeEventListener('cut', blockDomEvent, true);
+      domNode.removeEventListener('paste', blockDomEvent, true);
+      domNode.removeEventListener('drop', blockDomEvent, true);
+      domNode.removeEventListener('contextmenu', blockDomEvent, true);
+      domNode.removeEventListener('keydown', keydownCapture, true);
+    };
+
+    return () => {
+      if (editorGuardsCleanupRef.current) {
+        editorGuardsCleanupRef.current();
+        editorGuardsCleanupRef.current = null;
+      }
+    };
+  }, [competition, submitted]);
 
   // Auto-submit on timeout with same logic as violation auto-submit
   const autoSubmitOnTimeout = async () => {
@@ -438,14 +547,81 @@ public:
       if (!inFullscreen) recordViolation('exited fullscreen (pressed Escape)');
     };
 
+    // 7️⃣ Disable Copy - Ctrl+C / Cmd+C
+    const handleCopy = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toast.error('🚫 Copy is disabled during competition');
+      console.warn('⚠️ Copy attempt blocked');
+      return false;
+    };
+
+    // 8️⃣ Disable Paste - Ctrl+V / Cmd+V
+    const handlePaste = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toast.error('🚫 Paste is disabled during competition');
+      console.warn('⚠️ Paste attempt blocked');
+      return false;
+    };
+
+    // 9️⃣ Disable right-click context menu (copy/paste options)
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toast.error('🚫 Right-click is disabled during competition');
+      console.warn('⚠️ Right-click attempt blocked');
+      return false;
+    };
+
+    // Update handleKeyDown to block copy/paste hotkeys
+    const handleKeyDownWithCopyPaste = (e) => {
+      // 🚫 Block Ctrl+C or Cmd+C (Copy)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        toast.error('🚫 Copy is disabled during competition');
+        console.warn('⚠️ Copy hotkey blocked');
+        return false;
+      }
+
+      // 🚫 Block Ctrl+V or Cmd+V (Paste)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        toast.error('🚫 Paste is disabled during competition');
+        console.warn('⚠️ Paste hotkey blocked');
+        return false;
+      }
+
+      // 🚫 Block Ctrl+X or Cmd+X (Cut)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+        e.preventDefault();
+        toast.error('🚫 Cut is disabled during competition');
+        console.warn('⚠️ Cut hotkey blocked');
+        return false;
+      }
+
+      // Block Ctrl+W
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        toast.error('🚫 Cannot close tab during competition');
+        return false;
+      }
+
+      // Block F11
+      if (e.key === 'F11') { e.preventDefault(); return false; }
+    };
+
     if (!document.fullscreenElement) setShowFullscreenPrompt(true);
 
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDownWithCopyPaste);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
+    document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       if (kickTimeout) clearTimeout(kickTimeout);
@@ -453,8 +629,11 @@ public:
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDownWithCopyPaste);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
+      document.removeEventListener('contextmenu', handleContextMenu);
     };
   }, [competition]);
 
@@ -1315,8 +1494,11 @@ public:
                     glyphMargin: false,
                     autoClosingBrackets: 'always',
                     autoClosingQuotes: 'always',
-                    formatOnPaste: true,
+                    formatOnPaste: false,
                     formatOnType: true,
+                    selectionClipboard: false,
+                    contextmenu: false,
+                    dragAndDrop: false,
                     padding: { top: 16, bottom: 16 },
                     lineDecorationsWidth: 0,
                     lineNumbersMinChars: 3,
