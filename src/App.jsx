@@ -8,6 +8,7 @@ import { Toaster } from 'react-hot-toast';
 import LandingPage from './components/layout/LandingPage';
 import AboutPage from './components/layout/AboutPage';
 import ContactPage from './components/layout/ContactPage';
+import TeamApplicationPage from './components/layout/TeamApplicationPage';
 import MaintenancePage from './components/layout/MaintenancePage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
@@ -66,6 +67,7 @@ import HackathonRegistration from './components/events/HackathonRegistration';
 import EventManagement from './components/admin/EventManagement';
 import EventQuizManager from './components/admin/EventQuizManager';
 import AdminHackathonRegistrations from './components/admin/AdminHackathonRegistrations';
+import TeamApplicationsManager from './components/admin/TeamApplicationsManager';
 
 function App() {
   // Check if maintenance mode is enabled
@@ -109,6 +111,7 @@ function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/contact" element={<ContactPage />} />
+              <Route path="/apply-team" element={<TeamApplicationPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
@@ -388,6 +391,14 @@ function App() {
                     <BulkEmailManager />
                   </ProtectedRoute>
                 } 
+              />
+              <Route
+                path="/admin/team-applications"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <TeamApplicationsManager />
+                  </ProtectedRoute>
+                }
               />
 
               {/* Catch all */}

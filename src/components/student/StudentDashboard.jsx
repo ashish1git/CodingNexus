@@ -648,7 +648,7 @@ const StudentDashboard = () => {
   const handleLogout = async () => {
     navigate('/', { replace: true });
     setTimeout(async () => {
-      try { await logout(); toast.success('Logged out successfully'); }
+      try { await logout(); }
       catch (error) { console.error('Logout error:', error); toast.error('Failed to logout'); }
     }, 10);
   };

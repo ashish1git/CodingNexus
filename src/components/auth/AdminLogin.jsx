@@ -48,7 +48,7 @@ const AdminLogin = () => {
       const result = await login(formData.email, formData.password, true);
       
       if (result.success) {
-        toast.success('Login successful!');
+        // Success toast already shown in authService.loginAdmin
         navigate('/admin/dashboard');
       } else {
         // Error toast already shown in authService, but we can add more specific handling

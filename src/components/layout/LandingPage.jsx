@@ -276,6 +276,9 @@ const LandingPage = () => {
               <Terminal className="w-5 h-5 md:w-6 md:h-6 mr-2 group-hover:rotate-12 transition-transform" />
               Student Portal
             </button>
+            <button onClick={() => nav('/apply-team')} className="group inline-flex items-center justify-center px-6 py-3 md:px-10 md:py-5 bg-white/10 border-2 border-cyan-400 text-cyan-200 rounded-lg md:rounded-xl font-bold text-base md:text-xl hover:bg-cyan-500/20 transition-all hover:border-cyan-300 hover:shadow-lg hover:shadow-cyan-500/40 hover:scale-105">
+              Apply to Team
+            </button>
           </div>
   <div style={{ position: 'relative', zIndex: 10 }}>
         <VideoTestimonials />
@@ -430,7 +433,7 @@ const LandingPage = () => {
                 <Terminal className="w-5 h-5 text-purple-400" /> Quick Links
               </h3>
               <div className="space-y-2 md:space-y-3">
-                {[{ label:'📚 Documentation', path:'/api/docs' },{ label:'About Us', path:'/about' },{ label:'Contact', path:'/contact' }].map((l,i) => (
+                {[{ label:'📚 Documentation', path:'/api/docs' },{ label:'About Us', path:'/about' },{ label:'Contact', path:'/contact' },{ label:'Apply to Team', path:'/apply-team' }].map((l,i) => (
                   <button key={i} onClick={() => nav(l.path)} className="block text-gray-400 hover:text-purple-400 transition-all text-sm md:text-base hover:translate-x-2 transform">→ {l.label}</button>
                 ))}
               </div>

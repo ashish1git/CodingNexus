@@ -13,6 +13,7 @@ import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
 import eventRoutes from './routes/events.js';
 import codeRoutes from './routes/code.js';
+import teamApplicationsRoutes from './routes/team-applications.js';
 import prisma from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,7 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/submissions', asyncSubmissionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/code', codeRoutes);
+app.use('/api/team-applications', teamApplicationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

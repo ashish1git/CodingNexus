@@ -216,6 +216,61 @@ model SupportTicket {
   @@index([createdAt])
 }
 
+model TeamApplication {
+  id                    String   @id @default(uuid())
+  // Basic Information
+  fullName              String?
+  branch                String?
+  year                  String?
+  department            String?
+  email                 String?
+  phoneNumber           String?
+  // Profiles
+  githubProfile         String?
+  linkedinProfile       String?
+  portfolioWebsite      String?
+  // Resume
+  resumeLink            String?
+  // Technical Skills
+  technicalSkills       String[] // JSON array stored as string
+  technicalProficiency  Int?     // 1-5
+  // Programming & DSA
+  preferredLanguage     String?
+  practiceDSA           String?  // Regularly/Sometimes/No
+  dsaPlatforms          String?  // Comma-separated
+  problemSolvingLevel   Int?     // 1-5
+  // Projects
+  hasProjects           Boolean  @default(false)
+  projectLinks          String?  // Comma-separated or JSON
+  proudestProject       String?  // Text description
+  // Motivation
+  whyJoinCodingNexus    String?
+  technicalLearning     String?  // Self-learned description
+  // Commitment
+  hoursPerWeek          Int?
+  teamworkCommitted     Boolean  @default(false)
+  technicalTaskWilling  Boolean  @default(false)
+  // Availability
+  offlineAvailable      Boolean  @default(false)
+  interestedDomain      String?  // Frontend/Backend/Full Stack/Competitive Programming
+  // Additional
+  additionalInfo        String?
+  // Declaration
+  declarationAgreed     Boolean  @default(false)
+  
+  // Legacy fields (for backward compatibility)
+  classYear             String?
+  division              String?
+  moodleId              String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([declarationAgreed])
+}
+
 model Competition {
   id              String                    @id @default(uuid())
   title           String

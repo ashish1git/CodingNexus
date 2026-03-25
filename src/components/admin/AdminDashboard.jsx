@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -79,7 +79,6 @@ const AdminDashboard = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('Logged out successfully');
       navigate('/admin-login');
     } catch (error) {
       toast.error('Failed to logout');
@@ -95,6 +94,7 @@ const AdminDashboard = () => {
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
     { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
     { icon: <CalendarDays />, label: 'Events', path: '/admin/events' },
+    { icon: <UserCheck />, label: 'Team Applications', path: '/admin/team-applications' },
     { icon: <FileText />, label: 'Certificates', path: '/admin/certificates' },
     { icon: <Mail />, label: 'Bulk Email', path: '/admin/bulk-email' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
@@ -295,7 +295,7 @@ const AdminDashboard = () => {
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
               <h2 className="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <Link
                   to="/admin/students"
                   className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition"
@@ -323,6 +323,13 @@ const AdminDashboard = () => {
                 >
                   <Bell className="w-8 h-8 text-pink-600" />
                   <span className="text-sm font-medium text-gray-700">Announce</span>
+                </Link>
+                <Link
+                  to="/admin/team-applications"
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-cyan-500 hover:bg-cyan-50 transition"
+                >
+                  <UserCheck className="w-8 h-8 text-cyan-600" />
+                  <span className="text-sm font-medium text-gray-700">Team Applications</span>
                 </Link>
               </div>
             </div>

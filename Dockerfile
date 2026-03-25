@@ -50,6 +50,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 
 # Switch user

@@ -27,7 +27,7 @@ http {
 
         # Docs route
         location = /docs {
-            return 301 /docs/;
+            return 301 /docs/; 
         }
 
         location ^~ /docs/ {
