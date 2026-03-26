@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
-import { analyzeTimeComplexity, analyzeSpaceComplexity, generateComplexityReport, estimateInputSize } from '../utils/complexityAnalyzer.js';
+import { analyzeTimeComplexity, analyzeSpaceComplexity, generateComplexityReport, estimateInputSize, determineEfficiencyRating, calculateEfficiencyScore, compareComplexities, getOptimizationSuggestions, generateEfficiencyReport } from '../utils/complexityAnalyzer.js';
 
 const router = express.Router();
 
@@ -729,6 +729,8 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
 
         // Analyze complexity if submission passed all tests
         let complexityAnalysis = null;
+        let efficiencyData = null;
+
         if (finalStatus === 'accepted' && testResults.length >= 2) {
           try {
             complexityAnalysis = generateComplexityReport(
@@ -736,6 +738,15 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               problem
             );
             console.log(`📊 Complexity Analysis for Problem ${submission.problemId}:`, complexityAnalysis);
+
+            // ⭐ NEW: Generate efficiency report
+            if (problem.expectedComplexity) {
+              efficiencyData = generateEfficiencyReport(
+                { testResults },
+                problem
+              );
+              console.log(`⚡ Efficiency Report for Problem ${submission.problemId}:`, efficiencyData);
+            }
           } catch (analysisError) {
             console.warn(`Complexity analysis failed for problem ${submission.problemId}:`, analysisError.message);
           }
@@ -751,6 +762,15 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           } : null
         }));
 
+        // ⭐ NEW: Create efficiency metadata object
+        const efficiencyMetadata = efficiencyData ? {
+          overall: efficiencyData.efficiency?.overall,
+          score: efficiencyData.efficiency?.score,
+          timeComparisonRating: efficiencyData.timeComplexity?.comparison,
+          spaceComparisonRating: efficiencyData.spaceComplexity?.comparison,
+          suggestions: efficiencyData.efficiency?.suggestions
+        } : null;
+
         // Update problem submission with results
         await prisma.problemSubmission.update({
           where: { id: submission.id },
@@ -765,7 +785,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             // Store complexity analysis if available
             ...(complexityAnalysis && {
               errorMessage: complexityAnalysis.canEvaluate 
-                ? `Complexity: ${complexityAnalysis.timeComplexity?.estimated || 'unknown'} (${complexityAnalysis.timeComplexity?.confidence || 0}% confidence)`
+                ? `Complexity: ${complexityAnalysis.timeComplexity?.estimated || 'unknown'} (${complexityAnalysis.timeComplexity?.confidence || 0}% confidence)${efficiencyMetadata ? ` | Efficiency: ${efficiencyMetadata.overall} (${efficiencyMetadata.score}/100)` : ''}`
                 : complexityAnalysis.reason
             })
           }
@@ -1346,6 +1366,94 @@ router.get('/:competitionId/submissions/:submissionId/complexity', authenticate,
 });
 
 /**
+ * ⭐ NEW: GET /competitions/:competitionId/submissions/:submissionId/efficiency
+ * Get efficiency rating for a submission (actual vs expected complexity)
+ * 
+ * Returns efficiency score (0-100), rating, and optimization suggestions
+ */
+router.get('/:competitionId/submissions/:submissionId/efficiency', authenticate, async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    const submission = await prisma.problemSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        problem: true,
+        user: true
+      }
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // Check authorization
+    if (submission.userId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'superadmin' && req.user.role !== 'subadmin') {
+      return res.status(403).json({ error: 'Not authorized to view this submission' });
+    }
+
+    // Only evaluate for accepted submissions with expected complexity
+    if (submission.status !== 'accepted' || !submission.problem.expectedComplexity) {
+      return res.json({
+        canEvaluate: false,
+        reason: submission.status !== 'accepted' 
+          ? 'Efficiency only evaluated for accepted submissions'
+          : 'No expected complexity specified for this problem'
+      });
+    }
+
+    // Generate efficiency report
+    const efficiencyReport = generateEfficiencyReport(submission, submission.problem);
+
+    res.json({
+      submissionId: submission.id,
+      problemId: submission.problem.id,
+      problemTitle: submission.problem.title,
+      language: submission.language,
+      status: submission.status,
+      
+      // ⭐ Efficiency metrics
+      efficiency: efficiencyReport.canEvaluate ? {
+        overall: efficiencyReport.efficiency.overall,
+        score: efficiencyReport.efficiency.score,
+        suggestions: efficiencyReport.efficiency.suggestions,
+        
+        timeComplexity: {
+          actual: efficiencyReport.timeComplexity.actual,
+          expected: efficiencyReport.timeComplexity.expected,
+          comparison: efficiencyReport.timeComplexity.comparison,
+          confidence: efficiencyReport.timeComplexity.confidence
+        },
+        
+        spaceComplexity: {
+          actual: efficiencyReport.spaceComplexity.actual,
+          expected: efficiencyReport.spaceComplexity.expected,
+          comparison: efficiencyReport.spaceComplexity.comparison,
+          confidence: efficiencyReport.spaceComplexity.confidence
+        },
+        
+        executionMetrics: {
+          maxTime: efficiencyReport.executionMetrics.maxTime,
+          avgTime: efficiencyReport.executionMetrics.avgTime,
+          maxMemory: efficiencyReport.executionMetrics.maxMemory,
+          avgMemory: efficiencyReport.executionMetrics.avgMemory
+        }
+      } : { canEvaluate: false, reason: efficiencyReport.reason },
+      
+      testsPassed: submission.testsPassed,
+      totalTests: submission.totalTests,
+      score: submission.score,
+      maxScore: submission.maxScore,
+      submittedAt: submission.submittedAt,
+      judgedAt: submission.judgedAt
+    });
+  } catch (error) {
+    console.error('Error fetching efficiency metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch efficiency metrics' });
+  }
+});
+
+/**
  * GET /competitions/:competitionId/problems/:problemId/complexity-analysis
  * Get aggregate complexity analysis for a problem across all submissions
  * Shows what complexities users have submitted (useful for teachers/admins)
@@ -1502,6 +1610,119 @@ router.get('/:competitionId/complexity-report', authenticate, authorizeRole('adm
   } catch (error) {
     console.error('Error generating competition complexity report:', error);
     res.status(500).json({ error: 'Failed to generate competition complexity report' });
+  }
+});
+
+/**
+ * ⭐ NEW: GET /competitions/:competitionId/efficiency-report
+ * Get efficiency report for all problems in a competition
+ * Shows which students are writing efficient code (Admin only)
+ */
+router.get('/:competitionId/efficiency-report', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+
+    const competition = await prisma.competition.findUnique({
+      where: { id: competitionId },
+      include: {
+        problems: true,
+        submissions: {
+          where: {
+            status: 'accepted'
+          },
+          include: {
+            problemSubmissions: {
+              include: { problem: true }
+            },
+            user: {
+              include: { studentProfile: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!competition) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+
+    // Generate efficiency report for each student
+    const studentEfficiencyReports = competition.submissions.map(submission => {
+      const efficiencyDetails = submission.problemSubmissions.map(ps => {
+        if (!ps.problem.expectedComplexity) {
+          return {
+            problemId: ps.problem.id,
+            problemTitle: ps.problem.title,
+            canEvaluate: false
+          };
+        }
+
+        const efficiencyReport = generateEfficiencyReport(ps, ps.problem);
+        
+        return {
+          problemId: ps.problem.id,
+          problemTitle: ps.problem.title,
+          expectedComplexity: ps.problem.expectedComplexity,
+          actualComplexity: efficiencyReport.timeComplexity?.actual,
+          efficiencyScore: efficiencyReport.efficiency?.score,
+          efficiencyRating: efficiencyReport.efficiency?.overall,
+          comparison: efficiencyReport.timeComplexity?.comparison,
+          canEvaluate: efficiencyReport.canEvaluate
+        };
+      });
+
+      // Calculate average efficiency score
+      const evaluatedProblems = efficiencyDetails.filter(d => d.canEvaluate && d.efficiencyScore);
+      const avgEfficiencyScore = evaluatedProblems.length > 0
+        ? Math.round(evaluatedProblems.reduce((sum, d) => sum + d.efficiencyScore, 0) / evaluatedProblems.length)
+        : null;
+
+      const perfectSolutions = efficiencyDetails.filter(d => d.efficiencyRating === 'optimal').length;
+      const suboptimalSolutions = efficiencyDetails.filter(d => d.efficiencyRating === 'suboptimal').length;
+
+      return {
+        userId: submission.userId,
+        userName: submission.user.studentProfile?.name || submission.user.email,
+        email: submission.user.email,
+        avgEfficiencyScore,
+        perfectSolutions,
+        suboptimalSolutions,
+        evaluatedProblems: evaluatedProblems.length,
+        totalProblems: submission.problemSubmissions.length,
+        problemDetails: efficiencyDetails
+      };
+    });
+
+    // Sort by efficiency score
+    const sortedReports = studentEfficiencyReports.sort((a, b) => {
+      if (a.avgEfficiencyScore === null) return 1;
+      if (b.avgEfficiencyScore === null) return -1;
+      return b.avgEfficiencyScore - a.avgEfficiencyScore;
+    });
+
+    // Generate aggregate statistics
+    const allEvaluatedScores = sortedReports
+      .filter(r => r.avgEfficiencyScore !== null)
+      .map(r => r.avgEfficiencyScore);
+
+    const competitionStats = {
+      totalParticipants: competition.submissions.length,
+      avgCompetitionEfficiency: allEvaluatedScores.length > 0
+        ? Math.round(allEvaluatedScores.reduce((a, b) => a + b) / allEvaluatedScores.length)
+        : null,
+      idealSolutions: sortedReports.reduce((sum, r) => sum + r.perfectSolutions, 0),
+      suboptimalSolutions: sortedReports.reduce((sum, r) => sum + r.suboptimalSolutions, 0)
+    };
+
+    res.json({
+      competitionId,
+      competitionTitle: competition.title,
+      statistics: competitionStats,
+      studentReports: sortedReports
+    });
+  } catch (error) {
+    console.error('Error generating efficiency report:', error);
+    res.status(500).json({ error: 'Failed to generate efficiency report' });
   }
 });
 

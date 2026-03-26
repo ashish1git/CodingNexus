@@ -40,7 +40,10 @@ const CompetitionManager = () => {
     // LeetCode-style function signature
     functionName: 'solution',
     returnType: 'int',
-    parameters: [{ name: 'nums', type: 'int[]' }]
+    parameters: [{ name: 'nums', type: 'int[]' }],
+    // Expected complexity constraints
+    expectedComplexity: '',
+    expectedSpace: ''
   });
   const [competitions, setCompetitions] = useState([]);
 
@@ -1259,17 +1262,53 @@ public:
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-                        <select
-                          value={currentProblem.difficulty}
-                          onChange={(e) => setCurrentProblem({ ...currentProblem, difficulty: e.target.value })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
-                        >
-                          <option value="easy">Easy</option>
-                          <option value="medium">Medium</option>
-                          <option value="hard">Hard</option>
-                        </select>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                          <select
+                            value={currentProblem.difficulty}
+                            onChange={(e) => setCurrentProblem({ ...currentProblem, difficulty: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
+                          >
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard">Hard</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Expected Time Complexity</label>
+                          <select
+                            value={currentProblem.expectedComplexity}
+                            onChange={(e) => setCurrentProblem({ ...currentProblem, expectedComplexity: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
+                          >
+                            <option value="">Not specified</option>
+                            <option value="O(1)">O(1) - Constant</option>
+                            <option value="O(log n)">O(log n) - Logarithmic</option>
+                            <option value="O(n)">O(n) - Linear</option>
+                            <option value="O(n log n)">O(n log n) - Linear Logarithmic</option>
+                            <option value="O(n²)">O(n²) - Quadratic</option>
+                            <option value="O(n³)">O(n³) - Cubic</option>
+                            <option value="O(2^n)">O(2^n) - Exponential</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Expected Space Complexity</label>
+                          <select
+                            value={currentProblem.expectedSpace}
+                            onChange={(e) => setCurrentProblem({ ...currentProblem, expectedSpace: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900"
+                          >
+                            <option value="">Not specified</option>
+                            <option value="O(1)">O(1) - Constant</option>
+                            <option value="O(log n)">O(log n) - Logarithmic</option>
+                            <option value="O(n)">O(n) - Linear</option>
+                            <option value="O(n log n)">O(n log n) - Linear Logarithmic</option>
+                            <option value="O(n²)">O(n²) - Quadratic</option>
+                            <option value="O(n³)">O(n³) - Cubic</option>
+                            <option value="O(2^n)">O(2^n) - Exponential</option>
+                          </select>
+                        </div>
                       </div>
 
                       {/* Function Signature - LeetCode Style */}

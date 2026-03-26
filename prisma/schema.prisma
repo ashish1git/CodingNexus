@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-   
 }
 
 model User {
@@ -296,26 +295,28 @@ model Competition {
 }
 
 model Problem {
-  id            String              @id @default(uuid())
-  competitionId String
-  title         String
-  description   String
-  difficulty    String
-  points        Int
-  orderIndex    Int
-  constraints   Json
-  examples      Json
-  testCases     Json
-  timeLimit     Int                 @default(3000)
-  memoryLimit   Int                 @default(256)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  functionName  String              @default("solution")
-  parameters    Json?
-  returnType    String              @default("int")
-  starterCode   Json?
-  competition   Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-  submissions   ProblemSubmission[]
+  id                  String              @id @default(uuid())
+  competitionId       String
+  title               String
+  description         String
+  difficulty          String
+  points              Int
+  orderIndex          Int
+  constraints         Json
+  examples            Json
+  testCases           Json
+  timeLimit           Int                 @default(3000)
+  memoryLimit         Int                 @default(256)
+  expectedComplexity  String?             // ⭐ Expected time complexity (e.g., "O(n)")
+  expectedSpace       String?             // ⭐ Expected space complexity (e.g., "O(1)")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  functionName        String              @default("solution")
+  parameters          Json?
+  returnType          String              @default("int")
+  starterCode         Json?
+  competition         Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  submissions         ProblemSubmission[]
 
   @@index([competitionId])
   @@index([orderIndex])

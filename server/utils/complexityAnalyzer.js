@@ -402,4 +402,202 @@ export function generateComplexityReport(submission, problem) {
   };
 }
 
+/**
+ * ⭐ NEW: Determine efficiency rating by comparing actual vs expected complexity
+ */
+export function determineEfficiencyRating(actualTime, actualSpace, expectedTime, expectedSpace) {
+  const timeComparison = compareComplexities(actualTime, expectedTime);
+  const spaceComparison = expectedSpace ? compareComplexities(actualSpace, expectedSpace) : 'not-specified';
+
+  let overallRating = 'unknown';
+  
+  if (expectedTime) {
+    if (timeComparison === 'equal') {
+      overallRating = 'optimal';
+    } else if (timeComparison === 'better') {
+      overallRating = 'excellent';
+    } else if (timeComparison === 'worse') {
+      overallRating = 'suboptimal';
+    }
+  }
+
+  return {
+    overall: overallRating,
+    time: {
+      actual: actualTime,
+      expected: expectedTime,
+      comparison: timeComparison
+    },
+    space: {
+      actual: actualSpace,
+      expected: expectedSpace,
+      comparison: spaceComparison
+    }
+  };
+}
+
+/**
+ * ⭐ NEW: Compare two complexity classes
+ * Returns: 'better' | 'equal' | 'worse' | 'unknown'
+ */
+export function compareComplexities(actual, expected) {
+  if (!expected || actual === 'unknown' || expected === 'unknown') {
+    return 'unknown';
+  }
+
+  if (actual === expected) return 'equal';
+
+  const COMPLEXITY_ORDER = [
+    'O(1)',
+    'O(log n)',
+    'O(n)',
+    'O(n log n)',
+    'O(n²)',
+    'O(n³)',
+    'O(2^n)'
+  ];
+
+  const actualIdx = COMPLEXITY_ORDER.indexOf(actual);
+  const expectedIdx = COMPLEXITY_ORDER.indexOf(expected);
+
+  if (actualIdx === -1 || expectedIdx === -1) {
+    return 'unknown';
+  }
+
+  return actualIdx < expectedIdx ? 'better' : 'worse';
+}
+
+/**
+ * ⭐ NEW: Calculate efficiency score (0-100)
+ */
+export function calculateEfficiencyScore(efficiencyRating) {
+  const timeScore = getComparisonScore(efficiencyRating.time.comparison);
+  const spaceScore = efficiencyRating.space.expected 
+    ? getComparisonScore(efficiencyRating.space.comparison)
+    : timeScore;
+
+  // Weighted: time 70%, space 30%
+  return Math.round((timeScore * 0.7) + (spaceScore * 0.3));
+}
+
+/**
+ * ⭐ NEW: Get score for a comparison result
+ */
+function getComparisonScore(comparison) {
+  switch (comparison) {
+    case 'better': return 100;
+    case 'equal': return 100;
+    case 'worse': return 60;
+    case 'not-specified': return 70;
+    case 'unknown': return 50;
+    default: return 0;
+  }
+}
+
+/**
+ * ⭐ NEW: Get optimization suggestions based on complexity comparison
+ */
+export function getOptimizationSuggestions(actualComplexity, expectedComplexity) {
+  if (!expectedComplexity) {
+    return ['No expected complexity specified for this problem.'];
+  }
+
+  const comparison = compareComplexities(actualComplexity, expectedComplexity);
+  const suggestions = [];
+
+  if (comparison === 'better') {
+    suggestions.push('✅ Excellent! Your solution is MORE efficient than expected.');
+    suggestions.push('💡 Consider sharing your approach for others to learn from.');
+    return suggestions;
+  }
+
+  if (comparison === 'equal') {
+    suggestions.push('✅ Perfect! Your solution matches the expected complexity.');
+    suggestions.push('💡 This is an optimal solution for the given problem.');
+    return suggestions;
+  }
+
+  if (comparison === 'worse') {
+    suggestions.push(`⚠️ Your solution is ${actualComplexity} but expected is ${expectedComplexity}.`);
+    suggestions.push('💡 Try to optimize your approach!');
+
+    // Specific suggestions based on actual vs expected
+    if (actualComplexity === 'O(n²)' && expectedComplexity === 'O(n log n)') {
+      suggestions.push('💡 Consider: Use sorting + two-pointer technique');
+      suggestions.push('💡 Or: Implement hash map for O(1) lookups');
+    } else if (actualComplexity === 'O(n²)' && expectedComplexity === 'O(n)') {
+      suggestions.push('💡 Consider: Using a hash map instead of nested loops');
+      suggestions.push('💡 Or: Implement a single-pass algorithm');
+    } else if (actualComplexity === 'O(n³)') {
+      suggestions.push('💡 Consider: Reduce nesting levels');
+      suggestions.push('💡 Or: Use dynamic programming for memoization');
+    } else if (actualComplexity === 'O(2^n)') {
+      suggestions.push('💡 Try: Dynamic programming approach');
+      suggestions.push('💡 Or: Greedy algorithm or mathematical pattern');
+    }
+  }
+
+  if (comparison === 'unknown') {
+    suggestions.push('❓ Could not compare complexities - insufficient data');
+  }
+
+  return suggestions;
+}
+
+/**
+ * ⭐ NEW: Generate efficiency report for a submission
+ */
+export function generateEfficiencyReport(submission, problem) {
+  if (!submission.testResults || submission.testResults.length < 2) {
+    return {
+      canEvaluate: false,
+      reason: 'Insufficient test results for efficiency analysis'
+    };
+  }
+
+  const timeAnalysis = analyzeTimeComplexity(submission.testResults, problem);
+  const spaceAnalysis = analyzeSpaceComplexity(submission.testResults, problem);
+
+  const efficiencyRating = determineEfficiencyRating(
+    timeAnalysis.estimated,
+    spaceAnalysis.estimated,
+    problem.expectedComplexity,
+    problem.expectedSpace
+  );
+
+  const efficiencyScore = calculateEfficiencyScore(efficiencyRating);
+
+  const suggestions = getOptimizationSuggestions(
+    timeAnalysis.estimated,
+    problem.expectedComplexity
+  );
+
+  return {
+    canEvaluate: true,
+    efficiency: {
+      overall: efficiencyRating.overall,
+      score: efficiencyScore,
+      suggestions: suggestions
+    },
+    timeComplexity: {
+      actual: timeAnalysis.estimated,
+      expected: problem.expectedComplexity,
+      comparison: efficiencyRating.time.comparison,
+      confidence: timeAnalysis.confidence
+    },
+    spaceComplexity: {
+      actual: spaceAnalysis.estimated,
+      expected: problem.expectedSpace,
+      comparison: efficiencyRating.space.comparison,
+      confidence: spaceAnalysis.confidence
+    },
+    executionMetrics: {
+      maxTime: Math.max(...(submission.testResults || []).map(t => parseFloat(t.time) || 0)),
+      maxMemory: Math.max(...(submission.testResults || []).map(t => t.memory || 0)),
+      avgTime: submission.testResults.reduce((sum, t) => sum + (parseFloat(t.time) || 0), 0) / submission.testResults.length,
+      avgMemory: submission.testResults.reduce((sum, t) => sum + (t.memory || 0), 0) / submission.testResults.length
+    }
+  };
+}
+
 export { estimateInputSize };
