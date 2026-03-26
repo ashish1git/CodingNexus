@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
+import { analyzeTimeComplexity, analyzeSpaceComplexity, generateComplexityReport, estimateInputSize } from '../utils/complexityAnalyzer.js';
 
 const router = express.Router();
 
@@ -631,7 +632,10 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             // Submit to Judge0 with wait=true for synchronous result
             const judge0Payload = {
               source_code: executableCode,
-              language_id: languageId
+              language_id: languageId,
+              // Add time and memory limits based on problem constraints
+              cpu_time_limit: problem.timeLimit ? problem.timeLimit / 1000 : 3, // Convert ms to seconds
+              memory_limit: problem.memoryLimit ? problem.memoryLimit * 1024 : 256000 // Convert MB to KB
             };
             
             // Add stdin if problem doesn't use parameters (stdin-based)
@@ -723,6 +727,30 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           finalStatus = 'compile-error';
         }
 
+        // Analyze complexity if submission passed all tests
+        let complexityAnalysis = null;
+        if (finalStatus === 'accepted' && testResults.length >= 2) {
+          try {
+            complexityAnalysis = generateComplexityReport(
+              { testResults },
+              problem
+            );
+            console.log(`📊 Complexity Analysis for Problem ${submission.problemId}:`, complexityAnalysis);
+          } catch (analysisError) {
+            console.warn(`Complexity analysis failed for problem ${submission.problemId}:`, analysisError.message);
+          }
+        }
+
+        // Create enriched testResults with complexity data
+        const enrichedTestResults = testResults.map((result, idx) => ({
+          ...result,
+          inputSize: estimateInputSize(result.input),
+          complexityMetric: complexityAnalysis ? {
+            timeComplexity: complexityAnalysis.timeComplexity?.estimated,
+            spaceComplexity: complexityAnalysis.spaceComplexity?.estimated
+          } : null
+        }));
+
         // Update problem submission with results
         await prisma.problemSubmission.update({
           where: { id: submission.id },
@@ -732,8 +760,14 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             testsPassed: totalPassed,
             executionTime: Math.round(totalTime),
             memoryUsed: totalMemory,
-            testResults: testResults,
-            judgedAt: new Date()
+            testResults: enrichedTestResults,
+            judgedAt: new Date(),
+            // Store complexity analysis if available
+            ...(complexityAnalysis && {
+              errorMessage: complexityAnalysis.canEvaluate 
+                ? `Complexity: ${complexityAnalysis.timeComplexity?.estimated || 'unknown'} (${complexityAnalysis.timeComplexity?.confidence || 0}% confidence)`
+                : complexityAnalysis.reason
+            })
           }
         });
 
@@ -1240,6 +1274,234 @@ router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('ad
   } catch (error) {
     console.error('Error fetching evaluator activity:', error);
     res.status(500).json({ error: 'Failed to fetch evaluator activity' });
+  }
+});
+
+/**
+ * GET /competitions/:competitionId/submissions/:submissionId/complexity
+ * Get complexity analysis for a specific submission
+ * 
+ * Returns:
+ * - Time complexity estimate (O(n), O(n²), etc.)
+ * - Space complexity estimate
+ * - Execution metrics
+ * - Efficiency rating compared to expectations
+ */
+router.get('/:competitionId/submissions/:submissionId/complexity', authenticate, async (req, res) => {
+  try {
+    const { competitionId, submissionId } = req.params;
+
+    // Fetch the problem submission
+    const problemSubmission = await prisma.problemSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        problem: true,
+        competitionSubmission: {
+          include: {
+            competition: true
+          }
+        },
+        user: true
+      }
+    });
+
+    if (!problemSubmission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // Check authorization - user can view their own submission or admin can view any
+    const isSelfSubmission = problemSubmission.userId === req.user.id;
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin' || req.user.role === 'subadmin';
+    
+    if (!isSelfSubmission && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to view this submission' });
+    }
+
+    // Generate complexity report if submission passed
+    const complexityReport = problemSubmission.status === 'accepted' 
+      ? generateComplexityReport(problemSubmission, problemSubmission.problem)
+      : {
+          canEvaluate: false,
+          reason: 'Complexity analysis only available for accepted submissions'
+        };
+
+    res.json({
+      submissionId: problemSubmission.id,
+      problemId: problemSubmission.problem.id,
+      problemTitle: problemSubmission.problem.title,
+      language: problemSubmission.language,
+      status: problemSubmission.status,
+      testsPassed: problemSubmission.testsPassed,
+      totalTests: problemSubmission.totalTests,
+      executionTime: problemSubmission.executionTime,
+      memoryUsed: problemSubmission.memoryUsed,
+      complexity: complexityReport,
+      submittedAt: problemSubmission.submittedAt,
+      judgedAt: problemSubmission.judgedAt
+    });
+  } catch (error) {
+    console.error('Error fetching complexity metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch complexity metrics' });
+  }
+});
+
+/**
+ * GET /competitions/:competitionId/problems/:problemId/complexity-analysis
+ * Get aggregate complexity analysis for a problem across all submissions
+ * Shows what complexities users have submitted (useful for teachers/admins)
+ */
+router.get('/:competitionId/problems/:problemId/complexity-analysis', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId, problemId } = req.params;
+
+    // Verify problem exists in this competition
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId }
+    });
+
+    if (!problem || problem.competitionId !== competitionId) {
+      return res.status(404).json({ error: 'Problem not found in this competition' });
+    }
+
+    // Get all accepted submissions for this problem
+    const submissions = await prisma.problemSubmission.findMany({
+      where: {
+        problemId,
+        status: 'accepted'
+      },
+      include: {
+        user: {
+          include: {
+            studentProfile: true
+          }
+        }
+      },
+      orderBy: { judgedAt: 'desc' }
+    });
+
+    // Analyze each submission's complexity
+    const complexityAnalyses = submissions.map(submission => {
+      const report = generateComplexityReport(submission, problem);
+      
+      return {
+        userId: submission.userId,
+        userName: submission.user.studentProfile?.name || submission.user.email,
+        language: submission.language,
+        timeComplexity: report.canEvaluate ? report.timeComplexity?.estimated : 'unknown',
+        spaceComplexity: report.canEvaluate ? report.spaceComplexity?.estimated : 'unknown',
+        executionTime: submission.executionTime,
+        memoryUsed: submission.memoryUsed,
+        submittedAt: submission.submittedAt,
+        confidenceScore: report.canEvaluate ? report.timeComplexity?.confidence : 0
+      };
+    });
+
+    // Generate statistics
+    const complexityCounts = {};
+    complexityAnalyses.forEach(analysis => {
+      if (analysis.timeComplexity !== 'unknown') {
+        complexityCounts[analysis.timeComplexity] = (complexityCounts[analysis.timeComplexity] || 0) + 1;
+      }
+    });
+
+    const stats = {
+      totalAcceptedSubmissions: submissions.length,
+      complexityDistribution: complexityCounts,
+      averageExecutionTime: submissions.length > 0 
+        ? Math.round(submissions.reduce((sum, s) => sum + s.executionTime, 0) / submissions.length) 
+        : 0,
+      averageMemory: submissions.length > 0 
+        ? Math.round(submissions.reduce((sum, s) => sum + s.memoryUsed, 0) / submissions.length) 
+        : 0,
+      problemConstraints: {
+        timeLimit: problem.timeLimit,
+        memoryLimit: problem.memoryLimit,
+        expectedComplexity: problem.expectedComplexity || 'not-specified'
+      }
+    };
+
+    res.json({
+      problemId,
+      problemTitle: problem.title,
+      difficulty: problem.difficulty,
+      submissions: complexityAnalyses,
+      statistics: stats
+    });
+  } catch (error) {
+    console.error('Error generating complexity analysis:', error);
+    res.status(500).json({ error: 'Failed to generate complexity analysis' });
+  }
+});
+
+/**
+ * GET /competitions/:competitionId/complexity-report
+ * Get complexity report for all problems in a competition
+ * Shows submission efficiency patterns
+ */
+router.get('/:competitionId/complexity-report', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { competitionId } = req.params;
+
+    const competition = await prisma.competition.findUnique({
+      where: { id: competitionId },
+      include: {
+        problems: {
+          include: {
+            submissions: {
+              where: { status: 'accepted' },
+              include: {
+                user: {
+                  include: { studentProfile: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!competition) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+
+    // Generate complexity analysis for each problem
+    const problemReports = competition.problems.map(problem => {
+      const submissions = problem.submissions;
+      
+      const complexityAnalyses = submissions.map(submission => {
+        const report = generateComplexityReport(submission, problem);
+        return {
+          timeComplexity: report.canEvaluate ? report.timeComplexity?.estimated : 'unknown',
+          executionTime: submission.executionTime
+        };
+      });
+
+      const complexityCounts = {};
+      complexityAnalyses.forEach(analysis => {
+        if (analysis.timeComplexity !== 'unknown') {
+          complexityCounts[analysis.timeComplexity] = (complexityCounts[analysis.timeComplexity] || 0) + 1;
+        }
+      });
+
+      return {
+        problemId: problem.id,
+        title: problem.title,
+        difficulty: problem.difficulty,
+        acceptedSubmissions: submissions.length,
+        complexityDistribution: complexityCounts,
+        mostCommonComplexity: Object.entries(complexityCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'unknown'
+      };
+    });
+
+    res.json({
+      competitionId,
+      competitionTitle: competition.title,
+      totalProblems: competition.problems.length,
+      problems: problemReports
+    });
+  } catch (error) {
+    console.error('Error generating competition complexity report:', error);
+    res.status(500).json({ error: 'Failed to generate competition complexity report' });
   }
 });
 

@@ -120,7 +120,7 @@ function overlayTextOnTemplate(doc, options) {
   } = options;
 
   // Text color for name (visible on template)
-  const nameColor = '#FFD700';      // Gold for participant name
+  const nameColor = '#000000';      // Black for participant name
   const issueDateColor = '#FFFFFF'; // White for issue date
 
   // ==================== PARTICIPANT NAME ====================
@@ -128,9 +128,9 @@ function overlayTextOnTemplate(doc, options) {
   // Font size 28 works well for names up to ~30 characters
   // For longer names, PDFKit will automatically wrap or you can reduce fontSize further
   
-  doc.fontSize(21)                    // ← ADJUST: Font size (24-32 range recommended)
-    .fillColor(nameColor)             // ← ADJUST: Color (#FFD700 = gold)
-    .font('Helvetica-Bold')
+  doc.fontSize(28)                    // ← ADJUST: Font size (24-32 range recommended)
+    .fillColor(nameColor)             // ← ADJUST: Color (#000000 = black)
+    .font('Times-Bold')
     .text(participantName || 'Participant Name', 0, 328, {  // ← ADJUST: Y position (305-335)
       align: 'center',
       width: pageWidth

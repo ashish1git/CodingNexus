@@ -1854,7 +1854,7 @@ router.get('/competitions/:id', async (req, res) => {
 // ============ BULK EMAIL SYSTEM ============
 
 // Get email recipients list (for preview)
-router.post('/email/recipients', async (req, res) => {
+router.post('/email/recipients', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const { filterType, filterValue, searchQuery } = req.body;
     
@@ -1986,9 +1986,66 @@ router.post('/email/recipients', async (req, res) => {
   }
 });
 
-// Send bulk email
-router.post('/email/send-bulk', async (req, res) => {
+// Get team application recipients
+router.post('/email/team-applications', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
+    const { searchQuery } = req.body;
+
+    // Get all team applications
+    const applications = await prisma.teamApplication.findMany({
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        status: true,
+        branch: true
+      },
+      orderBy: {
+        email: 'asc'
+      }
+    });
+
+    let recipients = applications.map(app => ({
+      id: app.id,
+      email: app.email,
+      name: app.fullName,
+      status: app.status,
+      batch: app.branch
+    }));
+
+    // Apply search filter if provided
+    if (searchQuery && searchQuery.trim()) {
+      const search = searchQuery.toLowerCase().trim();
+      recipients = recipients.filter(r => 
+        r.email.toLowerCase().includes(search) ||
+        r.name.toLowerCase().includes(search)
+      );
+    }
+
+    res.json({
+      success: true,
+      recipients,
+      count: recipients.length,
+      eventInfo: {
+        title: 'Team Applications',
+        type: 'teamApplication',
+        totalApplications: applications.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching team application recipients:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch team applications' 
+    });
+  }
+});
+
+// Send bulk email - requires authentication
+router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    console.log('📧 Bulk email request from:', req.user?.email || 'Unknown admin');
     const { subject, message, htmlContent, filterType, filterValue, recipientIds, recipientType } = req.body;
 
     // Validate required fields
@@ -2003,7 +2060,7 @@ router.post('/email/send-bulk', async (req, res) => {
     let recipients = [];
     
     if (recipientIds && recipientIds.length > 0) {
-      // Check if we're sending to event participants or regular students
+      // Check if we're sending to event participants, team applications, or regular students
       if (recipientType === 'eventParticipant' || filterType === 'event') {
         // Send to event participants
         const participants = await prisma.eventParticipant.findMany({
@@ -2016,6 +2073,18 @@ router.post('/email/send-bulk', async (req, res) => {
         recipients = participants.map(p => ({
           email: p.email,
           name: p.name
+        }));
+      } else if (recipientType === 'teamApplication' || filterType === 'teamApplication') {
+        // Send to team application participants
+        const applications = await prisma.teamApplication.findMany({
+          where: {
+            id: { in: recipientIds }
+          }
+        });
+        
+        recipients = applications.map(app => ({
+          email: app.email,
+          name: app.fullName
         }));
       } else {
         // Send to regular students
@@ -2070,6 +2139,21 @@ router.post('/email/send-bulk', async (req, res) => {
         recipients = registrations.map(reg => ({
           email: reg.participant.email,
           name: reg.participant.name
+        }));
+      } else if (filterType === 'teamApplication') {
+        // Get team applicants (all team applications)
+        const applications = await prisma.teamApplication.findMany({
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        });
+
+        recipients = applications.map(app => ({
+          id: app.id,
+          email: app.email,
+          name: app.fullName
         }));
       } else {
         // Get all active students
@@ -2225,7 +2309,7 @@ router.post('/email/send-bulk', async (req, res) => {
 });
 
 // Get list of events for filtering
-router.get('/email/events', async (req, res) => {
+router.get('/email/events', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const now = new Date();
     
@@ -2275,9 +2359,26 @@ router.get('/email/events', async (req, res) => {
       };
     });
 
+    // Get count of team applications
+    const teamApplicationCount = await prisma.teamApplication.count();
+
+    // Add Team Applications as a special filter option
+    const allOptions = [
+      {
+        id: 'team-applications',
+        title: '👥 Team Applications',
+        date: new Date(),
+        type: 'teamApplication',
+        status: 'active',
+        venue: 'N/A',
+        registrations: teamApplicationCount
+      },
+      ...categorizedEvents
+    ];
+
     res.json({
       success: true,
-      events: categorizedEvents
+      events: allOptions
     });
 
   } catch (error) {

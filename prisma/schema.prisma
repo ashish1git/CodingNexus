@@ -218,23 +218,23 @@ model SupportTicket {
 
 model TeamApplication {
   id                    String   @id @default(uuid())
-  // Basic Information
+  // Basic Information (REQUIRED in validation)
   fullName              String?
   branch                String?
   year                  String?
   department            String?
   email                 String?
   phoneNumber           String?
-  // Profiles
+  // Profiles (GitHub REQUIRED)
   githubProfile         String?
   linkedinProfile       String?
   portfolioWebsite      String?
   // Resume
   resumeLink            String?
-  // Technical Skills
+  // Technical Skills (REQUIRED AT LEAST 1 in validation)
   technicalSkills       String[] // JSON array stored as string
   technicalProficiency  Int?     // 1-5
-  // Programming & DSA
+  // Programming & DSA (ALL REQUIRED in validation)
   preferredLanguage     String?
   practiceDSA           String?  // Regularly/Sometimes/No
   dsaPlatforms          String?  // Comma-separated
@@ -243,19 +243,18 @@ model TeamApplication {
   hasProjects           Boolean  @default(false)
   projectLinks          String?  // Comma-separated or JSON
   proudestProject       String?  // Text description
-  // Motivation
+  // Motivation & Learning (ALL REQUIRED in validation)
   whyJoinCodingNexus    String?
-  technicalLearning     String?  // Self-learned description
-  // Commitment
+  technicalLearning     String?
+  // Commitment & Availability (ALL REQUIRED in validation)
   hoursPerWeek          Int?
   teamworkCommitted     Boolean  @default(false)
   technicalTaskWilling  Boolean  @default(false)
-  // Availability
   offlineAvailable      Boolean  @default(false)
-  interestedDomain      String?  // Frontend/Backend/Full Stack/Competitive Programming
+  interestedDomain      String?
   // Additional
   additionalInfo        String?
-  // Declaration
+  // Declaration (REQUIRED in validation)
   declarationAgreed     Boolean  @default(false)
   
   // Legacy fields (for backward compatibility)

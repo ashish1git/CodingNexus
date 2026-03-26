@@ -75,21 +75,42 @@ const TeamApplicationPage = () => {
   };
 
   const validateForm = () => {
-    // Validate email format only if provided
-    if (form.email?.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(form.email.trim())) return 'Invalid email address format';
-    }
+    // Basic Information - ALL REQUIRED
+    if (!form.fullName?.trim()) return 'Full Name is required';
+    if (!form.branch?.trim()) return 'Branch & Year is required';
+    if (!form.email?.trim()) return 'Email is required';
+    if (!form.phoneNumber?.trim()) return 'Phone Number is required';
     
-    // Validate phone number length only if provided
-    if (form.phoneNumber?.trim() && form.phoneNumber.trim().length < 8) {
-      return 'Phone number must be at least 8 digits';
-    }
+    // Your Profiles - GitHub REQUIRED
+    if (!form.githubProfile?.trim()) return 'GitHub Profile link is required';
     
-    // Validate hours per week only if provided
-    if (form.hoursPerWeek && (isNaN(form.hoursPerWeek) || form.hoursPerWeek < 1)) {
-      return 'Please enter valid hours per week';
-    }
+    // Programming & DSA - ALL REQUIRED
+    if (!form.preferredLanguage?.trim()) return 'Preferred Programming Language is required';
+    if (!form.practiceDSA?.trim()) return 'DSA Practice info is required';
+    if (!form.problemSolvingLevel || form.problemSolvingLevel === '') return 'Problem Solving Level is required';
+    
+    // Technical Skills - AT LEAST ONE REQUIRED
+    if (form.technicalSkills.length === 0) return 'Select at least one Technical Skill';
+    
+    // Motivation & Learning - ALL REQUIRED
+    if (!form.whyJoinCodingNexus?.trim()) return 'Why you want to join Coding Nexus is required';
+    if (!form.technicalLearning?.trim()) return 'Technical Learning description is required';
+    
+    // Commitment & Availability - ALL REQUIRED
+    if (!form.hoursPerWeek || form.hoursPerWeek < 1) return 'Hours Per Week is required (minimum 1)';
+    if (!form.teamworkCommitted) return 'Must confirm team commitment';
+    if (!form.technicalTaskWilling) return 'Must confirm willingness for technical tasks';
+    if (!form.offlineAvailable) return 'Must confirm offline availability';
+    if (!form.interestedDomain?.trim()) return 'Interested Domain is required';
+    
+    // Final Declaration - REQUIRED
+    if (!form.declarationAgreed) return 'You must agree to the declaration to submit';
+    
+    // Format validations
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) return 'Invalid email address format';
+    
+    if (form.phoneNumber.trim().length < 8) return 'Phone number must be at least 8 digits';
 
     return null;
   };
@@ -211,6 +232,7 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="Full Name *"
                   className="px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
                 <input
                   type="text"
@@ -219,6 +241,7 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="Branch & Year (e.g., CS-SE) *"
                   className="px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
                 <input
                   type="text"
@@ -243,6 +266,7 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="Email Address *"
                   className="md:col-span-2 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
                 <input
                   type="tel"
@@ -251,6 +275,7 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="Phone Number (WhatsApp preferred) *"
                   className="md:col-span-2 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
               </div>
             </section>
@@ -269,13 +294,14 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="GitHub Profile Link *"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
                 <input
                   type="url"
                   name="linkedinProfile"
                   value={form.linkedinProfile}
                   onChange={onChange}
-                  placeholder="LinkedIn Profile Link *"
+                  placeholder="LinkedIn Profile Link"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
@@ -283,7 +309,7 @@ const TeamApplicationPage = () => {
                   name="portfolioWebsite"
                   value={form.portfolioWebsite}
                   onChange={onChange}
-                  placeholder="Portfolio / Personal Website *"
+                  placeholder="Portfolio / Personal Website"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -375,6 +401,7 @@ const TeamApplicationPage = () => {
                     value={form.practiceDSA}
                     onChange={onChange}
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   >
                     <option value="">Select...</option>
                     <option value="Regularly">Regularly</option>
@@ -461,14 +488,16 @@ const TeamApplicationPage = () => {
                   onChange={onChange}
                   placeholder="Why do you want to join Coding Nexus? *"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-24"
+                  required
                 />
 
                 <textarea
                   name="technicalLearning"
                   value={form.technicalLearning}
                   onChange={onChange}
-                  placeholder="Describe something technical you learned on your own without guidance"
+                  placeholder="Describe something technical you learned on your own without guidance *"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-24"
+                  required
                 />
               </div>
             </section>
@@ -488,6 +517,7 @@ const TeamApplicationPage = () => {
                   placeholder="How many hours per week can you contribute? *"
                   min="1"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 />
 
                 <label className="flex items-center gap-3 p-4 border border-slate-300 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
@@ -497,6 +527,7 @@ const TeamApplicationPage = () => {
                     checked={form.teamworkCommitted}
                     onChange={onChange}
                     className="w-5 h-5 rounded"
+                    required
                   />
                   <span className="text-slate-700 font-medium">I'm comfortable working in a team and meeting deadlines *</span>
                 </label>
@@ -508,6 +539,7 @@ const TeamApplicationPage = () => {
                     checked={form.technicalTaskWilling}
                     onChange={onChange}
                     className="w-5 h-5 rounded"
+                    required
                   />
                   <span className="text-slate-700 font-medium">I'm willing to complete a technical task if shortlisted *</span>
                 </label>
@@ -519,6 +551,7 @@ const TeamApplicationPage = () => {
                     checked={form.offlineAvailable}
                     onChange={onChange}
                     className="w-5 h-5 rounded"
+                    required
                   />
                   <span className="text-slate-700 font-medium">I'm available for offline meetings and events if required *</span>
                 </label>
@@ -530,6 +563,7 @@ const TeamApplicationPage = () => {
                     value={form.interestedDomain}
                     onChange={onChange}
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   >
                     <option value="">Select domain...</option>
                     <option value="Frontend">Frontend</option>
@@ -567,6 +601,7 @@ const TeamApplicationPage = () => {
                   checked={form.declarationAgreed}
                   onChange={onChange}
                   className="w-5 h-5 rounded mt-1 flex-shrink-0"
+                  required
                 />
                 <span className="text-slate-700 leading-relaxed">
                   I confirm that <span className="font-bold">I am serious about learning, contributing, and building consistently</span> with Coding Nexus Team. I understand that this requires dedication and commitment. *

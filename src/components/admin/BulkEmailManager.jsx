@@ -96,6 +96,28 @@ const BulkEmailManager = () => {
     setLoading(true);
     setSearchQuery(''); // Reset search when fetching new recipients
     try {
+      // Handle Team Applications separately
+      if (filterType === 'teamApplication') {
+        const data = await apiClient.post('/admin/email/team-applications', {
+          searchQuery: searchQuery
+        });
+
+        if (data.success) {
+          setRecipients(data.recipients);
+          setFilteredRecipients(data.recipients);
+          setSelectedRecipients(data.recipients.map(r => r.id));
+          setEventInfo(data.eventInfo || null);
+          toast.success(`Found ${data.count} team applicants`);
+          
+          // Auto-populate subject for team applications
+          if (!subject) {
+            setSubject('Coding Nexus Team - Important Update');
+          }
+        }
+        return;
+      }
+
+      // Handle other filter types (events, batch, all)
       const data = await apiClient.post('/admin/email/recipients', {
         filterType: filterType === 'all' ? undefined : filterType,
         filterValue: filterType === 'all' ? undefined : filterValue,
@@ -155,7 +177,7 @@ const BulkEmailManager = () => {
         htmlContent: useCustomHTML ? htmlContent : undefined,
         recipientIds: selectedRecipients,
         filterType: filterType,
-        recipientType: filterType === 'event' ? 'eventParticipant' : 'student'
+        recipientType: filterType === 'event' ? 'eventParticipant' : filterType === 'teamApplication' ? 'teamApplication' : 'student'
       });
 
       if (data.success) {
@@ -274,11 +296,13 @@ const BulkEmailManager = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                   >
                     <option value="event">📅 By Event Registration (Recommended)</option>
+                    <option value="teamApplication">👥 Team Applications</option>
                     <option value="batch">🎓 By Batch</option>
                     <option value="all">👥 All Active Students</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     {filterType === 'event' && '✨ Perfect for event-related communications'}
+                    {filterType === 'teamApplication' && '🎯 Send to all team applicants'}
                     {filterType === 'batch' && '📚 Target specific learning groups'}
                     {filterType === 'all' && '📢 System-wide announcements'}
                   </p>
@@ -422,7 +446,7 @@ const BulkEmailManager = () => {
                 {/* Fetch Recipients Button */}
                 <button
                   onClick={fetchRecipients}
-                  disabled={loading || (filterType !== 'all' && !filterValue)}
+                  disabled={loading || (filterType !== 'all' && filterType !== 'teamApplication' && !filterValue)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {loading ? (
