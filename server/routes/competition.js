@@ -731,6 +731,9 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
         let complexityAnalysis = null;
         let efficiencyData = null;
 
+        console.log(`🔍 Problem fields - expectedComplexity: ${problem.expectedComplexity}, expectedSpace: ${problem.expectedSpace}`);
+        console.log(`📋 Test results count: ${testResults.length}, timeLimit: ${problem.timeLimit}, memoryLimit: ${problem.memoryLimit}`);
+
         if (finalStatus === 'accepted' && testResults.length >= 2) {
           try {
             complexityAnalysis = generateComplexityReport(
@@ -739,17 +742,22 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             );
             console.log(`📊 Complexity Analysis for Problem ${submission.problemId}:`, complexityAnalysis);
 
-            // ⭐ NEW: Generate efficiency report
+            // ⭐ NEW: Generate efficiency report (only if expected complexity is set)
             if (problem.expectedComplexity) {
+              console.log(`🎯 Generating efficiency report - Expected: ${problem.expectedComplexity}`);
               efficiencyData = generateEfficiencyReport(
                 { testResults },
                 problem
               );
               console.log(`⚡ Efficiency Report for Problem ${submission.problemId}:`, efficiencyData);
+            } else {
+              console.log(`⚠️ No expectedComplexity set for problem ${submission.problemId} - skipping efficiency analysis`);
             }
           } catch (analysisError) {
             console.warn(`Complexity analysis failed for problem ${submission.problemId}:`, analysisError.message);
           }
+        } else {
+          console.log(`⏭️ Skipping complexity analysis - status: ${finalStatus}, testResults: ${testResults.length}`);
         }
 
         // Create enriched testResults with complexity data
