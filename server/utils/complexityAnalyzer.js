@@ -1,27 +1,51 @@
 /**
  * Complexity Analyzer
  * Estimates Big O time and space complexity from execution metrics
+ * NOW: Uses AST-based code analysis for accuracy (FIRST PRIORITY)
  * 
  * Used to evaluate LeetCode-style problem submissions
  */
 
+import { analyzeCodeComplexity } from './astComplexityAnalyzer.js';
+
 /**
  * Estimate Big O complexity from execution times & memory usage
- * NOW: Prioritizes MEMORY-based analysis (more accurate) + fallback to time
+ * NOW: Prioritizes AST-based analysis (most accurate) → Memory → Time
  * 
  * @param {Array} testCases - Array of test cases with {input, time, memory}
  * @param {Object} problem - Problem metadata with constraints
+ * @param {string} sourceCode - Optional: source code for AST analysis
  * @returns {Object} Complexity analysis with estimated O notation
  */
-export function analyzeTimeComplexity(testCases, problem = {}) {
-  // ⭐ NEW: Try memory-based detection FIRST (more accurate)
+export function analyzeTimeComplexity(testCases, problem = {}, sourceCode = null) {
+  // ⭐ PRIORITY 1: Try AST-based code analysis (most accurate)
+  if (sourceCode) {
+    console.log(`🌳 [AST-Priority] Source code received, attempting AST analysis...`);
+    try {
+      const astAnalysis = analyzeCodeComplexity(sourceCode, problem.language || 'javascript');
+      console.log(`🌳 AST-based complexity detected: ${astAnalysis.timeComplexity} (${astAnalysis.confidence}% confident)`);
+      return {
+        estimated: astAnalysis.timeComplexity,
+        explanation: astAnalysis.timeExplanation,
+        confidence: astAnalysis.confidence,
+        rationale: 'AST-based code structure analysis',
+        astAnalysis: astAnalysis
+      };
+    } catch (error) {
+      console.warn(`⚠️ AST analysis failed, falling back to runtime metrics: ${error.message}`);
+    }
+  } else {
+    console.log(`⚠️ [AST-Priority] No source code provided, skipping AST analysis`);
+  }
+
+  // ⭐ PRIORITY 2: Try memory-based detection (accurate for runtime)
   const memoryAnalysis = analyzeComplexityByMemory(testCases);
   if (memoryAnalysis.estimated !== 'unknown' && memoryAnalysis.confidence >= 60) {
     console.log(`📊 Memory-based complexity detected: ${memoryAnalysis.estimated} (${memoryAnalysis.confidence}% confident)`);
     return memoryAnalysis;
   }
 
-  // Fallback: Analyze time patterns across test cases
+  // ⭐ PRIORITY 3: Fallback - Analyze time patterns across test cases
   const timeMetrics = extractTimeMetrics(testCases);
   
   if (!timeMetrics || timeMetrics.length < 2) {
@@ -49,9 +73,14 @@ export function analyzeTimeComplexity(testCases, problem = {}) {
  * Detects: O(n), O(n²), O(n³), O(log n), O(1) by memory growth
  */
 function analyzeComplexityByMemory(testCases) {
+  console.log(`🔍 Memory Analysis - Received ${testCases?.length || 0} test cases`);
+  console.log(`📝 Test case structure:`, JSON.stringify(testCases?.slice(0, 1), null, 2));
+  
   const memoryMetrics = extractMemoryMetrics(testCases);
+  console.log(`💾 Memory metrics extracted:`, memoryMetrics);
   
   if (!memoryMetrics || memoryMetrics.length < 2) {
+    console.log(`⚠️ Insufficient memory data - returning unknown`);
     return {
       estimated: 'unknown',
       confidence: 0,
@@ -77,7 +106,10 @@ function analyzeComplexityByMemory(testCases) {
     });
   }
 
+  console.log(`📊 Memory ratios calculated:`, memoryRatios);
+
   if (memoryRatios.length === 0) {
+    console.log(`⚠️ No valid memory ratios - returning unknown`);
     return {
       estimated: 'unknown',
       confidence: 0,
@@ -96,6 +128,8 @@ function analyzeComplexityByMemory(testCases) {
   );
 
   const confidence = Math.round((complexityVotes[dominantComplexity] / memoryRatios.length) * 100);
+
+  console.log(`✅ Memory analysis complete - Complexity: ${dominantComplexity}, Confidence: ${confidence}%`);
 
   return {
     estimated: dominantComplexity,
@@ -195,9 +229,9 @@ function extractMemoryMetrics(testCases) {
 /**
  * Estimate input size from test case input
  * Heuristics:
- * - Count of numbers
+ * - Count of numbers in array
  * - Length of string
- * - Parse n from "n: <value>" format
+ * - Parse n from "n = X" format
  */
 function estimateInputSize(input) {
   if (!input) return 1;
@@ -210,18 +244,29 @@ function estimateInputSize(input) {
     return parseInt(nMatch[1]);
   }
   
-  // Try to find single number at start of input
-  const numMatch = inputStr.match(/^(\d+)/);
+  // For array-like inputs [n1, n2, ...], count elements
+  const arrayMatch = inputStr.match(/\[([^\]]+)\]/);
+  if (arrayMatch) {
+    const elements = arrayMatch[1].split(',').filter(x => x.trim()).length;
+    if (elements > 0 && elements < 1000000) {
+      return elements;
+    }
+  }
+  
+  // Try to find single number at start of input (after [)
+  const numMatch = inputStr.match(/^\[\s*\d+/);
   if (numMatch) {
-    const num = parseInt(numMatch[1]);
-    if (num > 0 && num < 1000000) return num;
+    const numbers = inputStr.match(/\d+/g);
+    if (numbers && numbers.length > 0) {
+      return numbers.length;
+    }
   }
   
   // Count whitespace-separated numbers
-  const numbers = inputStr.trim().split(/\s+/).filter(x => /^\d+$/.test(x));
+  const numbers = inputStr.trim().split(/[\s,\[\]]+/).filter(x => /^\d+$/.test(x));
   if (numbers.length > 0) {
-    const maxNum = Math.max(...numbers.map(Number));
-    if (maxNum > 0 && maxNum < 1000000) return maxNum;
+    // Return the count of numbers (array size)
+    return Math.max(1, numbers.length);
   }
   
   // Default: use string length as proxy
@@ -458,7 +503,12 @@ export function generateComplexityReport(submission, problem) {
     };
   }
 
-  const timeanalysis = analyzeTimeComplexity(submission.testResults, problem);
+  // Pass sourceCode to analyzeTimeComplexity if available
+  const timeanalysis = analyzeTimeComplexity(
+    submission.testResults, 
+    problem,
+    submission.sourceCode // Include source code for AST analysis
+  );
   const spaceAnalysis = analyzeSpaceComplexity(submission.testResults, problem);
 
   // Determine if solution is efficient

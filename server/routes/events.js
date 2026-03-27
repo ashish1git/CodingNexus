@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
 import { sendRegistrationConfirmation, sendCertificateEmail, sendEventReminder } from '../services/emailService.js';
 import { generateCertificatePDF } from '../utils/certificateGenerator.js';
+import { generateCareerBlueprintCertificate } from '../utils/careerBlueprintCertificateGenerator.js';
 
 const router = express.Router();
 
@@ -944,15 +945,26 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=${safeName}-preview.pdf`);
 
-    const pdfDoc = await generateCertificatePDF({
-      participantName,
-      division,
-      eventName: event.title,
-      eventDate,
-      certificateNumber: `PREVIEW-${Date.now()}`,
-      templateType: 'participation',
-      issueDate: issueDateFormatted
-    });
+    let pdfDoc;
+    
+    // Check if this is the Career Blueprint event
+    if (event.title.toLowerCase().includes('career blue print')) {
+      console.log('🎫 Using finalcert.png template for Career Blueprint event (preview)');
+      pdfDoc = await generateCareerBlueprintCertificate({
+        participantName,
+        issueDate: issueDateFormatted
+      });
+    } else {
+      pdfDoc = await generateCertificatePDF({
+        participantName,
+        division,
+        eventName: event.title,
+        eventDate,
+        certificateNumber: `PREVIEW-${Date.now()}`,
+        templateType: 'participation',
+        issueDate: issueDateFormatted
+      });
+    }
 
     pdfDoc.pipe(res);
   } catch (error) {
@@ -2259,15 +2271,26 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${safeName}-certificate.pdf`);
 
-    const pdfDoc = await generateCertificatePDF({
-      participantName: certificateName,
-      division: participant.division || '',
-      eventName: event.title,
-      eventDate,
-      certificateNumber: certNumber,
-      templateType,
-      issueDate: issueDateFormatted
-    });
+    let pdfDoc;
+    
+    // Check if this is the Career Blueprint event
+    if (event.title.toLowerCase().includes('career blue print')) {
+      console.log('🎫 Using finalcert.png template for Career Blueprint event (POST)');
+      pdfDoc = await generateCareerBlueprintCertificate({
+        participantName: certificateName,
+        issueDate: issueDateFormatted
+      });
+    } else {
+      pdfDoc = await generateCertificatePDF({
+        participantName: certificateName,
+        division: participant.division || '',
+        eventName: event.title,
+        eventDate,
+        certificateNumber: certNumber,
+        templateType,
+        issueDate: issueDateFormatted
+      });
+    }
 
     pdfDoc.pipe(res);
   } catch (error) {
@@ -2391,15 +2414,26 @@ router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest,
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${safeName}-certificate.pdf`);
 
-    const pdfDoc = await generateCertificatePDF({
-      participantName: certificateName,
-      division: participant.division || '',
-      eventName: event.title,
-      eventDate,
-      certificateNumber: certNumber,
-      templateType,
-      issueDate: issueDateFormatted
-    });
+    let pdfDoc;
+    
+    // Check if this is the Career Blueprint event
+    if (event.title.toLowerCase().includes('career blue print')) {
+      console.log('🎫 Using finalcert.png template for Career Blueprint event (GET)');
+      pdfDoc = await generateCareerBlueprintCertificate({
+        participantName: certificateName,
+        issueDate: issueDateFormatted
+      });
+    } else {
+      pdfDoc = await generateCertificatePDF({
+        participantName: certificateName,
+        division: participant.division || '',
+        eventName: event.title,
+        eventDate,
+        certificateNumber: certNumber,
+        templateType,
+        issueDate: issueDateFormatted
+      });
+    }
 
     pdfDoc.pipe(res);
   } catch (error) {

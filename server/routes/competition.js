@@ -5,6 +5,7 @@ import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 import { analyzeTimeComplexity, analyzeSpaceComplexity, generateComplexityReport, estimateInputSize, determineEfficiencyRating, calculateEfficiencyScore, compareComplexities, getOptimizationSuggestions, generateEfficiencyReport } from '../utils/complexityAnalyzer.js';
+import { analyzeCodeComplexity } from '../utils/astComplexityAnalyzer.js';
 
 const router = express.Router();
 
@@ -460,6 +461,63 @@ router.post('/:id/register', authenticate, async (req, res) => {
   }
 });
 
+/**
+ * ⭐ NEW ENDPOINT: Analyze code complexity in real-time
+ * Used during test/run phase to show complexity and predict TLE
+ */
+router.post('/:id/analyze-complexity', authenticate, async (req, res) => {
+  try {
+    const { problemId, code, language } = req.body;
+
+    if (!problemId || !code || !language) {
+      return res.status(400).json({ error: 'Missing required fields: problemId, code, language' });
+    }
+
+    // Get problem to check expected complexity and constraints
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId }
+    });
+
+    if (!problem) {
+      return res.status(404).json({ error: 'Problem not found' });
+    }
+
+    // Analyze code complexity using AST
+    const complexityAnalysis = analyzeCodeComplexity(code, language);
+
+    // Predict TLE based on complexity vs constraints
+    const tlePrediction = predictTLE(complexityAnalysis.timeComplexity, problem);
+
+    // Prepare response
+    const response = {
+      success: true,
+      analysis: {
+        timeComplexity: complexityAnalysis.timeComplexity,
+        timeExplanation: complexityAnalysis.timeExplanation,
+        spaceComplexity: complexityAnalysis.spaceComplexity,
+        spaceExplanation: complexityAnalysis.spaceExplanation,
+        confidence: complexityAnalysis.confidence,
+        loops: complexityAnalysis.loops,
+        maxNesting: complexityAnalysis.maxNesting,
+        hasRecursion: complexityAnalysis.hasRecursion,
+        dataStructures: complexityAnalysis.dataStructures
+      },
+      constraints: {
+        expected: problem.expectedComplexity || 'not-specified',
+        timeLimit: problem.timeLimit,
+        memoryLimit: problem.memoryLimit
+      },
+      tlePrediction: tlePrediction,
+      feedback: generateFeedback(complexityAnalysis, problem, tlePrediction)
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error analyzing complexity:', error);
+    res.status(500).json({ error: 'Failed to analyze complexity' });
+  }
+});
+
 // Submit solutions for competition
 router.post('/:id/submit', authenticate, async (req, res) => {
   try {
@@ -737,7 +795,10 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
         if (finalStatus === 'accepted' && testResults.length >= 2) {
           try {
             complexityAnalysis = generateComplexityReport(
-              { testResults },
+              { 
+                testResults,
+                sourceCode: submission.code  // Include source code for AST analysis
+              },
               problem
             );
             console.log(`📊 Complexity Analysis for Problem ${submission.problemId}:`, complexityAnalysis);
@@ -1347,7 +1408,13 @@ router.get('/:competitionId/submissions/:submissionId/complexity', authenticate,
 
     // Generate complexity report if submission passed
     const complexityReport = problemSubmission.status === 'accepted' 
-      ? generateComplexityReport(problemSubmission, problemSubmission.problem)
+      ? generateComplexityReport(
+          {
+            testResults: problemSubmission.testResults,
+            sourceCode: problemSubmission.code  // Include source code for AST analysis
+          },
+          problemSubmission.problem
+        )
       : {
           canEvaluate: false,
           reason: 'Complexity analysis only available for accepted submissions'
@@ -1497,7 +1564,13 @@ router.get('/:competitionId/problems/:problemId/complexity-analysis', authentica
 
     // Analyze each submission's complexity
     const complexityAnalyses = submissions.map(submission => {
-      const report = generateComplexityReport(submission, problem);
+      const report = generateComplexityReport(
+        { 
+          testResults: submission.testResults,
+          sourceCode: submission.code  // Include source code for AST analysis
+        },
+        problem
+      );
       
       return {
         userId: submission.userId,
@@ -1585,7 +1658,13 @@ router.get('/:competitionId/complexity-report', authenticate, authorizeRole('adm
       const submissions = problem.submissions;
       
       const complexityAnalyses = submissions.map(submission => {
-        const report = generateComplexityReport(submission, problem);
+        const report = generateComplexityReport(
+          { 
+            testResults: submission.testResults,
+            sourceCode: submission.code  // Include source code for AST analysis
+          },
+          problem
+        );
         return {
           timeComplexity: report.canEvaluate ? report.timeComplexity?.estimated : 'unknown',
           executionTime: submission.executionTime
@@ -1733,5 +1812,131 @@ router.get('/:competitionId/efficiency-report', authenticate, authorizeRole('adm
     res.status(500).json({ error: 'Failed to generate efficiency report' });
   }
 });
+
+/**
+ * ⭐ Helper Function: Predict TLE (Time Limit Exceeded)
+ * Compares actual complexity vs expected complexity
+ */
+function predictTLE(actualComplexity, problem) {
+  if (!problem.expectedComplexity) {
+    return {
+      willTLE: false,
+      reason: 'No complexity constraint specified',
+      severity: 'info'
+    };
+  }
+
+  const complexityOrder = [
+    'O(1)',
+    'O(log n)',
+    'O(n)',
+    'O(n log n)',
+    'O(n²)',
+    'O(n³)',
+    'O(2^n)',
+    'O(n!)'
+  ];
+
+  const actualIndex = complexityOrder.indexOf(actualComplexity);
+  const expectedIndex = complexityOrder.indexOf(problem.expectedComplexity);
+
+  if (actualIndex === -1 || expectedIndex === -1) {
+    return {
+      willTLE: false,
+      reason: 'Unable to determine TLE risk',
+      severity: 'warning'
+    };
+  }
+
+  // If actual is worse than expected, high TLE risk
+  if (actualIndex > expectedIndex) {
+    const difference = actualIndex - expectedIndex;
+    return {
+      willTLE: true,
+      reason: `Your solution is ${complexityOrder[actualIndex]} but expected is ${complexityOrder[expectedIndex]} - likely to exceed time limit`,
+      severity: difference > 2 ? 'critical' : 'high',
+      recommendation: 'Consider optimizing your algorithm',
+      expectedTime: complexityOrder[expectedIndex]
+    };
+  }
+
+  // If actual is better than or equal to expected
+  return {
+    willTLE: false,
+    reason: `Your solution (${actualComplexity}) meets or exceeds the expected complexity (${problem.expectedComplexity})`,
+    severity: 'success'
+  };
+}
+
+/**
+ * ⭐ Helper Function: Generate User Feedback
+ * Creates actionable feedback based on complexity analysis
+ */
+function generateFeedback(analysis, problem, tlePrediction) {
+  const feedback = {
+    status: 'analyzing',
+    messages: [],
+    warnings: [],
+    suggestions: []
+  };
+
+  // Complexity feedback
+  if (tlePrediction.willTLE) {
+    feedback.messages.push({
+      type: 'error',
+      title: '⚠️ Time Limit Exceeded Risk',
+      message: tlePrediction.reason,
+      severity: tlePrediction.severity
+    });
+    
+    if (tlePrediction.recommendation) {
+      feedback.suggestions.push(tlePrediction.recommendation);
+    }
+  } else {
+    feedback.messages.push({
+      type: 'success',
+      title: '✅ Complexity Check Passed',
+      message: tlePrediction.reason
+    });
+  }
+
+  // Loop feedback
+  if (analysis.maxNesting === 0) {
+    feedback.messages.push({
+      type: 'info',
+      title: 'ℹ️ Algorithm Type',
+      message: 'No loops or recursion detected - constant time algorithm'
+    });
+  } else if (analysis.maxNesting === 1) {
+    feedback.messages.push({
+      type: 'info',
+      title: 'ℹ️ Algorithm Type',
+      message: `Single loop algorithm (${analysis.loops} total loop${analysis.loops > 1 ? 's' : ''})`
+    });
+  } else {
+    feedback.messages.push({
+      type: 'warning',
+      title: '⚠️ Nested Loops Detected',
+      message: `${analysis.maxNesting} nested loop${analysis.maxNesting > 1 ? 's' : ''} found - consider optimization`
+    });
+  }
+
+  // Recursion feedback
+  if (analysis.hasRecursion) {
+    feedback.warnings.push('Recursive algorithm detected - may consume more stack memory');
+  }
+
+  // Data structure feedback
+  if (Object.keys(analysis.dataStructures).length > 0) {
+    const structures = Object.keys(analysis.dataStructures).join(', ');
+    feedback.messages.push({
+      type: 'info',
+      title: 'ℹ️ Data Structures Used',
+      message: `${structures} - efficient choice for this algorithm`
+    });
+  }
+
+  return feedback;
+}
 
 export default router;

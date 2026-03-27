@@ -677,12 +677,10 @@ const StudentDashboard = () => {
             <button className="sdb-hamburger" onClick={() => setIsSidebarOpen(!isSidebarOpen)} aria-label="Toggle Sidebar">
               {isSidebarOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-              <div className="sdb-logo-icon">
-                <Code size={20} color="#fff" />
-              </div>
-              <span className="sdb-logo-text">Coding Nexus</span>
-            </Link>
+            <div className="sdb-logo-icon">
+              <Code size={20} color="#fff" />
+            </div>
+            <span className="sdb-logo-text">Coding Nexus</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
