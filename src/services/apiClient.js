@@ -95,15 +95,11 @@ class ApiClient {
         // Handle 401 specifically - token issues
         if (response.status === 401) {
           console.error('🔒 Authentication failed:', data.error);
-          // If token is invalid, clear it
-          if (data.error === 'Invalid token' || data.error === 'No token provided') {
+          // Never clear the token for an active guest session
+          const isGuestSession = localStorage.getItem('guest_user');
+          if (!isGuestSession && (data.error === 'Invalid token' || data.error === 'No token provided')) {
             this.removeToken();
             localStorage.removeItem('user');
-            // Optionally redirect to login
-            if (window.location.pathname !== '/login' && window.location.pathname !== '/admin/login') {
-              console.log('🔄 Redirecting to login due to invalid token...');
-              // You could trigger a redirect here or dispatch an event
-            }
           }
         }
         throw new Error(data.error || `HTTP error! status: ${response.status}`);

@@ -38,8 +38,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install utilities
-RUN apk add --no-cache dumb-init wget
+# Install utilities (use mirror fallback to handle transient DNS issues)
+RUN apk update --no-cache || true && \
+    apk add --no-cache dumb-init curl
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -61,7 +62,7 @@ EXPOSE 3000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1
+  CMD curl -sf http://localhost:3000/api/health || exit 1
 
 # Start container
 ENTRYPOINT ["dumb-init", "--"]

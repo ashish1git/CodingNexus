@@ -6,15 +6,22 @@
  */
 
 /**
- * Estimate Big O complexity from execution times
- * Analyzes the relationship between input size and execution time
+ * Estimate Big O complexity from execution times & memory usage
+ * NOW: Prioritizes MEMORY-based analysis (more accurate) + fallback to time
  * 
  * @param {Array} testCases - Array of test cases with {input, time, memory}
  * @param {Object} problem - Problem metadata with constraints
  * @returns {Object} Complexity analysis with estimated O notation
  */
 export function analyzeTimeComplexity(testCases, problem = {}) {
-  // Analyze time patterns across test cases
+  // ⭐ NEW: Try memory-based detection FIRST (more accurate)
+  const memoryAnalysis = analyzeComplexityByMemory(testCases);
+  if (memoryAnalysis.estimated !== 'unknown' && memoryAnalysis.confidence >= 60) {
+    console.log(`📊 Memory-based complexity detected: ${memoryAnalysis.estimated} (${memoryAnalysis.confidence}% confident)`);
+    return memoryAnalysis;
+  }
+
+  // Fallback: Analyze time patterns across test cases
   const timeMetrics = extractTimeMetrics(testCases);
   
   if (!timeMetrics || timeMetrics.length < 2) {
@@ -30,8 +37,103 @@ export function analyzeTimeComplexity(testCases, problem = {}) {
   
   // Estimate complexity based on growth patterns
   const complexity = estimateComplexity(timeRatios, timeMetrics);
+  console.log(`⏱️ Time-based complexity detected: ${complexity.estimated} (${complexity.confidence}% confident)`);
 
   return complexity;
+}
+
+/**
+ * ⭐ NEW: Analyze complexity based on MEMORY usage patterns
+ * More accurate than time-based for most problems
+ * 
+ * Detects: O(n), O(n²), O(n³), O(log n), O(1) by memory growth
+ */
+function analyzeComplexityByMemory(testCases) {
+  const memoryMetrics = extractMemoryMetrics(testCases);
+  
+  if (!memoryMetrics || memoryMetrics.length < 2) {
+    return {
+      estimated: 'unknown',
+      confidence: 0,
+      rationale: 'Insufficient memory data'
+    };
+  }
+
+  // Calculate memory growth ratios
+  const memoryRatios = [];
+  for (let i = 1; i < memoryMetrics.length; i++) {
+    const prev = memoryMetrics[i - 1];
+    const curr = memoryMetrics[i];
+    
+    if (prev.memory === 0 || curr.memory === 0) continue;
+    
+    const inputRatio = curr.inputSize / prev.inputSize;
+    const memoryRatio = curr.memory / prev.memory;
+    
+    memoryRatios.push({
+      inputRatio,
+      memoryRatio,
+      complexity: estimateComplexityFromMemoryRatio(inputRatio, memoryRatio)
+    });
+  }
+
+  if (memoryRatios.length === 0) {
+    return {
+      estimated: 'unknown',
+      confidence: 0,
+      rationale: 'Could not calculate memory ratios'
+    };
+  }
+
+  // Determine dominant complexity pattern
+  const complexityVotes = {};
+  memoryRatios.forEach(ratio => {
+    complexityVotes[ratio.complexity] = (complexityVotes[ratio.complexity] || 0) + 1;
+  });
+
+  const dominantComplexity = Object.keys(complexityVotes).reduce((a, b) =>
+    complexityVotes[a] > complexityVotes[b] ? a : b
+  );
+
+  const confidence = Math.round((complexityVotes[dominantComplexity] / memoryRatios.length) * 100);
+
+  return {
+    estimated: dominantComplexity,
+    confidence,
+    rationale: `Memory-based analysis: ${memoryRatios.length} data points show ${dominantComplexity}`,
+    details: memoryRatios
+  };
+}
+
+/**
+ * ⭐ NEW: Estimate complexity from memory growth ratio
+ * If memory grows by 2x when input grows by 2x → O(n)
+ * If memory grows by 4x when input grows by 2x → O(n²)
+ */
+function estimateComplexityFromMemoryRatio(inputRatio, memoryRatio) {
+  // Handle edge cases
+  if (memoryRatio < 1.2) return 'O(1)';
+  
+  // Calculate expected ratios for different complexities
+  const o1Ratio = 1.0;           // No growth
+  const ologn = Math.log2(inputRatio) + 1;  // log(n) growth
+  const onRatio = inputRatio;    // Linear: 2x input = 2x memory
+  const onlognRatio = inputRatio * Math.log2(inputRatio);  // n log n
+  const on2Ratio = inputRatio * inputRatio;  // Quadratic: 2x input = 4x memory
+  const on3Ratio = inputRatio ** 3;  // Cubic: 2x input = 8x memory
+
+  // Find closest match
+  const differences = [
+    { complexity: 'O(1)', diff: Math.abs(memoryRatio - o1Ratio) },
+    { complexity: 'O(log n)', diff: Math.abs(memoryRatio - ologn) },
+    { complexity: 'O(n)', diff: Math.abs(memoryRatio - onRatio) },
+    { complexity: 'O(n log n)', diff: Math.abs(memoryRatio - onlognRatio) },
+    { complexity: 'O(n²)', diff: Math.abs(memoryRatio - on2Ratio) },
+    { complexity: 'O(n³)', diff: Math.abs(memoryRatio - on3Ratio) }
+  ];
+
+  differences.sort((a, b) => a.diff - b.diff);
+  return differences[0].complexity;
 }
 
 /**

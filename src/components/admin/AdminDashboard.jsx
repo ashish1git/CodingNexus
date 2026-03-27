@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -330,6 +330,14 @@ const AdminDashboard = () => {
                 >
                   <UserCheck className="w-8 h-8 text-cyan-600" />
                   <span className="text-sm font-medium text-gray-700">Team Applications</span>
+                </Link>
+                {/* NEW: Guest Management */}
+                <Link
+                  to="/admin/guest-management"
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition"
+                >
+                  <Ghost className="w-8 h-8 text-purple-600" />
+                  <span className="text-sm font-medium text-gray-700">Guest Sessions</span>
                 </Link>
               </div>
             </div>

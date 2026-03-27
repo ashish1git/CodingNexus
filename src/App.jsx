@@ -1,6 +1,9 @@
 // src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { GuestProvider } from './context/GuestContext';
+import GuestBanner from './components/shared/GuestBanner';
+import GuestLogin from './components/auth/GuestLogin';
 import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from 'react-hot-toast';
 
@@ -68,6 +71,7 @@ import EventManagement from './components/admin/EventManagement';
 import EventQuizManager from './components/admin/EventQuizManager';
 import AdminHackathonRegistrations from './components/admin/AdminHackathonRegistrations';
 import TeamApplicationsManager from './components/admin/TeamApplicationsManager';
+import GuestManagementPage from './components/admin/GuestManagementPage';
 
 function App() {
   // Check if maintenance mode is enabled
@@ -87,8 +91,10 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <GuestProvider>
         <Router>
           <div className="min-h-screen bg-gray-50">
+            <GuestBanner />
             <Toaster 
               position="top-right"
               toastOptions={{
@@ -116,6 +122,8 @@ function App() {
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
+              {/* NEW: Guest login route */}
+              <Route path="/guest-login" element={<GuestLogin />} />
               
               {/* Event Public Routes */}
               <Route path="/events" element={<EventsPage />} />
@@ -400,12 +408,22 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              {/* NEW: Guest Management dedicated page */}
+              <Route
+                path="/admin/guest-management"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <GuestManagementPage />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </div>
         </Router>
+        </GuestProvider>
       </AuthProvider>
     </ThemeProvider>
   );

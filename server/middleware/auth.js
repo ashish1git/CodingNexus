@@ -11,6 +11,28 @@ export const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
+    // Check if this is a platform guest (new guest session)
+    if (decoded.role === 'guest') {
+      const guestSession = await prisma.guestSession.findUnique({
+        where: { id: decoded.userId }
+      });
+
+      if (!guestSession || !guestSession.isActive || guestSession.expiresAt < new Date()) {
+        return res.status(401).json({ success: false, error: 'Guest session expired or invalid' });
+      }
+
+      req.user = {
+        id: guestSession.id,
+        role: 'guest',
+        username: guestSession.username,
+        // Provide a compatible `name` field for leaderboard / display lookups
+        name: guestSession.username,
+        isGuest: true
+      };
+      next();
+      return;
+    }
+
     // Check if this is an event guest (event participant)
     if (decoded.role === 'event_guest' || decoded.userType === 'event_guest') {
       // Fetch event participant from database

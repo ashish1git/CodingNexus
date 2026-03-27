@@ -14,6 +14,7 @@ import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-s
 import eventRoutes from './routes/events.js';
 import codeRoutes from './routes/code.js';
 import teamApplicationsRoutes from './routes/team-applications.js';
+import guestRoutes from './routes/guest.js';
 import prisma from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,6 +73,7 @@ app.use('/api/submissions', asyncSubmissionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/code', codeRoutes);
 app.use('/api/team-applications', teamApplicationsRoutes);
+app.use('/api/guest', guestRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

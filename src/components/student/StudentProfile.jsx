@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useGuest } from '../../context/GuestContext';
 import { studentService } from '../../services/studentService';
 import ChangePasswordModal from '../shared/ChangePasswordModal';
 import toast from 'react-hot-toast';
@@ -10,6 +11,12 @@ import 'react-easy-crop/react-easy-crop.css';
 
 const StudentProfile = () => {
   const { userDetails, currentUser, refreshUser } = useAuth();
+  const { guestUser, isGuest } = useGuest();
+
+  // For guests, use the username they chose; for regular students, use the full name
+  const displayName = isGuest
+    ? guestUser?.username
+    : (userDetails?.studentProfile?.name || userDetails?.name || 'Student');
   const [uploading, setUploading] = useState(false);
   const [photoURL, setPhotoURL] = useState(userDetails?.profilePhotoUrl || userDetails?.photoURL || null);
   const [showCropModal, setShowCropModal] = useState(false);
@@ -242,7 +249,7 @@ const StudentProfile = () => {
   };
 
   const attendance = userDetails?.attendance ?? 0;
-  const userFirstName = userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0] || 'User';
+  const userFirstName = isGuest ? guestUser?.username : (userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0] || 'User');
   const studentProfile = userDetails?.studentProfile || {};
   const joinedDate = new Date(userDetails?.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -285,7 +292,7 @@ const StudentProfile = () => {
                     />
                   ) : (
                     <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold">
-                      {studentProfile?.name?.charAt(0).toUpperCase() || userDetails?.name?.charAt(0).toUpperCase() || 'U'}
+                      {displayName?.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}
                 </div>
@@ -313,7 +320,7 @@ const StudentProfile = () => {
 
               {/* User Info */}
               <div className="text-center sm:text-left flex-1">
-                <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">{studentProfile?.name || userDetails?.name || 'Student'}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">{displayName}</h1>
                 <p className="text-sm sm:text-base text-slate-400 mt-1">{studentProfile?.batch || 'Basic'} Batch Student</p>
                 <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
                   <span className="px-3 py-1 bg-indigo-900/50 text-indigo-300 rounded-full text-xs sm:text-sm font-medium border border-indigo-700/50">

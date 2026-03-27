@@ -676,3 +676,36 @@ model HackathonRegistration {
   @@index([problemStatementNo])
   @@index([teamType])
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Guest User System (NEW — does not modify any existing models)
+// ──────────────────────────────────────────────────────────────────
+
+/// Represents a temporary guest session on the platform.
+/// Guests are identified by a chosen username and receive a
+/// short-lived JWT.  No email/password required.
+model GuestSession {
+  id        String   @id @default(uuid())
+  username  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([username])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+/// Admin-configurable list of frontend routes that guests may visit.
+/// Admin toggles routes ON/OFF through the Guest Access Control panel.
+model GuestRouteConfig {
+  id        String   @id @default(uuid())
+  route     String   @unique        // e.g. "/student/competitions"
+  label     String                  // Human-readable label shown in admin UI
+  isEnabled Boolean  @default(true)
+  updatedBy String?                 // Admin user ID who last changed this
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isEnabled])
+}

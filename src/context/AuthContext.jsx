@@ -28,8 +28,20 @@ export const AuthProvider = ({ children }) => {
       console.log('🔐 Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser });
 
       if (token) {
-        // If we have token but no stored user, or need to verify token
-        try {
+        // NEW: If this is a guest session, skip AuthContext entirely.
+      // The GuestContext manages the guest JWT — we must NOT clear it here.
+      const isGuestSession = localStorage.getItem('guest_user');
+      if (isGuestSession) {
+        console.log('👻 Guest session detected, skipping AuthContext init');
+        setCurrentUser(null);
+        setUserDetails(null);
+        setInitialCheckDone(true);
+        setLoading(false);
+        return;
+      }
+
+      // If we have token but no stored user, or need to verify token
+      try {
           const user = await authService.getCurrentUser();
           if (user) {
             console.log('✅ User authenticated:', user.email, user.role);

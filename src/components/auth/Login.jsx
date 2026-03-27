@@ -209,6 +209,24 @@ const Login = () => {
               Admin Login →
             </Link>
           </div>
+          {/* NEW: Guest login option */}
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-gray-400 bg-white px-2">
+              or
+            </div>
+          </div>
+          <div className="text-center">
+            <Link
+              to="/guest-login"
+              id="continue-as-guest-btn"
+              className="inline-flex items-center gap-1.5 px-4 py-2 border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg font-medium text-sm transition w-full justify-center"
+            >
+              👻 Continue as Guest
+            </Link>
+          </div>
         </div>        </div>      </div>
     </div>
   );

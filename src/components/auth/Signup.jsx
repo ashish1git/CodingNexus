@@ -79,7 +79,7 @@ const Signup = () => {
       };
 
       await signup(email, formData.password, userData);
-      toast.success('Registration successful! Please login.');
+      toast.success('Registration successful! Login to access competitions.');
       navigate('/login');
     }catch (error) {
   console.error('Signup error:', error);
