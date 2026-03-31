@@ -666,6 +666,70 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           continue;
         }
 
+        // ⭐ PRE-TEST COMPLEXITY CHECK: Analyze complexity immediately after compilation
+        // This checks if code will likely TLE BEFORE running test cases
+        console.log(`\n🔎 PRE-TEST COMPLEXITY CHECK for Problem ${submission.problemId}`);
+        let preTestComplexityAnalysis = null;
+        let preTLEPrediction = null;
+        let skipTestCases = false;
+
+        try {
+          // Analyze the submitted code using AST analyzer
+          preTestComplexityAnalysis = analyzeCodeComplexity(submission.code, submission.language);
+          console.log(`📊 Detected Complexity: ${preTestComplexityAnalysis.timeComplexity} (Loops: ${preTestComplexityAnalysis.loops}, Recursion: ${preTestComplexityAnalysis.hasRecursion})`);
+
+          // If admin set an expected complexity, check for TLE risk
+          if (problem.expectedComplexity) {
+            console.log(`🎯 Expected Complexity: ${problem.expectedComplexity}`);
+            
+            // Predict TLE based on actual vs expected complexity
+            preTLEPrediction = predictTLE(preTestComplexityAnalysis.timeComplexity, problem);
+            console.log(`⚠️  TLE Prediction: willTLE=${preTLEPrediction.willTLE}, severity=${preTLEPrediction.severity}, reason=${preTLEPrediction.reason}`);
+
+            // If severity is CRITICAL, block execution immediately
+            if (preTLEPrediction.willTLE && preTLEPrediction.severity === 'critical') {
+              console.error(`❌ BLOCKING TEST EXECUTION: Detected ${preTestComplexityAnalysis.timeComplexity} (critical TLE risk)`);
+              
+              // Create feedback message
+              const feedbackMessage = `⏱️ Time Limit Exceeds\n\nYour algorithm has complexity ${preTestComplexityAnalysis.timeComplexity}, but the expected solution is ${problem.expectedComplexity}.\n\nReason: ${preTLEPrediction.reason}\n\nRecommendation: ${preTLEPrediction.recommendation || 'Optimize your algorithm to match the expected complexity'}`;
+              
+              await prisma.problemSubmission.update({
+                where: { id: submission.id },
+                data: {
+                  status: 'tle',
+                  errorMessage: feedbackMessage,
+                  judgedAt: new Date(),
+                  testResults: [{
+                    error: feedbackMessage,
+                    detectedComplexity: preTestComplexityAnalysis.timeComplexity,
+                    expectedComplexity: problem.expectedComplexity,
+                    preTLEDetection: true
+                  }]
+                }
+              });
+              
+              console.log(`✓ Problem ${submission.problemId}: TLE error recorded, skipping test cases`);
+              skipTestCases = true;
+            } else if (preTLEPrediction.willTLE && preTLEPrediction.severity === 'high') {
+              // HIGH severity - warn but allow test execution
+              console.warn(`⚠️  HIGH severity TLE risk but allowing execution: ${preTLEPrediction.reason}`);
+            } else {
+              // OK to proceed
+              console.log(`✅ Complexity check passed - proceeding with test cases`);
+            }
+          } else {
+            console.log(`ℹ️  No expectedComplexity set for problem - proceeding with test cases (complexity: ${preTestComplexityAnalysis.timeComplexity})`);
+          }
+        } catch (complexityCheckError) {
+          console.warn(`⚠️  Pre-test complexity check failed (non-blocking):`, complexityCheckError.message);
+          // Don't block execution if complexity check fails - just log and continue
+        }
+
+        // If critical TLE detected, skip to next submission
+        if (skipTestCases) {
+          continue;
+        }
+
         let totalPassed = 0;
         let totalTime = 0;
         let totalMemory = 0;
