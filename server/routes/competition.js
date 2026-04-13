@@ -1006,6 +1006,9 @@ router.post('/', authenticate, authorizeRole('admin', 'superadmin'), async (req,
             testCases: problem.testCases || [],
             timeLimit: problem.timeLimit || 3000,
             memoryLimit: problem.memoryLimit || 256,
+            // ⭐ COMPLEXITY FIELDS - Admin sets expected complexity
+            expectedComplexity: problem.expectedComplexity || null,  // e.g., "O(n)", "O(n log n)", "O(n²)"
+            expectedSpace: problem.expectedSpace || null,            // e.g., "O(1)", "O(n)"
             // LeetCode-style function signature fields
             functionName: problem.functionName || 'solution',
             parameters: problem.parameters || [],

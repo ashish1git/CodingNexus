@@ -62,7 +62,8 @@ export function analyzeCodeComplexity(code, language = 'javascript') {
 
 /**
  * Detect all loops (for, while) and their nesting depth
- * Simple and accurate: count consecutive nested loops
+ * IMPROVED: Uses brace matching to detect TRUE nesting (not just distance)
+ * Also handles single-statement loops (without explicit braces)
  */
 function detectLoops(code) {
   const cleanCode = removeStringsAndComments(code);
@@ -73,35 +74,49 @@ function detectLoops(code) {
   let match;
   
   while ((match = loopPattern.exec(cleanCode)) !== null) {
-    loops.push({
-      type: match[1].toLowerCase(),
-      position: match.index
-    });
+    const loopPos = match.index;
+    
+    // Find the opening brace { for this loop
+    const braceInfo = findLoopBraces(cleanCode, loopPos);
+    
+    if (braceInfo) {
+      loops.push({
+        type: match[1].toLowerCase(),
+        position: loopPos,
+        braceStart: braceInfo.start,
+        braceEnd: braceInfo.end,
+        isSingleStatement: braceInfo.isSingleStatement
+      });
+    }
   }
   
   if (loops.length === 0) {
     return { total: 0, maxDepth: 0, loops: [], byType: { for: 0, while: 0 } };
   }
 
-  // Calculate nesting depth by counting how many loops can be nested at each position
+  // Calculate TRUE nesting depth using brace positions
+  // A loop is nested in another if its opening brace is INSIDE another's braces
   let maxNestingDepth = 1;
   
-  // Simple heuristic: if we have N loops and code is reasonably sized,
-  // check if they appear to be nested by looking at their spacing
   if (loops.length > 1) {
-    // Loops are typically nested if they appear close to each other
-    // and their closing braces overlap
-    let consecutiveNested = 1;
-    for (let i = 1; i < loops.length; i++) {
-      const prevPos = loops[i - 1].position;
-      const currPos = loops[i].position;
-      // If loops are close together (within 100 chars), they're likely nested
-      if (currPos - prevPos < 100) {
-        consecutiveNested++;
-        maxNestingDepth = Math.max(maxNestingDepth, consecutiveNested);
-      } else {
-        consecutiveNested = 1;
+    // For each loop, check how many other loops contain it
+    for (let i = 0; i < loops.length; i++) {
+      let nestingLevel = 1;
+      const currentLoop = loops[i];
+      
+      // Count how many loops this loop is nested inside
+      for (let j = 0; j < loops.length; j++) {
+        if (i !== j) {
+          const otherLoop = loops[j];
+          // Is currentLoop inside otherLoop?
+          if (currentLoop.braceStart > otherLoop.braceStart && 
+              currentLoop.braceEnd < otherLoop.braceEnd) {
+            nestingLevel++;
+          }
+        }
       }
+      
+      maxNestingDepth = Math.max(maxNestingDepth, nestingLevel);
     }
   }
 
@@ -114,6 +129,83 @@ function detectLoops(code) {
       while: loops.filter(l => l.type === 'while').length
     }
   };
+}
+
+/**
+ * Find loop braces, handling both { } and single-statement loops
+ * Returns { start, end, isSingleStatement }
+ */
+function findLoopBraces(code, loopPos) {
+  let parenDepth = 0;
+  let foundParen = false;
+  let conditionEnd = -1;
+  
+  // Find end of condition (closing paren)
+  for (let i = loopPos; i < code.length; i++) {
+    const char = code[i];
+    
+    if (char === '(') {
+      parenDepth++;
+      foundParen = true;
+    } else if (char === ')') {
+      parenDepth--;
+      if (foundParen && parenDepth === 0) {
+        conditionEnd = i;
+        break;
+      }
+    }
+  }
+  
+  if (conditionEnd === -1) return null;
+  
+  // Look for opening brace after condition
+  for (let i = conditionEnd + 1; i < code.length; i++) {
+    const char = code[i];
+    
+    if (char === '{') {
+      // Braced loop body
+      const closePos = findMatchingCloseBrace(code, i);
+      if (closePos !== -1) {
+        return { start: i, end: closePos, isSingleStatement: false };
+      }
+      return null;
+    } else if (!/\s/.test(char)) {
+      // Non-whitespace that's not { means single statement
+      // Find the end of the statement (semicolon or newline)
+      for (let j = i; j < code.length; j++) {
+        if (code[j] === ';' || code[j] === '\n' || j === code.length - 1) {
+          return { 
+            start: i, 
+            end: j, 
+            isSingleStatement: true 
+          };
+        }
+      }
+      return null;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Find matching closing brace for an opening brace
+ */
+function findMatchingCloseBrace(code, openPos) {
+  let depth = 1;
+  
+  for (let i = openPos + 1; i < code.length; i++) {
+    if (code[i] === '{') {
+      depth++;
+    } else if (code[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  
+  return -1;
 }
 
 /**
@@ -137,48 +229,63 @@ function isLoopKeyword(substr) {
 
 /**
  * Detect recursive function calls
+ * Only counts TRUE recursion (function calling itself from within its own body)
  */
 function detectRecursion(code) {
   const cleanCode = removeStringsAndComments(code);
   
-  // Find actual function/method signatures  
-  const functionRegex = /(?:function\s+(\w+)|(\w+)\s*\(\s*[^)]*\)\s*\{|public\s+\w+\s+(\w+)\s*\(|def\s+(\w+))/g;
-  const functions = new Set();
+  // Find function definitions with their bodies
+  const functionDefRegex = /(?:function\s+(\w+)|(\w+)\s*\(\s*[^)]*\)\s*\{)/g;
+  const functions = new Map(); // Map of { name -> { start, end } }
   
   let match;
-  while ((match = functionRegex.exec(cleanCode)) !== null) {
-    const name = match[1] || match[2] || match[3] || match[4];
+  while ((match = functionDefRegex.exec(cleanCode)) !== null) {
+    const name = match[1] || match[2];
+    
     if (name && !['for', 'if', 'while', 'switch', 'catch', 'function'].includes(name)) {
-      functions.add(name);
+      // Find the opening brace for this function
+      let searchPos = match.index + match[0].length;
+      if (cleanCode[searchPos - 1] !== '{') {
+        // Find the next {
+        searchPos = cleanCode.indexOf('{', searchPos);
+      } else {
+        searchPos = match.index + match[0].length - 1;
+      }
+      
+      if (searchPos !== -1) {
+        // Find matching closing brace
+        const closePos = findMatchingCloseBrace(cleanCode, searchPos);
+        if (closePos !== -1) {
+          functions.set(name, {
+            start: searchPos,
+            end: closePos,
+            body: cleanCode.substring(searchPos, closePos + 1)
+          });
+        }
+      }
     }
   }
 
-  // Check if any function calls are recursive (function calls itself)
+  // Check if any function calls itself within its own body (TRUE recursion)
   let maxRecursionDepth = 0;
   let isRecursive = false;
   
-  for (const func of functions) {
-    // Look for exact function calls within that function
-    const funcCallRegex = new RegExp(`(?:return\\s+)?${func}\\s*\\(`, 'g');
-    const callMatches = cleanCode.match(funcCallRegex);
+  for (const [funcName, funcInfo] of functions) {
+    // Look for self-calls within this function's body
+    const selfCallRegex = new RegExp(`(?:return\\s+)?${funcName}\\s*\\(`, 'g');
+    const selfCalls = funcInfo.body.match(selfCallRegex);
     
     // If a function calls itself, it's recursive
-    if (callMatches && callMatches.length > 0) {
-      // Check if this is actually a self-call (by checking context)
-      const funcNameOccurrences = (cleanCode.match(new RegExp(`(?<!\\w)${func}(?!\\w)`, 'g')) || []).length;
-      
-      // If the function appears more than twice (definition + at least one call), it's recursive
-      if (funcNameOccurrences > 1) {
-        isRecursive = true;
-        maxRecursionDepth = Math.max(maxRecursionDepth, callMatches.length);
-      }
+    if (selfCalls && selfCalls.length > 0) {
+      isRecursive = true;
+      maxRecursionDepth = Math.max(maxRecursionDepth, selfCalls.length);
     }
   }
 
   return {
     isRecursive: isRecursive,
     maxDepth: maxRecursionDepth,
-    functions: Array.from(functions)
+    functions: Array.from(functions.keys())
   };
 }
 
