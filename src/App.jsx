@@ -35,6 +35,9 @@ import Competitions from './components/student/Competitions';
 import CompetitionProblems from './components/student/CompetitionProblems';
 import CompetitionResults from './components/student/CompetitionResults';
 import StudentCertificates from './components/student/StudentCertificates';
+import AptitudeTests from './components/student/AptitudeTests';
+import AptitudeAttempt from './components/student/AptitudeAttempt';
+import AptitudeResults from './components/student/AptitudeResults';
 
 // Admin components
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -72,6 +75,7 @@ import EventQuizManager from './components/admin/EventQuizManager';
 import AdminHackathonRegistrations from './components/admin/AdminHackathonRegistrations';
 import TeamApplicationsManager from './components/admin/TeamApplicationsManager';
 import GuestManagementPage from './components/admin/GuestManagementPage';
+import AptitudeManager from './components/admin/AptitudeManager';
 
 function App() {
   // Check if maintenance mode is enabled
@@ -238,13 +242,38 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              <Route 
-                path="/student/certificates" 
+              <Route
+                path="/student/certificates"
                 element={
                   <ProtectedRoute>
                     <StudentCertificates />
                   </ProtectedRoute>
-                } 
+                }
+              />
+              {/* Aptitude Practice Routes */}
+              <Route
+                path="/student/aptitude"
+                element={
+                  <ProtectedRoute>
+                    <AptitudeTests />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/student/aptitude/:testId"
+                element={
+                  <ProtectedRoute>
+                    <AptitudeAttempt />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/student/aptitude/:testId/results"
+                element={
+                  <ProtectedRoute>
+                    <AptitudeResults />
+                  </ProtectedRoute>
+                }
               />
 
               {/* Admin Protected Routes */}
@@ -408,6 +437,15 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/admin/aptitude"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <AptitudeManager />
+                  </ProtectedRoute>
+                }
+              />
+
               {/* NEW: Guest Management dedicated page */}
               <Route
                 path="/admin/guest-management"

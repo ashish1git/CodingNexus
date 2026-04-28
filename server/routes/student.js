@@ -702,6 +702,84 @@ router.get('/tickets', async (req, res) => {
   }
 });
 
+// Delete student's own ticket
+router.delete('/tickets/:id', async (req, res) => {
+  try {
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    if (ticket.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    await prisma.supportTicket.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Student reply to ticket (only if replyEnabled)
+router.post('/tickets/:id/reply', async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id },
+      include: { user: { include: { studentProfile: true } } }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    if (ticket.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    if (!ticket.replyEnabled) {
+      return res.status(403).json({ success: false, error: 'Replies are not enabled for this ticket' });
+    }
+
+    if (ticket.status === 'closed') {
+      return res.status(400).json({ success: false, error: 'Cannot reply to a closed ticket' });
+    }
+
+    let responses = [];
+    if (ticket.response) {
+      try { responses = JSON.parse(ticket.response); } catch (e) { responses = []; }
+    }
+
+    responses.push({
+      from: 'student',
+      name: ticket.user?.studentProfile?.name || 'Student',
+      timestamp: new Date().toISOString(),
+      message: message.trim()
+    });
+
+    const updated = await prisma.supportTicket.update({
+      where: { id: req.params.id },
+      data: { response: JSON.stringify(responses) }
+    });
+
+    res.json({
+      success: true,
+      data: { ...updated, responses }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ PROFILE ============
 
 // Upload profile photo

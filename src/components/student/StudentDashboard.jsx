@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Bell, Calendar, Award, Code, HelpCircle,
-  LogOut, Menu, X, User, Clock, TrendingUp, FileText, Trophy
+  LogOut, Menu, X, User, Clock, TrendingUp, FileText, Trophy, Brain
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
@@ -659,7 +659,8 @@ const StudentDashboard = () => {
     { icon: <Calendar className="w-4 h-4" />, label: 'Attendance', path: '/student/attendance' },
     { icon: <Award className="w-4 h-4" />, label: 'Quizzes', path: '/student/quiz/list' },
     { icon: <Trophy className="w-4 h-4" />, label: 'Competitions', path: '/student/competitions' },
-    { icon: <FileText className="w-4 h-4" />, label: 'Certificates', path: '/student/certificates', badge: availableCertificatesCount, isNew: true },
+    { icon: <Brain className="w-4 h-4" />, label: 'Aptitude', path: '/student/aptitude', isNew: true },
+    { icon: <FileText className="w-4 h-4" />, label: 'Certificates', path: '/student/certificates', badge: availableCertificatesCount, isNew: false },
     { icon: <Code className="w-4 h-4" />, label: 'Code Editor', path: '/student/code-editor' },
     { icon: <HelpCircle className="w-4 h-4" />, label: 'Support', path: '/student/support' },
   ];

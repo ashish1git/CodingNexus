@@ -1554,8 +1554,8 @@ router.get('/tickets', async (req, res) => {
 // Update ticket
 router.put('/tickets/:id', async (req, res) => {
   try {
-    const { status, reply } = req.body;
-    
+    const { status, reply, replyEnabled } = req.body;
+
     const ticket = await prisma.supportTicket.findUnique({
       where: { id: req.params.id }
     });
@@ -1565,11 +1565,15 @@ router.put('/tickets/:id', async (req, res) => {
     }
 
     const updateData = {};
-    
+
     if (status) {
       updateData.status = status;
     }
-    
+
+    if (typeof replyEnabled === 'boolean') {
+      updateData.replyEnabled = replyEnabled;
+    }
+
     if (reply && reply.trim()) {
       let responses = [];
       if (ticket.response) {
@@ -1579,17 +1583,17 @@ router.put('/tickets/:id', async (req, res) => {
           responses = [];
         }
       }
-      
+
       responses.push({
         from: 'admin',
         name: req.user.adminProfile?.name || 'Admin',
         timestamp: new Date().toISOString(),
         message: reply.trim()
       });
-      
+
       updateData.response = JSON.stringify(responses);
     }
-    
+
     updateData.respondedBy = req.user.id;
     updateData.respondedAt = new Date();
 

@@ -1,9 +1,9 @@
 // src/components/admin/TicketManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  ArrowLeft, MessageCircle, Send, Clock, CheckCircle, AlertCircle, 
-  Search, Filter, X, ShieldAlert 
+import {
+  ArrowLeft, MessageCircle, Send, Clock, CheckCircle, AlertCircle,
+  Search, Filter, X, ShieldAlert, MessageSquare, MessageSquareOff
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -243,6 +243,28 @@ const TicketManagement = () => {
     }
   };
 
+  const handleToggleReply = async (ticketId, currentValue) => {
+    try {
+      const newValue = !currentValue;
+      const response = await adminService.updateTicket(ticketId, { replyEnabled: newValue });
+      if (response.success) {
+        toast.success(newValue ? 'Student can now reply to this ticket' : 'Student replies disabled');
+        const updatedTickets = tickets.map(t =>
+          t.id === ticketId ? { ...t, replyEnabled: newValue } : t
+        );
+        setTickets(updatedTickets);
+        if (selectedTicket && selectedTicket.id === ticketId) {
+          setSelectedTicket(prev => ({ ...prev, replyEnabled: newValue }));
+        }
+      } else {
+        toast.error(response.error || 'Failed to update reply setting');
+      }
+    } catch (error) {
+      console.error('Error toggling reply:', error);
+      toast.error('Failed to update reply setting');
+    }
+  };
+
   const openTicketModal = (ticket) => {
     setSelectedTicket(ticket);
     setShowModal(true);
@@ -463,7 +485,7 @@ const TicketManagement = () => {
 
                     <p className="text-gray-600 text-sm mb-3 line-clamp-2">{ticket.message}</p>
 
-                    <div className="flex items-center gap-6 text-xs text-gray-500">
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                       <span className="font-medium">{ticket.studentName}</span>
                       <span>Roll: {ticket.studentRollNo}</span>
                       <span>Created: {ticket.createdAt?.toLocaleDateString()}</span>
@@ -471,6 +493,12 @@ const TicketManagement = () => {
                         <span className="flex items-center gap-1 text-indigo-600">
                           <MessageCircle className="w-4 h-4" />
                           {ticket.responses.length} replies
+                        </span>
+                      )}
+                      {ticket.replyEnabled && ticket.status !== 'closed' && (
+                        <span className="flex items-center gap-1 text-indigo-600 font-semibold">
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          Reply open
                         </span>
                       )}
                     </div>
@@ -523,20 +551,42 @@ const TicketManagement = () => {
                 </button>
               </div>
 
-              {/* Status Change - Moved down and properly spaced */}
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Change Status:</label>
-                <div className="flex items-center gap-3">
+              {/* Status Change */}
+              <div className="mt-6 flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Change Status:</label>
                   <select
                     value={selectedTicket.status}
                     onChange={(e) => handleStatusChange(selectedTicket.id, e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent flex-1 text-gray-900"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full text-gray-900"
                   >
                     <option value="open">Open</option>
                     <option value="in-progress">In Progress</option>
                     <option value="closed">Closed</option>
                   </select>
                 </div>
+
+                {/* Reply toggle */}
+                {selectedTicket.status !== 'closed' && canRespondTickets && (
+                  <div className="flex-shrink-0">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Student Replies:</label>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleReply(selectedTicket.id, selectedTicket.replyEnabled)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm transition ${
+                        selectedTicket.replyEnabled
+                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                          : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      {selectedTicket.replyEnabled ? (
+                        <><MessageSquare className="w-4 h-4" /> Enabled</>
+                      ) : (
+                        <><MessageSquareOff className="w-4 h-4" /> Disabled</>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

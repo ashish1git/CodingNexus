@@ -160,6 +160,26 @@ export const studentService = {
     }
   },
 
+  async deleteTicket(ticketId) {
+    try {
+      const response = await apiClient.delete(`/student/tickets/${ticketId}`);
+      return response;
+    } catch (error) {
+      console.error('Delete ticket error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async replyToTicket(ticketId, message) {
+    try {
+      const response = await apiClient.post(`/student/tickets/${ticketId}/reply`, { message });
+      return response;
+    } catch (error) {
+      console.error('Reply to ticket error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ PROFILE ============
   
   async updateProfile(profileData) {

@@ -104,7 +104,7 @@ const LandingPage = () => {
     const counter = setInterval(() => {
       step++;
       const e = 1 - Math.pow(1 - step / steps, 3);
-      setClubFocus({ dsa: Math.floor(e * 100), events: Math.floor(e * 5), workshops: Math.floor(e * 5), members: Math.floor(e * 20) });
+      setClubFocus({ dsa: Math.floor(e * 100), events: Math.floor(e * 5), workshops: Math.floor(e * 5), members: Math.floor(e * 100) });
       if (step >= steps) clearInterval(counter);
     }, interval);
 

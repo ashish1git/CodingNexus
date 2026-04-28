@@ -1,9 +1,8 @@
 // src/components/student/CodeEditor.jsx
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, X } from 'lucide-react';
 import Editor from '@monaco-editor/react';
-import toast from 'react-hot-toast';
 
 /* ================= JAVA SNIPPETS ================= */
 function registerJavaSnippets(monaco) {
@@ -97,12 +96,13 @@ const CodeEditor = () => {
     { value: 'c', icon: 'C' }
   ];
 
-  const pistonMap = {
-    javascript: 'javascript',
-    python: 'python',
-    java: 'java',
-    cpp: 'cpp',
-    c: 'c'
+  // Judge0 language IDs
+  const judge0Map = {
+    javascript: 63,  // Node.js
+    python: 71,      // Python 3
+    java: 62,        // Java
+    cpp: 54,         // C++ (GCC 9.2.0)
+    c: 50            // C (GCC 9.2.0)
   };
 
   function getDefaultCode(lang) {
@@ -151,19 +151,34 @@ int main(){
     setOutput('Running code...\n');
 
     try {
-      const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+      const response = await fetch('/api/code/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          language: pistonMap[language],
-          version: '*',
-          stdin: input,
-          files: [{ content: code }]
+          source_code: code,
+          language_id: judge0Map[language],
+          stdin: input
         })
       });
 
       const result = await response.json();
-      setOutput(result.run?.stderr || result.run?.stdout || 'No Output');
+
+      if (!response.ok) {
+        setOutput('Execution Error: ' + (result.details || result.error || 'Unknown error'));
+        return;
+      }
+
+      const out = result.stdout || '';
+      const err = result.stderr || '';
+      const compile = result.compile_output || '';
+
+      if (compile) {
+        setOutput('Compile Error:\n' + compile);
+      } else if (err) {
+        setOutput(out + (out ? '\n' : '') + 'stderr:\n' + err);
+      } else {
+        setOutput(out || 'No output');
+      }
     } catch (err) {
       setOutput('Execution Error: ' + err.message);
     } finally {

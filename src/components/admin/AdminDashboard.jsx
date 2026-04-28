@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost, Brain
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -93,6 +93,7 @@ const AdminDashboard = () => {
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
     { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },
+    { icon: <Brain />, label: 'Aptitude', path: '/admin/aptitude' },
     { icon: <CalendarDays />, label: 'Events', path: '/admin/events' },
     { icon: <UserCheck />, label: 'Team Applications', path: '/admin/team-applications' },
     { icon: <FileText />, label: 'Certificates', path: '/admin/certificates' },
@@ -145,28 +146,28 @@ const AdminDashboard = () => {
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } lg:translate-x-0 fixed lg:sticky top-16 left-0 z-30 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 transition-transform duration-300 overflow-y-auto`}
         >
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-8 pb-6 border-b border-gray-200">
-              <div className="w-12 h-12 bg-gradient-to-r from-gray-700 to-indigo-700 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          <div className="p-4">
+            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-200">
+              <div className="w-10 h-10 bg-gradient-to-r from-gray-700 to-indigo-700 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0">
                 {userDetails?.name?.charAt(0).toUpperCase()}
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-800">{userDetails?.name}</h3>
-                <p className="text-sm text-gray-500">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-gray-800 text-sm truncate">{userDetails?.name}</h3>
+                <p className="text-xs text-gray-500">
                   {userDetails?.role === 'superadmin' ? 'Super Admin' : 'Sub Admin'}
                 </p>
               </div>
             </div>
 
-            <nav className="space-y-2">
+            <nav className="space-y-0.5">
               {menuItems.map((item, index) => (
                 <Link
                   key={index}
                   to={item.path}
-                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition"
+                  className="flex items-center gap-3 px-3 py-2.5 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition text-sm"
                   onClick={() => setIsSidebarOpen(false)}
                 >
-                  {item.icon}
+                  <span className="w-4 h-4 flex-shrink-0">{item.icon}</span>
                   <span className="font-medium">{item.label}</span>
                 </Link>
               ))}
