@@ -4,7 +4,6 @@ import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { wrapCodeForExecution } from '../utils/codeWrapper.js';
-import { analyzeCodeComplexity } from '../utils/astComplexityAnalyzer.js';
 
 const router = express.Router();
 
@@ -159,21 +158,6 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
     }
 
     // Return results
-    // ⭐ NEW: Analyze complexity and add to response
-    let complexityAnalysis = null;
-    let tlePrediction = null;
-    let feedback = null;
-
-    try {
-      complexityAnalysis = analyzeCodeComplexity(code, language);
-      tlePrediction = predictTLE(complexityAnalysis.timeComplexity, problem);
-      feedback = generateFeedback(complexityAnalysis, problem, tlePrediction);
-
-      console.log(`📊 Run - Detected Complexity: ${complexityAnalysis.timeComplexity}, TLE Risk: ${tlePrediction.willTLE}`);
-    } catch (analysisError) {
-      console.warn('⚠️ Complexity analysis failed:', analysisError.message);
-    }
-
     res.json({
       success: true,
       results,
@@ -184,28 +168,7 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
         executionTime: `${totalTime.toFixed(0)}ms`,
         memoryUsed: `${(maxMemory / 1024).toFixed(1)}MB`,
         compilationError
-      },
-      // ⭐ NEW: Include complexity analysis in response
-      complexity: complexityAnalysis ? {
-        timeComplexity: complexityAnalysis.timeComplexity,
-        timeExplanation: complexityAnalysis.timeExplanation,
-        spaceComplexity: complexityAnalysis.spaceComplexity,
-        spaceExplanation: complexityAnalysis.spaceExplanation,
-        confidence: complexityAnalysis.confidence,
-        loops: complexityAnalysis.loops,
-        maxNesting: complexityAnalysis.maxNesting,
-        hasRecursion: complexityAnalysis.hasRecursion,
-        dataStructures: complexityAnalysis.dataStructures
-      } : null,
-      constraints: {
-        expected: problem.expectedComplexity || 'not-specified',
-        timeLimit: problem.timeLimit,
-        memoryLimit: problem.memoryLimit
-      },
-      // ⭐ NEW: Include TLE prediction
-      tlePrediction: tlePrediction,
-      // ⭐ NEW: Include user-friendly feedback
-      feedback: feedback
+      }
     });
 
   } catch (error) {
@@ -658,127 +621,5 @@ router.post('/:submissionId/fetch-results', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch results' });
   }
 });
-
-/**
- * ⭐ Helper: Predict TLE based on complexity
- */
-function predictTLE(actualComplexity, problem) {
-  if (!problem.expectedComplexity) {
-    return {
-      willTLE: false,
-      reason: 'No complexity constraint specified',
-      severity: 'info'
-    };
-  }
-
-  const complexityOrder = [
-    'O(1)',
-    'O(log n)',
-    'O(n)',
-    'O(n log n)',
-    'O(n²)',
-    'O(n³)',
-    'O(2^n)',
-    'O(n!)'
-  ];
-
-  const actualIndex = complexityOrder.indexOf(actualComplexity);
-  const expectedIndex = complexityOrder.indexOf(problem.expectedComplexity);
-
-  if (actualIndex === -1 || expectedIndex === -1) {
-    return {
-      willTLE: false,
-      reason: 'Unable to determine TLE risk',
-      severity: 'warning'
-    };
-  }
-
-  if (actualIndex > expectedIndex) {
-    const difference = actualIndex - expectedIndex;
-    return {
-      willTLE: true,
-      reason: `Your solution is ${complexityOrder[actualIndex]} but expected is ${complexityOrder[expectedIndex]} - likely to exceed time limit`,
-      severity: difference > 2 ? 'critical' : 'high',
-      recommendation: 'Consider optimizing your algorithm',
-      expectedTime: complexityOrder[expectedIndex]
-    };
-  }
-
-  return {
-    willTLE: false,
-    reason: `Your solution (${actualComplexity}) meets or exceeds the expected complexity (${problem.expectedComplexity})`,
-    severity: 'success'
-  };
-}
-
-/**
- * ⭐ Helper: Generate user feedback based on complexity analysis
- */
-function generateFeedback(analysis, problem, tlePrediction) {
-  const feedback = {
-    status: 'analyzing',
-    messages: [],
-    warnings: [],
-    suggestions: []
-  };
-
-  // Complexity feedback
-  if (tlePrediction.willTLE) {
-    feedback.messages.push({
-      type: 'error',
-      title: '⚠️ Time Limit Exceeded Risk',
-      message: tlePrediction.reason,
-      severity: tlePrediction.severity
-    });
-    
-    if (tlePrediction.recommendation) {
-      feedback.suggestions.push(tlePrediction.recommendation);
-    }
-  } else {
-    feedback.messages.push({
-      type: 'success',
-      title: '✅ Complexity Check Passed',
-      message: tlePrediction.reason
-    });
-  }
-
-  // Loop feedback
-  if (analysis.maxNesting === 0) {
-    feedback.messages.push({
-      type: 'info',
-      title: 'ℹ️ Algorithm Type',
-      message: 'No loops or recursion detected - constant time algorithm'
-    });
-  } else if (analysis.maxNesting === 1) {
-    feedback.messages.push({
-      type: 'info',
-      title: 'ℹ️ Algorithm Type',
-      message: `Single loop algorithm (${analysis.loops} total loop${analysis.loops > 1 ? 's' : ''})`
-    });
-  } else {
-    feedback.messages.push({
-      type: 'warning',
-      title: '⚠️ Nested Loops Detected',
-      message: `${analysis.maxNesting} nested loop${analysis.maxNesting > 1 ? 's' : ''} found - consider optimization`
-    });
-  }
-
-  // Recursion feedback
-  if (analysis.hasRecursion) {
-    feedback.warnings.push('Recursive algorithm detected - may consume more stack memory');
-  }
-
-  // Data structure feedback
-  if (Object.keys(analysis.dataStructures).length > 0) {
-    const structures = Object.keys(analysis.dataStructures).join(', ');
-    feedback.messages.push({
-      type: 'info',
-      title: 'ℹ️ Data Structures Used',
-      message: `${structures} - efficient choice for this algorithm`
-    });
-  }
-
-  return feedback;
-}
 
 export default router;

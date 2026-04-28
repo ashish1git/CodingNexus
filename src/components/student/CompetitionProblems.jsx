@@ -729,40 +729,6 @@ public:
       setTestResults(formattedResults);
       setShowTestCases(true); // Auto-expand test results
 
-      // ⭐ NEW: Show complexity analysis and TLE warnings
-      if (result.complexity) {
-        const complexity = result.complexity;
-        const tle = result.tlePrediction;
-        const feedback = result.feedback;
-
-        // Show TLE warning if critical
-        if (tle?.willTLE && tle.severity === 'critical') {
-          toast.error(
-            `⏱️ ${tle.reason}\n\n${tle.recommendation || 'Optimize your algorithm'}`,
-            { duration: 5000 }
-          );
-        } else if (tle?.willTLE && tle.severity === 'high') {
-          toast.warning(
-            `⚠️ ${tle.reason}`,
-            { duration: 4000 }
-          );
-        } else if (complexity) {
-          // Show complexity analysis
-          toast.success(
-            `✅ Complexity: ${complexity.timeComplexity} (${complexity.confidence}% confidence)`,
-            { duration: 3000 }
-          );
-        }
-
-        // Store for later display in results panel
-        setTestResults(prev => ({
-          ...prev,
-          complexity: complexity,
-          tlePrediction: tle,
-          feedback: feedback
-        }));
-      }
-
       if (result.summary.allPassed) {
         toast.success(`All ${result.summary.total} test cases passed! 🎉`);
       } else if (result.summary.compilationError) {
@@ -1591,72 +1557,6 @@ public:
                 
                 {showTestCases && (
                   <div className="max-h-80 overflow-y-auto border-t border-[#3e3e3e]">
-                    {/* ⭐ NEW: Complexity Analysis Display */}
-                    {testResults.complexity && (
-                      <div className="p-4 border-b border-[#3e3e3e] space-y-3">
-                        {/* Complexity Header */}
-                        <div className="mb-3">
-                          <h4 className="text-sm font-semibold text-white mb-2">Complexity Analysis</h4>
-                        </div>
-
-                        {/* Time/Space Complexity */}
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div className="bg-[#1e1e1e] rounded-lg p-3 border border-[#3e3e3e]">
-                            <div className="text-gray-400 text-xs font-medium mb-1">Time</div>
-                            <div className="text-white font-semibold">{testResults.complexity.timeComplexity}</div>
-                            <div className="text-gray-500 text-xs mt-1">Confidence: {testResults.complexity.confidence}%</div>
-                          </div>
-                          <div className="bg-[#1e1e1e] rounded-lg p-3 border border-[#3e3e3e]">
-                            <div className="text-gray-400 text-xs font-medium mb-1">Space</div>
-                            <div className="text-white font-semibold">{testResults.complexity.spaceComplexity}</div>
-                          </div>
-                        </div>
-
-                        {/* TLE Prediction */}
-                        {testResults.tlePrediction && (
-                          <div className={`p-3 rounded-lg border text-sm ${
-                            testResults.tlePrediction.willTLE 
-                              ? testResults.tlePrediction.severity === 'critical'
-                                ? 'bg-red-500/10 border-red-500/30 text-red-300'
-                                : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                              : 'bg-green-500/10 border-green-500/30 text-green-300'
-                          }`}>
-                            <div className="font-semibold mb-1">
-                              {testResults.tlePrediction.willTLE ? '⚠️ TLE Risk' : '✅ Complexity OK'}
-                            </div>
-                            <div className="text-xs">{testResults.tlePrediction.reason}</div>
-                            {testResults.tlePrediction.recommendation && (
-                              <div className="text-xs mt-2 opacity-90">
-                                💡 {testResults.tlePrediction.recommendation}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Feedback Messages */}
-                        {testResults.feedback?.messages && Array.isArray(testResults.feedback.messages) && (
-                          <div className="space-y-2">
-                            {testResults.feedback.messages.map((msg, idx) => (
-                              <div key={idx} className="text-xs text-gray-300 p-2 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
-                                <div className="font-semibold text-gray-100">{msg.title}</div>
-                                <div className="text-gray-400 mt-1">{msg.message}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Suggestions */}
-                        {testResults.feedback?.suggestions && Array.isArray(testResults.feedback.suggestions) && testResults.feedback.suggestions.length > 0 && (
-                          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                            <div className="text-blue-300 text-xs font-semibold mb-1">Suggestions:</div>
-                            {testResults.feedback.suggestions.map((sug, idx) => (
-                              <div key={idx} className="text-blue-300/80 text-xs ml-2">• {sug}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     <div className="p-4 space-y-3">
                       {testResults.cases.map((testCase) => (
                         <div
