@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Brain, Plus, Edit2, Trash2, Eye, Search, ChevronLeft,
-  CheckCircle, XCircle, Users, Clock, BarChart2, AlertTriangle, X, Save
+  CheckCircle, XCircle, Users, Clock, BarChart2, AlertTriangle, X, Save, Calendar
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import aptitudeService from '../../services/aptitudeService';
@@ -17,6 +17,23 @@ const diffStyle = (d) => {
   return { color: '#fde047', background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' };
 };
 
+function getStatus(test) {
+  if (!test.startTime || !test.endTime) return { label: 'No Schedule', color: '#64748b', bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.25)' };
+  const now = new Date();
+  if (now < new Date(test.startTime)) return { label: 'Upcoming', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.3)' };
+  if (now > new Date(test.endTime)) return { label: 'Ended', color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
+  return { label: 'Live', color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)' };
+}
+
+// Convert a Date (or ISO string) to the value format required by datetime-local inputs
+function toLocalInput(dt) {
+  if (!dt) return '';
+  const d = new Date(dt);
+  // Adjust to local timezone offset so the input shows the correct local time
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d - offset).toISOString().slice(0, 16);
+}
+
 const emptyQuestion = () => ({
   _key: Math.random().toString(36).slice(2),
   question: '',
@@ -27,6 +44,7 @@ const emptyQuestion = () => ({
 
 const emptyForm = () => ({
   title: '', description: '', category: 'general', difficulty: 'medium', duration: 30,
+  startTime: '', endTime: '',
   questions: [emptyQuestion()]
 });
 
@@ -65,6 +83,8 @@ export default function AptitudeManager() {
       setFormData({
         title: t.title, description: t.description || '', category: t.category,
         difficulty: t.difficulty, duration: t.duration, isActive: t.isActive,
+        startTime: toLocalInput(t.startTime),
+        endTime: toLocalInput(t.endTime),
         questions: t.questions.map(q => ({
           _key: q.id, id: q.id, question: q.question,
           options: Array.isArray(q.options) ? q.options : [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
@@ -90,6 +110,9 @@ export default function AptitudeManager() {
   const handleSave = async () => {
     if (!formData.title.trim()) return toast.error('Title is required');
     if (!formData.duration || formData.duration < 1) return toast.error('Duration must be at least 1 minute');
+    if (!formData.startTime) return toast.error('Start time is required');
+    if (!formData.endTime) return toast.error('End time is required');
+    if (new Date(formData.endTime) <= new Date(formData.startTime)) return toast.error('End time must be after start time');
     const qs = formData.questions;
     if (!qs.length) return toast.error('Add at least one question');
     for (let i = 0; i < qs.length; i++) {
@@ -170,39 +193,49 @@ export default function AptitudeManager() {
           <Empty icon={<Brain size={40} />} text="No aptitude tests yet" action={<button onClick={openCreate} style={btnPrimary}><Plus size={15} /> Create First Test</button>} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {filtered.map(test => (
-              <div key={test.id} style={cardStyle}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                      <span style={{ ...diffStyle(test.difficulty), fontSize: '0.72rem', fontWeight: 600, padding: '2px 10px', borderRadius: 50 }}>
-                        {test.difficulty}
-                      </span>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.2)', padding: '2px 10px', borderRadius: 50, textTransform: 'capitalize' }}>
-                        {test.category}
-                      </span>
-                      {!test.isActive && <span style={{ fontSize: '0.72rem', color: '#64748b', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.25)', padding: '2px 10px', borderRadius: 50 }}>Inactive</span>}
+            {filtered.map(test => {
+              const status = getStatus(test);
+              return (
+                <div key={test.id} style={cardStyle}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                        {/* Status badge */}
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 10px', borderRadius: 50, color: status.color, background: status.bg, border: `1px solid ${status.border}`, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {status.label === 'Live' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />}
+                          {status.label}
+                        </span>
+                        <span style={{ ...diffStyle(test.difficulty), fontSize: '0.72rem', fontWeight: 600, padding: '2px 10px', borderRadius: 50 }}>
+                          {test.difficulty}
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8', background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.2)', padding: '2px 10px', borderRadius: 50, textTransform: 'capitalize' }}>
+                          {test.category}
+                        </span>
+                        {!test.isActive && <span style={{ fontSize: '0.72rem', color: '#64748b', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.25)', padding: '2px 10px', borderRadius: 50 }}>Inactive</span>}
+                      </div>
+                      <h3 style={{ margin: '0 0 4px', fontSize: '1rem', fontWeight: 700, color: '#f1f5f9' }}>{test.title}</h3>
+                      {test.description && <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{test.description}</p>}
+                      <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+                        <Stat icon={<BarChart2 size={12} />} val={`${test._count?.questions ?? test.questionCount ?? '?'} Q`} />
+                        <Stat icon={<Clock size={12} />} val={`${test.duration} min`} />
+                        <Stat icon={<Users size={12} />} val={`${test._count?.attempts ?? 0} attempts`} />
+                        {test.startTime && <Stat icon={<Calendar size={12} />} val={new Date(test.startTime).toLocaleString()} />}
+                        {test.endTime && <Stat icon={<Calendar size={12} />} val={`→ ${new Date(test.endTime).toLocaleString()}`} />}
+                      </div>
                     </div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '1rem', fontWeight: 700, color: '#f1f5f9' }}>{test.title}</h3>
-                    {test.description && <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{test.description}</p>}
-                    <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-                      <Stat icon={<BarChart2 size={12} />} val={`${test._count?.questions ?? test.questionCount ?? '?'} Q`} />
-                      <Stat icon={<Clock size={12} />} val={`${test.duration} min`} />
-                      <Stat icon={<Users size={12} />} val={`${test._count?.attempts ?? 0} attempts`} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <IconBtn onClick={() => openSubmissions(test)} title="View submissions"><Eye size={15} /></IconBtn>
+                      <IconBtn onClick={() => openEdit(test)} title="Edit"><Edit2 size={15} /></IconBtn>
+                      <IconBtn onClick={() => toggleActive(test)} title={test.isActive ? 'Deactivate' : 'Activate'}
+                        style={{ color: test.isActive ? '#34d399' : '#64748b' }}>
+                        <CheckCircle size={15} />
+                      </IconBtn>
+                      <IconBtn onClick={() => setDeleteConfirm(test.id)} title="Delete" style={{ color: '#f87171' }}><Trash2 size={15} /></IconBtn>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <IconBtn onClick={() => openSubmissions(test)} title="View submissions"><Eye size={15} /></IconBtn>
-                    <IconBtn onClick={() => openEdit(test)} title="Edit"><Edit2 size={15} /></IconBtn>
-                    <IconBtn onClick={() => toggleActive(test)} title={test.isActive ? 'Deactivate' : 'Activate'}
-                      style={{ color: test.isActive ? '#34d399' : '#64748b' }}>
-                      <CheckCircle size={15} />
-                    </IconBtn>
-                    <IconBtn onClick={() => setDeleteConfirm(test.id)} title="Delete" style={{ color: '#f87171' }}><Trash2 size={15} /></IconBtn>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -218,6 +251,7 @@ export default function AptitudeManager() {
           </div>
         </Modal>
       )}
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </div>
   );
 
@@ -310,6 +344,24 @@ export default function AptitudeManager() {
                 </button>
               </div>
             )}
+            <div>
+              <Label>Start Time *</Label>
+              <input
+                type="datetime-local"
+                value={formData.startTime}
+                onChange={e => setFormData(p => ({ ...p, startTime: e.target.value }))}
+                style={inputStyle()}
+              />
+            </div>
+            <div>
+              <Label>End Time *</Label>
+              <input
+                type="datetime-local"
+                value={formData.endTime}
+                onChange={e => setFormData(p => ({ ...p, endTime: e.target.value }))}
+                style={inputStyle()}
+              />
+            </div>
           </div>
         </div>
 

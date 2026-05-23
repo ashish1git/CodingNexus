@@ -48,11 +48,11 @@ const ForgotPassword = () => {
     
     const newErrors = {};
 
-    // Validate phone (last 4 digits)
+    // Validate phone (last 5 digits)
     if (!formData.phone.trim()) {
-      newErrors.phone = 'Please enter the last 4 digits of your phone number';
-    } else if (formData.phone.length !== 4 || !/^\d{4}$/.test(formData.phone)) {
-      newErrors.phone = 'Please enter exactly 4 digits';
+      newErrors.phone = 'Please enter the last 5 digits of your phone number';
+    } else if (formData.phone.length !== 5 || !/^\d{5}$/.test(formData.phone)) {
+      newErrors.phone = 'Please enter exactly 5 digits';
     }
 
     // Validate new password
@@ -164,27 +164,29 @@ const ForgotPassword = () => {
               <p className="text-sm text-indigo-800">
                 <strong>Account Found:</strong> {verificationData?.maskedName || 'Student'}
               </p>
-              <p className="text-xs text-indigo-600 mt-1">
-                Phone hint: ******{verificationData?.phoneHint || '****'}
-              </p>
+              {verificationData?.hasPhone && (
+                <p className="text-xs text-indigo-600 mt-1">
+                  Phone hint: ******{verificationData?.phoneHint || '**'}
+                </p>
+              )}
             </div>
 
             {/* Phone Verification */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Last 4 digits of your phone number
+                Last 5 digits of your phone number
               </label>
               <input
                 type="text"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                maxLength={4}
+                maxLength={5}
                 style={{ color: '#111827' }}
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition text-gray-900 ${
                   errors.phone ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="e.g., 1234"
+                placeholder="e.g., 12345"
               />
               {errors.phone && (
                 <p className="mt-1 text-sm text-red-600">{errors.phone}</p>

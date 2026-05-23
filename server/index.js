@@ -16,6 +16,10 @@ import codeRoutes from './routes/code.js';
 import teamApplicationsRoutes from './routes/team-applications.js';
 import guestRoutes from './routes/guest.js';
 import aptitudeRoutes from './routes/aptitude.js';
+import aptitudeQuestionRoutes from './routes/aptitude/questions.js';
+import aptitudeAiRoutes from './routes/aptitude/aiQuestions.js';
+import aptitudePracticeRoutes from './routes/aptitude/practice.js';
+import aptitudeCompetitionRoutes from './routes/aptitude/competition.js';
 import prisma from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,6 +79,10 @@ app.use('/api/events', eventRoutes);
 app.use('/api/code', codeRoutes);
 app.use('/api/team-applications', teamApplicationsRoutes);
 app.use('/api/guest', guestRoutes);
+app.use('/api/aptitude/ai-questions', aptitudeAiRoutes);
+app.use('/api/aptitude/practice', aptitudePracticeRoutes);
+app.use('/api/aptitude/competition', aptitudeCompetitionRoutes);
+app.use('/api/aptitude/questions', aptitudeQuestionRoutes);
 app.use('/api/aptitude', aptitudeRoutes);
 
 // Health check

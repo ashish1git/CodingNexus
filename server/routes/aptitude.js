@@ -4,11 +4,21 @@ import { authenticate, authorizeRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Derive status from startTime / endTime.
+// If no schedule is set the test is treated as always ongoing (backward compat).
+function getTestStatus(test) {
+  if (!test.startTime || !test.endTime) return 'ongoing';
+  const now = new Date();
+  if (now < new Date(test.startTime)) return 'upcoming';
+  if (now > new Date(test.endTime)) return 'ended';
+  return 'ongoing';
+}
+
 // ────────────────────────────────────────────────────────────
 // Student Routes (authenticated, any role)
 // ────────────────────────────────────────────────────────────
 
-// GET /api/aptitude — list all active tests (with filters)
+// GET /api/aptitude — list active tests (with status)
 router.get('/', authenticate, async (req, res) => {
   try {
     const { category, difficulty } = req.query;
@@ -38,6 +48,9 @@ router.get('/', authenticate, async (req, res) => {
       category: t.category,
       difficulty: t.difficulty,
       duration: t.duration,
+      startTime: t.startTime,
+      endTime: t.endTime,
+      status: getTestStatus(t),
       questionCount: t._count.questions,
       totalAttempts: t._count.attempts,
       myBestAttempt: t.attempts[0] || null
@@ -71,7 +84,23 @@ router.get('/:id', authenticate, async (req, res) => {
 
     if (!test) return res.status(404).json({ success: false, error: 'Test not found' });
 
-    res.json({ success: true, test });
+    const status = getTestStatus(test);
+    if (status === 'upcoming') {
+      return res.status(403).json({ success: false, error: 'Test has not started yet', status: 'upcoming', startTime: test.startTime });
+    }
+    if (status === 'ended') {
+      return res.status(403).json({ success: false, error: 'Test window has ended', status: 'ended' });
+    }
+
+    res.json({
+      success: true,
+      test: {
+        ...test,
+        startTime: test.startTime,
+        endTime: test.endTime,
+        status
+      }
+    });
   } catch (error) {
     console.error('Get aptitude test error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch test' });
@@ -81,7 +110,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/aptitude/:id/submit — submit answers
 router.post('/:id/submit', authenticate, async (req, res) => {
   try {
-    const { answers, timeTaken } = req.body; // answers: { [questionId]: "A"|"B"|"C"|"D" }
+    const { answers, timeTaken } = req.body;
 
     const test = await prisma.aptitudeTest.findUnique({
       where: { id: req.params.id, isActive: true },
@@ -89,6 +118,11 @@ router.post('/:id/submit', authenticate, async (req, res) => {
     });
 
     if (!test) return res.status(404).json({ success: false, error: 'Test not found' });
+
+    // Block submission after window closes
+    if (test.endTime && new Date() > new Date(test.endTime)) {
+      return res.status(403).json({ success: false, error: 'Test window has ended — submission not accepted' });
+    }
 
     // Calculate score
     let score = 0;
@@ -108,7 +142,6 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       };
     });
 
-    // Save attempt
     const attempt = await prisma.aptitudeAttempt.create({
       data: {
         testId: req.params.id,
@@ -157,7 +190,6 @@ router.get('/:id/my-attempts', authenticate, async (req, res) => {
 // GET /api/aptitude/:id/leaderboard — top scores for a test
 router.get('/:id/leaderboard', authenticate, async (req, res) => {
   try {
-    // Get best attempt per user
     const allAttempts = await prisma.aptitudeAttempt.findMany({
       where: { testId: req.params.id, submittedAt: { not: null } },
       include: {
@@ -203,7 +235,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
 // Admin Routes
 // ────────────────────────────────────────────────────────────
 
-// GET /api/aptitude/admin/all — all tests (including inactive)
+// GET /api/aptitude/admin/all — all tests (including inactive), with status
 router.get('/admin/all', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
     const tests = await prisma.aptitudeTest.findMany({
@@ -213,7 +245,12 @@ router.get('/admin/all', authenticate, authorizeRole('admin', 'subadmin', 'super
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, tests });
+    const enriched = tests.map(t => ({
+      ...t,
+      status: getTestStatus(t)
+    }));
+
+    res.json({ success: true, tests: enriched });
   } catch (error) {
     console.error('Admin get tests error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch tests' });
@@ -233,7 +270,7 @@ router.get('/admin/:id', authenticate, authorizeRole('admin', 'subadmin', 'super
 
     if (!test) return res.status(404).json({ success: false, error: 'Test not found' });
 
-    res.json({ success: true, test });
+    res.json({ success: true, test: { ...test, status: getTestStatus(test) } });
   } catch (error) {
     console.error('Admin get test error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch test' });
@@ -243,10 +280,16 @@ router.get('/admin/:id', authenticate, authorizeRole('admin', 'subadmin', 'super
 // POST /api/aptitude/admin — create test with questions
 router.post('/admin', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
-    const { title, description, category, difficulty, duration, questions } = req.body;
+    const { title, description, category, difficulty, duration, startTime, endTime, questions } = req.body;
 
     if (!title || !duration || !questions?.length) {
       return res.status(400).json({ success: false, error: 'title, duration and at least one question are required' });
+    }
+    if (!startTime || !endTime) {
+      return res.status(400).json({ success: false, error: 'startTime and endTime are required' });
+    }
+    if (new Date(endTime) <= new Date(startTime)) {
+      return res.status(400).json({ success: false, error: 'endTime must be after startTime' });
     }
 
     const test = await prisma.aptitudeTest.create({
@@ -256,6 +299,8 @@ router.post('/admin', authenticate, authorizeRole('admin', 'subadmin', 'superadm
         category: category || 'general',
         difficulty: difficulty || 'medium',
         duration: Number(duration),
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
         createdBy: req.user.id,
         questions: {
           create: questions.map((q, idx) => ({
@@ -270,7 +315,7 @@ router.post('/admin', authenticate, authorizeRole('admin', 'subadmin', 'superadm
       include: { questions: true, _count: { select: { questions: true } } }
     });
 
-    res.status(201).json({ success: true, test, message: 'Test created successfully' });
+    res.status(201).json({ success: true, test: { ...test, status: getTestStatus(test) }, message: 'Test created successfully' });
   } catch (error) {
     console.error('Create test error:', error);
     res.status(500).json({ success: false, error: 'Failed to create test' });
@@ -280,9 +325,12 @@ router.post('/admin', authenticate, authorizeRole('admin', 'subadmin', 'superadm
 // PUT /api/aptitude/admin/:id — update test metadata + replace questions
 router.put('/admin/:id', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
-    const { title, description, category, difficulty, duration, isActive, questions } = req.body;
+    const { title, description, category, difficulty, duration, startTime, endTime, isActive, questions } = req.body;
 
-    // Update test metadata
+    if (startTime && endTime && new Date(endTime) <= new Date(startTime)) {
+      return res.status(400).json({ success: false, error: 'endTime must be after startTime' });
+    }
+
     await prisma.aptitudeTest.update({
       where: { id: req.params.id },
       data: {
@@ -291,6 +339,8 @@ router.put('/admin/:id', authenticate, authorizeRole('admin', 'subadmin', 'super
         ...(category !== undefined && { category }),
         ...(difficulty !== undefined && { difficulty }),
         ...(duration !== undefined && { duration: Number(duration) }),
+        ...(startTime !== undefined && { startTime: startTime ? new Date(startTime) : null }),
+        ...(endTime !== undefined && { endTime: endTime ? new Date(endTime) : null }),
         ...(isActive !== undefined && { isActive })
       }
     });
@@ -315,7 +365,7 @@ router.put('/admin/:id', authenticate, authorizeRole('admin', 'subadmin', 'super
       include: { questions: { orderBy: { orderIndex: 'asc' } }, _count: { select: { questions: true } } }
     });
 
-    res.json({ success: true, test: updated, message: 'Test updated successfully' });
+    res.json({ success: true, test: { ...updated, status: getTestStatus(updated) }, message: 'Test updated successfully' });
   } catch (error) {
     console.error('Update test error:', error);
     res.status(500).json({ success: false, error: 'Failed to update test' });

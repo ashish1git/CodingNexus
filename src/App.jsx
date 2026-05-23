@@ -38,6 +38,7 @@ import StudentCertificates from './components/student/StudentCertificates';
 import AptitudeTests from './components/student/AptitudeTests';
 import AptitudeAttempt from './components/student/AptitudeAttempt';
 import AptitudeResults from './components/student/AptitudeResults';
+import PracticePage from './components/student/PracticePage';
 
 // Admin components
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -272,6 +273,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <AptitudeResults />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Practice Engine */}
+              <Route
+                path="/student/practice"
+                element={
+                  <ProtectedRoute>
+                    <PracticePage />
                   </ProtectedRoute>
                 }
               />

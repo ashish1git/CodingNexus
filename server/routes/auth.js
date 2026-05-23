@@ -382,9 +382,8 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'No account found with this Moodle ID' });
     }
 
-    // Get phone number hint (last 4 digits)
     const phone = user.studentProfile?.phone || '';
-    const phoneHint = phone.length >= 4 ? phone.slice(-4) : '****';
+    const phoneHint = phone.length >= 2 ? phone.slice(-2) : '**';
 
     // Get masked name (first name only)
     const fullName = user.studentProfile?.name || 'Student';
@@ -407,12 +406,12 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password - verify phone last 4 digits and update password
+// Reset password - verify phone last 5 digits and update password
 router.post('/reset-password', async (req, res) => {
   try {
-    const { moodleId, phoneLast4, newPassword } = req.body;
+    const { moodleId, phoneLast5, newPassword } = req.body;
 
-    if (!moodleId || !phoneLast4 || !newPassword) {
+    if (!moodleId || !phoneLast5 || !newPassword) {
       return res.status(400).json({ success: false, error: 'All fields are required' });
     }
 
@@ -455,18 +454,18 @@ router.post('/reset-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    // Verify phone last 4 digits
+    // Verify phone last 5 digits
     const phone = user.studentProfile?.phone || '';
-    const actualLast4 = phone.length >= 4 ? phone.slice(-4) : '';
+    const actualLast5 = phone.length >= 5 ? phone.slice(-5) : '';
 
-    if (!actualLast4) {
+    if (!actualLast5) {
       return res.status(400).json({ 
         success: false, 
         error: 'No phone number registered. Please contact admin to reset your password.' 
       });
     }
 
-    if (phoneLast4 !== actualLast4) {
+    if (phoneLast5 !== actualLast5) {
       return res.status(400).json({ success: false, error: 'Phone verification failed' });
     }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Brain, Clock, BarChart2, ChevronRight, Search,
-  ArrowLeft, CheckCircle, Target, BookOpen, Zap
+  ArrowLeft, CheckCircle, Target, BookOpen, Zap, Calendar, Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import aptitudeService from '../../services/aptitudeService';
@@ -48,6 +48,18 @@ const getCategoryIcon = (c) => {
   return <Target className="w-4 h-4" />;
 };
 
+// Format countdown like "2h 15m" or "45m 30s"
+function formatCountdown(ms) {
+  if (ms <= 0) return '0s';
+  const totalSecs = Math.floor(ms / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 export default function AptitudeTests() {
   const navigate = useNavigate();
   const [tests, setTests] = useState([]);
@@ -55,10 +67,17 @@ export default function AptitudeTests() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [difficulty, setDifficulty] = useState('all');
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     fetchTests();
   }, [category, difficulty]);
+
+  // Tick every second so countdown / status updates live
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const fetchTests = async () => {
     try {
@@ -73,11 +92,21 @@ export default function AptitudeTests() {
     }
   };
 
+  const getStatus = (test) => {
+    if (!test.startTime || !test.endTime) return 'ongoing';
+    if (now < new Date(test.startTime).getTime()) return 'upcoming';
+    if (now > new Date(test.endTime).getTime()) return 'ended';
+    return 'ongoing';
+  };
+
   const filtered = tests.filter(t =>
     !search ||
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     (t.description || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const ongoingCount = filtered.filter(t => getStatus(t) === 'ongoing').length;
+  const completedCount = tests.filter(t => t.myBestAttempt).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -95,7 +124,7 @@ export default function AptitudeTests() {
             </Link>
             <div className="flex items-center gap-2">
               <Brain className="w-6 h-6 text-violet-400" />
-              <h1 className="text-xl sm:text-2xl font-bold text-white">Aptitude Practice</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-white">Aptitude Tests</h1>
             </div>
           </div>
         </div>
@@ -115,9 +144,11 @@ export default function AptitudeTests() {
                 <p className="text-xs text-slate-400">Tests Available</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-indigo-300">
-                  {tests.filter(t => t.myBestAttempt).length}
-                </p>
+                <p className="text-2xl font-bold text-green-400">{ongoingCount}</p>
+                <p className="text-xs text-slate-400">Live Now</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-indigo-300">{completedCount}</p>
                 <p className="text-xs text-slate-400">Completed</p>
               </div>
             </div>
@@ -127,7 +158,6 @@ export default function AptitudeTests() {
         {/* Filters */}
         <div className="bg-slate-800 rounded-xl p-4 mb-6 border border-slate-700">
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -138,8 +168,6 @@ export default function AptitudeTests() {
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
               />
             </div>
-
-            {/* Category */}
             <select
               value={category}
               onChange={e => setCategory(e.target.value)}
@@ -149,8 +177,6 @@ export default function AptitudeTests() {
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
-
-            {/* Difficulty */}
             <select
               value={difficulty}
               onChange={e => setDifficulty(e.target.value)}
@@ -163,14 +189,12 @@ export default function AptitudeTests() {
           </div>
         </div>
 
-        {/* Results count */}
         {!loading && (
           <p className="text-slate-400 text-sm mb-4">
             {filtered.length} test{filtered.length !== 1 ? 's' : ''} found
           </p>
         )}
 
-        {/* Content */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <div className="w-10 h-10 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin mb-4" />
@@ -188,7 +212,14 @@ export default function AptitudeTests() {
               <TestCard
                 key={test.id}
                 test={test}
-                onClick={() => navigate(`/student/aptitude/${test.id}`)}
+                status={getStatus(test)}
+                now={now}
+                onClick={() => {
+                  const s = getStatus(test);
+                  if (s === 'upcoming') return toast('This test has not started yet', { icon: '🕐' });
+                  if (s === 'ended') return toast('This test window has ended', { icon: '🔒' });
+                  navigate(`/student/aptitude/${test.id}`);
+                }}
               />
             ))}
           </div>
@@ -198,17 +229,47 @@ export default function AptitudeTests() {
   );
 }
 
-function TestCard({ test, onClick }) {
+function TestCard({ test, status, now, onClick }) {
   const best = test.myBestAttempt;
   const pct = best ? Math.round((best.score / best.maxScore) * 100) : null;
   const label = CATEGORIES.find(c => c.value === test.category)?.label || test.category;
+  const isDisabled = status === 'upcoming' || status === 'ended';
+
+  const statusBadge = () => {
+    if (status === 'ongoing') return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border bg-green-900/30 border-green-600/50 text-green-300">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+        Live
+      </span>
+    );
+    if (status === 'upcoming') {
+      const msLeft = new Date(test.startTime).getTime() - now;
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border bg-blue-900/30 border-blue-600/50 text-blue-300">
+          <Clock className="w-3 h-3" />
+          Starts in {formatCountdown(msLeft)}
+        </span>
+      );
+    }
+    if (status === 'ended') return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border bg-slate-800/60 border-slate-600/50 text-slate-400">
+        <Lock className="w-3 h-3" />
+        Ended
+      </span>
+    );
+    return null;
+  };
 
   return (
     <div
       onClick={onClick}
-      className="bg-slate-800 border border-slate-700 rounded-xl p-5 cursor-pointer hover:border-violet-500/60 hover:-translate-y-1 hover:shadow-lg hover:shadow-violet-900/20 transition-all duration-200 flex flex-col gap-4"
+      className={`bg-slate-800 border rounded-xl p-5 flex flex-col gap-4 transition-all duration-200 ${
+        isDisabled
+          ? 'border-slate-700 opacity-70 cursor-not-allowed'
+          : 'border-slate-700 cursor-pointer hover:border-violet-500/60 hover:-translate-y-1 hover:shadow-lg hover:shadow-violet-900/20'
+      }`}
     >
-      {/* Badges */}
+      {/* Status + category/difficulty badges */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${getCategoryColor(test.category)}`}>
           {getCategoryIcon(test.category)}
@@ -217,6 +278,17 @@ function TestCard({ test, onClick }) {
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getDifficultyColor(test.difficulty)}`}>
           {test.difficulty.charAt(0).toUpperCase() + test.difficulty.slice(1)}
         </span>
+      </div>
+
+      {/* Status badge row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {statusBadge()}
+        {test.startTime && status !== 'ongoing' && (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+            <Calendar className="w-3 h-3" />
+            {new Date(test.startTime).toLocaleDateString()} {new Date(test.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
       </div>
 
       {/* Title & description */}
@@ -247,7 +319,15 @@ function TestCard({ test, onClick }) {
           <span className={`font-semibold ${pct >= 70 ? 'text-green-300' : 'text-yellow-300'}`}>
             Best: {best.score}/{best.maxScore} ({pct}%)
           </span>
-          <ChevronRight className="w-4 h-4 ml-auto text-slate-500" />
+          {!isDisabled && <ChevronRight className="w-4 h-4 ml-auto text-slate-500" />}
+        </div>
+      ) : status === 'ended' ? (
+        <div className="flex items-center justify-center gap-2 bg-slate-700/40 border border-slate-600/50 rounded-lg px-3 py-2.5 text-slate-500 text-sm font-semibold">
+          <Lock className="w-4 h-4" /> Test Ended
+        </div>
+      ) : status === 'upcoming' ? (
+        <div className="flex items-center justify-center gap-2 bg-blue-900/20 border border-blue-700/40 rounded-lg px-3 py-2.5 text-blue-400 text-sm font-semibold">
+          <Clock className="w-4 h-4" /> Not Started Yet
         </div>
       ) : (
         <div className="flex items-center justify-center gap-2 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 rounded-lg px-3 py-2.5 text-violet-300 text-sm font-semibold transition-colors">

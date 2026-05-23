@@ -29,11 +29,21 @@ export default function AptitudeAttempt() {
       setLoading(true);
       const data = await aptitudeService.getTest(testId);
       if (!data.test) { toast.error('Test not found'); navigate('/student/aptitude'); return; }
-      setTest(data.test);
-      setTimeLeft(data.test.duration * 60);
+      const t = data.test;
+
+      // Cap the countdown: use the lesser of (duration) and (seconds until endTime)
+      let effectiveSecs = t.duration * 60;
+      if (t.endTime) {
+        const secsUntilEnd = Math.floor((new Date(t.endTime).getTime() - Date.now()) / 1000);
+        effectiveSecs = Math.min(effectiveSecs, Math.max(0, secsUntilEnd));
+      }
+
+      setTest(t);
+      setTimeLeft(effectiveSecs);
       startTimeRef.current = Date.now();
-    } catch {
-      toast.error('Failed to load test');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to load test';
+      toast.error(msg);
       navigate('/student/aptitude');
     } finally {
       setLoading(false);

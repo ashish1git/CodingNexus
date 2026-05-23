@@ -25,7 +25,10 @@ model User {
   studentProfile           Student?
   tickets                  SupportTicket[]
   certificateRequests      CertificateRequest[]
-  aptitudeAttempts         AptitudeAttempt[]
+  aptitudeAttempts              AptitudeAttempt[]
+  practiceSessions              AptitudePracticeSession[]
+  competitionRegistrations2     AptitudeCompetitionRegistration[]
+  competitionAttempts           AptitudeCompetitionAttempt[]
 
   @@index([email])
   @@index([moodleId])
@@ -722,8 +725,10 @@ model AptitudeTest {
   description  String?
   category     String               @default("general") // general, quantitative, logical, verbal, technical
   difficulty   String               @default("medium")  // easy, medium, hard
-  duration     Int                  // in minutes
-  isActive     Boolean              @default(true)
+  duration     Int                  // in minutes (drives the per-student countdown)
+  startTime    DateTime?            // competition window start (null = no schedule)
+  endTime      DateTime?            // competition window end   (null = no schedule)
+  isActive     Boolean              @default(true)       // manual override disable
   createdBy    String
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
@@ -733,6 +738,8 @@ model AptitudeTest {
   @@index([category])
   @@index([difficulty])
   @@index([isActive])
+  @@index([startTime])
+  @@index([endTime])
   @@index([createdAt])
 }
 
@@ -751,6 +758,125 @@ model AptitudeAttempt {
 
   @@index([testId])
   @@index([userId])
+  @@index([submittedAt])
+}
+
+// ── Practice Session (free, unscored, per-question feedback) ──────────────────
+
+model AptitudePracticeSession {
+  id            String                   @id @default(uuid())
+  userId        String
+  categoryId    String?
+  topicId       String?
+  difficulty    String?
+  mode          String                   @default("static") // static | ai
+  totalAnswered Int                      @default(0)
+  totalCorrect  Int                      @default(0)
+  startedAt     DateTime                 @default(now())
+  endedAt       DateTime?
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers       AptitudePracticeAnswer[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([startedAt])
+}
+
+model AptitudePracticeAnswer {
+  id            String                   @id @default(uuid())
+  sessionId     String
+  questionId    String?                  // null for AI-generated questions
+  aiQuestion    String?                  // JSON snapshot for AI questions (no DB row)
+  correctOption String
+  orderIndex    Int                      @default(0)
+  selected      String?
+  isCorrect     Boolean                  @default(false)
+  timeTaken     Int                      @default(0)
+  answeredAt    DateTime?
+  session       AptitudePracticeSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([questionId])
+  @@index([isCorrect])
+}
+
+// ── Aptitude Competition System ───────────────────────────────────────────────
+
+model AptitudeCompetition {
+  id              String                          @id @default(uuid())
+  title           String
+  description     String?
+  category        String                          @default("general")
+  difficulty      String                          @default("medium")
+  duration        Int                             // minutes — per-student timer
+  startTime       DateTime                        // scheduled window open
+  endTime         DateTime                        // scheduled window close
+  maxParticipants Int?                            // null = unlimited
+  isActive        Boolean                         @default(true)
+  showLeaderboard Boolean                         @default(true)
+  allowLateJoin   Boolean                         @default(false)  // join after startTime?
+  createdBy       String
+  createdAt       DateTime                        @default(now())
+  updatedAt       DateTime                        @updatedAt
+  questions       AptitudeCompetitionQuestion[]
+  registrations   AptitudeCompetitionRegistration[]
+  attempts        AptitudeCompetitionAttempt[]
+
+  @@index([startTime])
+  @@index([endTime])
+  @@index([isActive])
+  @@index([category])
+  @@index([createdAt])
+}
+
+// Join table: competition ↔ questions (ordered, with per-question marks)
+model AptitudeCompetitionQuestion {
+  id            String               @id @default(uuid())
+  competitionId String
+  questionId    String               // FK → AptitudeQuestion
+  orderIndex    Int                  @default(0)
+  marks         Int                  @default(1)
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, questionId])
+  @@index([competitionId])
+  @@index([questionId])
+}
+
+// Student registers (joins) before attempting
+model AptitudeCompetitionRegistration {
+  id            String               @id @default(uuid())
+  competitionId String
+  userId        String
+  registeredAt  DateTime             @default(now())
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@index([competitionId])
+  @@index([userId])
+}
+
+// One attempt per student per competition (enforced unique)
+model AptitudeCompetitionAttempt {
+  id            String               @id @default(uuid())
+  competitionId String
+  userId        String
+  answers       Json                 // { questionId: "A"|"B"|"C"|"D" }
+  score         Int                  @default(0)
+  maxScore      Int                  @default(0)
+  percentage    Float                @default(0)
+  timeTaken     Int                  @default(0)  // seconds
+  rank          Int?                 // computed on submit / leaderboard refresh
+  startedAt     DateTime             @default(now())
+  submittedAt   DateTime?
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@index([competitionId])
+  @@index([userId])
+  @@index([competitionId, score])    // leaderboard sort
   @@index([submittedAt])
 }
 

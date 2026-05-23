@@ -206,11 +206,11 @@ export const authService = {
   },
 
   // Reset password with phone verification
-  resetPassword: async (moodleId, phoneLast4, newPassword) => {
+  resetPassword: async (moodleId, phoneLast5, newPassword) => {
     try {
       const response = await apiClient.post('/auth/reset-password', {
         moodleId,
-        phoneLast4,
+        phoneLast5,
         newPassword
       });
 
