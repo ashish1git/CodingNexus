@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Brain, Zap, BookOpen, BarChart2, Target, Sparkles,
-  Clock, Hash, ChevronRight, ArrowLeft, Cpu, Database
+  Clock, Hash, ChevronRight, ArrowLeft, Cpu, Database,
+  AlertCircle
 } from 'lucide-react';
+import aptitudeService from '../../services/aptitudeService';
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ const MODES = [
     value: 'ai',
     label: 'AI-Generated',
     icon:  Cpu,
-    desc:  'Gemini generates fresh questions on your chosen topic in real time.',
+    desc:  'AI generates fresh questions on your chosen topic in real time.',
     badge: 'Beta',
   },
 ];
@@ -63,8 +65,17 @@ export default function PracticeSetup({ onStart, loading = false }) {
   const [difficulty, setDifficulty] = useState('medium');
   const [count,      setCount]      = useState(10);
   const [mode,       setMode]       = useState('static');
+  const [aiLimit,    setAiLimit]    = useState(null);
+
+  useEffect(() => {
+    aptitudeService.getAILimit()
+      .then(data => setAiLimit(data))
+      .catch(() => setAiLimit({ usedToday: 0, limit: 3, remaining: 3, quotaExhausted: false }));
+  }, []);
 
   const selectedCat = CATEGORIES.find(c => c.value === category);
+  const quotaExhausted = aiLimit?.quotaExhausted || false;
+  const aiDisabled = aiLimit !== null && (aiLimit.remaining <= 0 || quotaExhausted);
 
   const handleStart = () => {
     onStart({
@@ -220,36 +231,59 @@ export default function PracticeSetup({ onStart, loading = false }) {
             {MODES.map(m => {
               const Icon   = m.icon;
               const active = mode === m.value;
+              const disabled = m.value === 'ai' && aiDisabled;
               return (
                 <button
                   key={m.value}
-                  onClick={() => setMode(m.value)}
+                  onClick={() => { if (!disabled) setMode(m.value); }}
+                  disabled={disabled}
                   className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                    active
-                      ? 'border-violet-500 bg-violet-600/10'
-                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                    disabled
+                      ? 'border-slate-800 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                      : active
+                        ? 'border-violet-500 bg-violet-600/10'
+                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${active ? 'text-violet-400' : 'text-slate-500'}`} />
+                  <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${active ? 'text-violet-400' : disabled ? 'text-slate-600' : 'text-slate-500'}`} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-semibold text-sm ${active ? 'text-violet-300' : 'text-slate-300'}`}>{m.label}</span>
+                      <span className={`font-semibold text-sm ${active ? 'text-violet-300' : disabled ? 'text-slate-500' : 'text-slate-300'}`}>{m.label}</span>
                       {m.badge && (
                         <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-violet-700/50 text-violet-300 border border-violet-600/50">
                           {m.badge}
                         </span>
                       )}
+                      {m.value === 'ai' && aiLimit !== null && (
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
+                          quotaExhausted
+                            ? 'bg-amber-900/30 text-amber-300 border-amber-700/50'
+                            : aiLimit.remaining > 0
+                              ? 'bg-green-900/30 text-green-300 border-green-700/50'
+                              : 'bg-red-900/30 text-red-300 border-red-700/50'
+                        }`}>
+                          {quotaExhausted ? 'Quota Exhausted' : `${aiLimit.remaining}/${aiLimit.limit} left today`}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">{m.desc}</p>
+                    <p className={`text-xs mt-0.5 leading-relaxed ${disabled ? 'text-slate-600' : 'text-slate-500'}`}>{m.desc}</p>
                   </div>
                 </button>
               );
             })}
           </div>
-          {mode === 'ai' && (
+          {mode === 'ai' && aiLimit !== null && aiLimit.remaining > 0 && !quotaExhausted && (
             <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
               <Sparkles className="w-3.5 h-3.5 mt-0.5 text-violet-500 flex-shrink-0" />
               AI mode takes ~5–10 seconds to generate questions. Falls back to question bank if generation fails.
+            </p>
+          )}
+          {aiDisabled && (
+            <p className="mt-2 text-xs text-red-400 flex items-start gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              {quotaExhausted
+                ? 'AI service quota has been reached for today — AI generation is temporarily unavailable. Please use the Question Bank or try again later.'
+                : `You have used all ${aiLimit?.limit || 3} AI-generated sessions for today. Please use the Question Bank or try again tomorrow.`}
             </p>
           )}
         </section>

@@ -87,12 +87,65 @@ function FeedbackBanner({ fb, submitting }) {
           : <><XCircle className="w-4 h-4" /> Incorrect — answer: <strong>{fb.correctOption}</strong></>
         }
       </div>
-      {fb.explanation && (
-        <div className="flex items-start gap-2 text-slate-300 leading-relaxed">
-          <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-400" />
-          {fb.explanation}
-        </div>
-      )}
+      {fb.explanation && <ExplanationBlock text={fb.explanation} />}
+    </div>
+  );
+}
+
+function ExplanationBlock({ text }) {
+  if (!text) return null;
+
+  // Parse the text into structured blocks: Steps, [TRICK], and plain text
+  const blocks = [];
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith('[TRICK]:') || trimmed.startsWith('[TRICK]')) {
+      blocks.push({ type: 'trick', content: trimmed.replace(/^\[TRICK\]:?\s*/i, '') });
+    } else if (/^Step\s+\d+/i.test(trimmed)) {
+      blocks.push({ type: 'step', content: trimmed });
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      blocks.push({ type: 'step', content: trimmed });
+    } else {
+      blocks.push({ type: 'text', content: trimmed });
+    }
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({ type: 'text', content: text.trim() });
+  }
+
+  return (
+    <div className="space-y-2 mt-2">
+      <div className="flex items-center gap-1.5 text-yellow-400 text-xs font-semibold uppercase tracking-wider">
+        <Lightbulb className="w-3.5 h-3.5" /> Explanation
+      </div>
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3 space-y-1.5">
+        {blocks.map((b, i) => {
+          if (b.type === 'trick') {
+            return (
+              <div key={i} className="flex items-start gap-2 bg-violet-900/20 border border-violet-700/30 rounded-lg p-2 text-violet-200 text-xs">
+                <span className="text-violet-400 mt-0.5">⚡</span>
+                <span><strong className="text-violet-300">Quick Trick:</strong> {b.content}</span>
+              </div>
+            );
+          }
+          if (b.type === 'step') {
+            return (
+              <div key={i} className="flex items-start gap-2 text-slate-300 text-xs leading-relaxed">
+                <span className="text-indigo-400 font-bold min-w-[1.5em] mt-px">{i + 1}.</span>
+                <span>{b.content}</span>
+              </div>
+            );
+          }
+          return (
+            <p key={i} className="text-slate-300 text-xs leading-relaxed">{b.content}</p>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -11,14 +11,65 @@ function handleError(res, error) {
   res.status(error.status || 500).json({ success: false, error: error.message || 'Internal server error' });
 }
 
-// ─── POST /api/aptitude/practice/start ───────────────────────────────────────
-// Creates a practice session and returns the first batch of questions.
-// Body: { category, topicId, difficulty, count, mode }
-//   mode: "static"  — questions from question bank only
-//         "ai"      — questions generated on-the-fly by Gemini (falls back to static if AI fails)
+// In-memory global AI quota flag with auto-reset (stores timestamp when quota was last exhausted)
+// Resets automatically when a new day starts (midnight server time) or on next successful call
+let g_aiQuotaExhaustedAt = null;
+const QUOTA_EXHAUSTED_RESET_HOURS = 6;
+
+function isQuotaExhausted() {
+  if (!g_aiQuotaExhaustedAt) return false;
+  const now = new Date();
+  const exhaustedDate = new Date(g_aiQuotaExhaustedAt);
+  // Reset if a new day started (midnight has passed) since quota was exhausted
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const exhaustedDayStart = new Date(exhaustedDate.getFullYear(), exhaustedDate.getMonth(), exhaustedDate.getDate());
+  if (todayStart.getTime() > exhaustedDayStart.getTime()) {
+    g_aiQuotaExhaustedAt = null;
+    console.log('[quota] Auto-reset: new day detected');
+    return false;
+  }
+  // Also reset if more than QUOTA_EXHAUSTED_RESET_HOURS have passed
+  if (now - exhaustedDate > QUOTA_EXHAUSTED_RESET_HOURS * 3600000) {
+    g_aiQuotaExhaustedAt = null;
+    console.log('[quota] Auto-reset: timeout reached');
+    return false;
+  }
+  return true;
+}
+
+// GET /api/aptitude/practice/ai-limit
+router.get('/ai-limit', async (req, res) => {
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const usedToday = await prisma.aptitudePracticeSession.count({
+      where: {
+        userId: req.user.id,
+        mode: 'ai',
+        startedAt: { gte: todayStart },
+      },
+    });
+
+    const limit = 3;
+    const personalRemaining = Math.max(0, limit - usedToday);
+
+    res.json({
+      success: true,
+      usedToday,
+      limit,
+      remaining: isQuotaExhausted() ? 0 : personalRemaining,
+      quotaExhausted: isQuotaExhausted(),
+    });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// POST /api/aptitude/practice/start
 router.post('/start', async (req, res) => {
   try {
-    const {
+    let {
       category,
       topicId,
       difficulty = 'medium',
@@ -27,36 +78,75 @@ router.post('/start', async (req, res) => {
     } = req.body;
 
     const clampedCount = Math.min(30, Math.max(1, Number(count)));
-
     let questions = [];
     let aiGenerated = false;
 
     if (mode === 'ai') {
-      // Attempt AI generation; fall back to static on any error
+      // ── Rate limit: max 3 AI practice sessions per user per day ──
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const aiCountToday = await prisma.aptitudePracticeSession.count({
+        where: {
+          userId: req.user.id,
+          mode: 'ai',
+          startedAt: { gte: todayStart },
+        },
+      });
+      if (aiCountToday >= 3) {
+        return res.status(429).json({
+          success: false,
+          error: 'You have reached the daily limit of 3 AI-generated practice sessions. Please try again tomorrow or use the Question Bank.',
+        });
+      }
+
       try {
         const { generateFromTopic } = await import('../../services/aptitude/aiQuestionGenerator.service.js');
         const topic = topicId || category || 'general aptitude';
         const generated = await generateFromTopic({ topic, category, difficulty, count: clampedCount });
-        // AI questions have no DB id — assign a temporary client-side id
+
+        // Clear quota-exhausted flag on success (quota may have reset)
+        g_aiQuotaExhaustedAt = null;
+
         questions = generated.map((q, i) => ({
           id:            `ai-${Date.now()}-${i}`,
+          orderIndex:    i,
           question:      q.question,
           options:       q.options,
           explanation:   q.explanation,
           difficulty:    q.difficulty,
           concept:       q.concept || null,
-          correctOption: q.correctOption,  // included — validated per-answer server-side
+          correctOption: q.correctOption,
           isAI:          true,
         }));
         aiGenerated = true;
       } catch (aiErr) {
-        console.warn('[practice/start] AI generation failed, falling back to static:', aiErr.message);
+        const msg = aiErr.message || '';
+        const isPermanentQuota = aiErr.isPermanentQuota === true;
+        const isKeyIssue = msg.includes('API_KEY') || msg.includes('API key not valid') || msg.includes('403');
+        console.warn('[practice/start] AI generation failed:', msg);
+
+        if (isPermanentQuota) {
+          g_aiQuotaExhaustedAt = new Date();
+          return res.status(429).json({
+            success: false,
+            error: 'AI question generation is temporarily unavailable — we have reached the daily AI service limit. Please try again later or use the Question Bank.',
+          });
+        }
+
+        if (isKeyIssue) {
+          return res.status(503).json({
+            success: false,
+            error: 'AI question generation is not configured yet. Please use the Question Bank for now.',
+          });
+        }
+
+        // Other errors — fall back to static silently
         mode = 'static';
       }
     }
 
     if (!aiGenerated) {
-      // Static: pull from question bank
+      // static fallback – try with filters, then relax
       questions = await getRandomQuestions({
         count: clampedCount,
         categoryId: category,
@@ -64,15 +154,37 @@ router.post('/start', async (req, res) => {
         difficulty: difficulty !== 'all' ? difficulty : undefined,
       });
 
-      // For static questions fetched via getRandomQuestions (student-safe — no correctOption),
-      // we need correctOption for server-side validation during the session.
-      // Fetch full records for the returned IDs.
+      // If strict filter returns nothing, retry without topic
+      if (questions.length === 0 && topicId) {
+        questions = await getRandomQuestions({
+          count: clampedCount,
+          categoryId: category,
+          difficulty: difficulty !== 'all' ? difficulty : undefined,
+        });
+      }
+
+      // If still nothing, retry with just difficulty
+      if (questions.length === 0 && (category || topicId)) {
+        questions = await getRandomQuestions({
+          count: clampedCount,
+          difficulty: difficulty !== 'all' ? difficulty : undefined,
+        });
+      }
+
+      // Absolute fallback – any active questions
+      if (questions.length === 0) {
+        questions = await getRandomQuestions({
+          count: clampedCount,
+        });
+      }
+
       if (questions.length > 0) {
         const ids = questions.map(q => q.id);
         const full = await prisma.aptitudeQuestion.findMany({ where: { id: { in: ids } } });
         const fullMap = Object.fromEntries(full.map(q => [q.id, q]));
-        questions = questions.map(q => ({
+        questions = questions.map((q, idx) => ({
           ...q,
+          orderIndex: idx,
           correctOption: fullMap[q.id]?.correctOption,
           explanation:   fullMap[q.id]?.explanation,
         }));
@@ -86,41 +198,48 @@ router.post('/start', async (req, res) => {
       });
     }
 
-    // Persist session to DB
     const session = await prisma.aptitudePracticeSession.create({
       data: {
         userId:       req.user.id,
         categoryId:   category   || null,
         topicId:      topicId    || null,
         difficulty:   difficulty !== 'all' ? difficulty : null,
+        mode:         aiGenerated ? 'ai' : 'static',
         totalAnswered: 0,
         totalCorrect:  0,
       }
     });
 
-    // Store question snapshot in DB for answer validation + result reconstruction
-    // We store correctOption server-side only — never send it in the start response.
-    await prisma.aptitudePracticeAnswer.createMany({
-      data: questions.map((q, idx) => ({
-        sessionId:  session.id,
-        questionId: q.isAI ? null : q.id,
-        aiQuestion: q.isAI ? JSON.stringify({
-          question: q.question,
-          options:  q.options,
+    // Insert answer slots — create one-by-one to get IDs back
+    const answerSlots = [];
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const slot = await prisma.aptitudePracticeAnswer.create({
+        data: {
+          sessionId:    session.id,
+          questionId:   q.isAI ? null : q.id,
+          aiQuestion:   q.isAI ? JSON.stringify({
+            question: q.question,
+            options:  q.options,
+            correctOption: q.correctOption,
+            explanation:   q.explanation,
+            concept:       q.concept,
+          }) : null,
           correctOption: q.correctOption,
-          explanation:   q.explanation,
-          concept:       q.concept,
-        }) : null,
-        correctOption: q.correctOption,
-        orderIndex:    idx,
-        selected:      null,
-        isCorrect:     false,
-        timeTaken:     0,
-      }))
-    });
+          orderIndex:    i,
+          selected:      null,
+          isCorrect:     false,
+          timeTaken:     0,
+        }
+      });
+      answerSlots.push({ id: slot.id, orderIndex: i });
+    }
 
-    // Strip correctOption before sending to client
-    const safeQuestions = questions.map(({ correctOption, ...rest }) => rest);
+    // Send to client with answerSlotId for answering, stripped of correctOption
+    const safeQuestions = questions.map(({ correctOption, ...rest }, idx) => ({
+      ...rest,
+      answerSlotId: answerSlots[idx].id,
+    }));
 
     res.status(201).json({
       success:      true,
@@ -135,42 +254,35 @@ router.post('/start', async (req, res) => {
   }
 });
 
-// ─── POST /api/aptitude/practice/:sessionId/answer ───────────────────────────
-// Validate and record a single answer. Returns immediate feedback.
-// Body: { questionId, selected, timeTaken }
+// POST /api/aptitude/practice/:sessionId/answer
 router.post('/:sessionId/answer', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { questionId, selected, timeTaken = 0 } = req.body;
+    const { answerSlotId, selected, timeTaken = 0 } = req.body;
 
     const session = await prisma.aptitudePracticeSession.findUnique({ where: { id: sessionId } });
     if (!session) return res.status(404).json({ success: false, error: 'Practice session not found' });
     if (session.userId !== req.user.id) return res.status(403).json({ success: false, error: 'Not your session' });
     if (session.endedAt) return res.status(400).json({ success: false, error: 'Session already finished' });
 
-    // Find the answer slot for this question
-    const answerSlot = await prisma.aptitudePracticeAnswer.findFirst({
-      where: {
-        sessionId,
-        OR: [
-          { questionId: questionId || undefined },
-          // For AI questions there's no questionId — match by order from client
-        ]
-      }
+    const answerSlot = await prisma.aptitudePracticeAnswer.findUnique({
+      where: { id: answerSlotId }
     });
 
-    if (!answerSlot) return res.status(404).json({ success: false, error: 'Question not found in this session' });
-    if (answerSlot.selected) return res.status(400).json({ success: false, error: 'Already answered' });
+    if (!answerSlot || answerSlot.sessionId !== sessionId) {
+      return res.status(404).json({ success: false, error: 'Answer slot not found in this session' });
+    }
+    if (answerSlot.selected) {
+      return res.status(400).json({ success: false, error: 'Already answered' });
+    }
 
     const isCorrect = selected ? selected === answerSlot.correctOption : false;
 
-    // Update the answer slot
     await prisma.aptitudePracticeAnswer.update({
       where:  { id: answerSlot.id },
       data:   { selected: selected || null, isCorrect, timeTaken: Number(timeTaken) }
     });
 
-    // Increment session counters
     await prisma.aptitudePracticeSession.update({
       where: { id: sessionId },
       data: {
@@ -179,7 +291,6 @@ router.post('/:sessionId/answer', async (req, res) => {
       }
     });
 
-    // Fetch explanation for immediate feedback
     let explanation = null;
     if (answerSlot.aiQuestion) {
       try { explanation = JSON.parse(answerSlot.aiQuestion).explanation; } catch {}
@@ -199,8 +310,7 @@ router.post('/:sessionId/answer', async (req, res) => {
   }
 });
 
-// ─── POST /api/aptitude/practice/:sessionId/finish ───────────────────────────
-// Mark session complete; returns full result summary.
+// POST /api/aptitude/practice/:sessionId/finish
 router.post('/:sessionId/finish', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -239,8 +349,7 @@ router.post('/:sessionId/finish', async (req, res) => {
   }
 });
 
-// ─── GET /api/aptitude/practice/:sessionId ───────────────────────────────────
-// Full session detail for the results page.
+// GET /api/aptitude/practice/:sessionId
 router.get('/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -252,7 +361,6 @@ router.get('/:sessionId', async (req, res) => {
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
     if (session.userId !== req.user.id) return res.status(403).json({ success: false, error: 'Not your session' });
 
-    // Enrich answers with full question text (from DB or embedded AI JSON)
     const enriched = await Promise.all(session.answers.map(async (a) => {
       let questionData = {};
       if (a.aiQuestion) {
@@ -262,6 +370,7 @@ router.get('/:sessionId', async (req, res) => {
         if (q) questionData = { question: q.question, options: q.options, explanation: q.explanation };
       }
       return {
+        answerSlotId:  a.id,
         questionId:    a.questionId || `ai-${a.id}`,
         question:      questionData.question || '(question unavailable)',
         options:       questionData.options   || [],

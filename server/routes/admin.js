@@ -7,6 +7,15 @@ import upload, { uploadToCloudinary } from '../middleware/upload.js';
 
 const router = express.Router();
 
+// Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
+const formatDisplayName = (name) => {
+  if (!name || !name.trim()) return '';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
+  return `${parts[1]} ${parts[0]}`;
+};
+
 // All routes require admin authentication
 router.use(authenticate);
 router.use(authorizeRole('admin', 'subadmin', 'superadmin'));
@@ -107,7 +116,7 @@ router.post('/students', async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        name: user.studentProfile.name
+        name: formatDisplayName(user.studentProfile.name)
       }
     });
   } catch (error) {
@@ -138,7 +147,7 @@ router.get('/students', async (req, res) => {
           email: u.email,
           moodleId: u.moodleId,
           isActive: u.isActive,
-          name: student.name,
+          name: formatDisplayName(student.name),
           rollNo: student.rollNo,
           batch: student.batch,
           phone: student.phone,
@@ -197,7 +206,7 @@ router.put('/students/:id', async (req, res) => {
           email: currentUser.email,
           moodleId: currentUser.moodleId,
           isActive: currentUser.isActive,
-          name: currentUser.studentProfile?.name,
+          name: formatDisplayName(currentUser.studentProfile?.name),
           rollNo: currentUser.studentProfile?.rollNo,
           batch: currentUser.studentProfile?.batch,
           phone: currentUser.studentProfile?.phone,

@@ -7,6 +7,15 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
+const formatDisplayName = (name) => {
+  if (!name || !name.trim()) return '';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
+  return `${parts[1]} ${parts[0]}`;
+};
+
 // Generate JWT token
 const generateToken = (userId, role) => {
   return jwt.sign(
@@ -142,11 +151,11 @@ router.post('/login', async (req, res) => {
         role: user.role,
         moodleId: user.moodleId,
         isActive: user.isActive,
-        profile: user.studentProfile,
-        studentProfile: user.studentProfile,
+        profile: { ...user.studentProfile, name: formatDisplayName(user.studentProfile?.name) },
+        studentProfile: { ...user.studentProfile, name: formatDisplayName(user.studentProfile?.name) },
         // Add commonly accessed fields at root level
         batch: user.studentProfile?.batch,
-        name: user.studentProfile?.name,
+        name: formatDisplayName(user.studentProfile?.name),
         phone: user.studentProfile?.phone,
         rollNo: user.studentProfile?.rollNo,
         profilePhotoUrl: user.studentProfile?.profilePhotoUrl
@@ -301,13 +310,13 @@ router.get('/me', authenticate, async (req, res) => {
       isActive: user.isActive,
       createdAt: user.createdAt,
       // Keep nested profiles for backward compatibility
-      profile: user.studentProfile || user.adminProfile,
-      studentProfile: user.studentProfile,
+      profile: user.studentProfile ? { ...user.studentProfile, name: formatDisplayName(user.studentProfile.name) } : user.adminProfile,
+      studentProfile: user.studentProfile ? { ...user.studentProfile, name: formatDisplayName(user.studentProfile.name) } : null,
       adminProfile: user.adminProfile,
       // Add profile data directly at root level for easy access
       ...(user.studentProfile && {
         batch: user.studentProfile.batch,
-        name: user.studentProfile.name,
+        name: formatDisplayName(user.studentProfile.name),
         phone: user.studentProfile.phone,
         rollNo: user.studentProfile.rollNo,
         profilePhotoUrl: user.studentProfile.profilePhotoUrl
@@ -385,9 +394,10 @@ router.post('/forgot-password', async (req, res) => {
     const phone = user.studentProfile?.phone || '';
     const phoneHint = phone.length >= 2 ? phone.slice(-2) : '**';
 
-    // Get masked name (first name only)
+    // Get masked name (first name only) — name in DB is "Last First Middle", so parts[1] is first name
     const fullName = user.studentProfile?.name || 'Student';
-    const firstName = fullName.split(' ')[0];
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstName = nameParts.length >= 2 ? nameParts[1] : nameParts[0];
     const maskedName = firstName.length > 2 
       ? firstName[0] + '*'.repeat(firstName.length - 2) + firstName[firstName.length - 1]
       : firstName;

@@ -61,8 +61,8 @@ const aptitudeService = {
   },
 
   // Submit a single answer during a live practice session
-  submitPracticeAnswer: async (sessionId, { questionId, selected, timeTaken }) => {
-    return await apiClient.post(`/aptitude/practice/${sessionId}/answer`, { questionId, selected, timeTaken });
+  submitPracticeAnswer: async (sessionId, { answerSlotId, selected, timeTaken }) => {
+    return await apiClient.post(`/aptitude/practice/${sessionId}/answer`, { answerSlotId, selected, timeTaken });
   },
 
   // End a session early or after all questions answered
@@ -73,6 +73,11 @@ const aptitudeService = {
   // Get full session result (for results page)
   getPracticeSession: async (sessionId) => {
     return await apiClient.get(`/aptitude/practice/${sessionId}`);
+  },
+
+  // Check daily AI practice generation limit
+  getAILimit: async () => {
+    return await apiClient.get('/aptitude/practice/ai-limit');
   },
 
   // Fetch random questions without a session (lightweight)

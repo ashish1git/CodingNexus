@@ -707,16 +707,27 @@ model GuestSession {
 
 model AptitudeQuestion {
   id           String               @id @default(uuid())
-  testId       String
+  testId       String?
   question     String
   options      Json                 // Array of {label: "A"|"B"|"C"|"D", text: string}
   correctOption String              // "A", "B", "C", or "D"
   explanation  String?
+  difficulty   String               @default("medium")
+  categoryId   String?
+  topicId      String?
+  tags         String[]             @default([])
+  sourceRef    String?
+  isActive     Boolean              @default(true)
   orderIndex   Int                  @default(0)
   createdAt    DateTime             @default(now())
-  test         AptitudeTest         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime             @default(now())
+  test         AptitudeTest?        @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   @@index([testId])
+  @@index([categoryId])
+  @@index([topicId])
+  @@index([difficulty])
+  @@index([isActive])
 }
 
 model AptitudeTest {

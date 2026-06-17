@@ -141,7 +141,7 @@ export function usePracticeEngine() {
 
     try {
       const data = await aptitudeService.submitPracticeAnswer(sessionId, {
-        questionId: current.id,
+        answerSlotId: current.answerSlotId,
         selected,
         timeTaken,
       });

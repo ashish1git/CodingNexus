@@ -3,6 +3,17 @@ import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
 
+// Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
+const formatDisplayName = (name) => {
+  if (!name || !name.trim()) return '';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
+  return `${parts[1]} ${parts[0]}`;
+};
+
+const router = express.Router();
+
 const router = express.Router();
 
 // All routes require student authentication
@@ -761,7 +772,7 @@ router.post('/tickets/:id/reply', async (req, res) => {
 
     responses.push({
       from: 'student',
-      name: ticket.user?.studentProfile?.name || 'Student',
+      name: formatDisplayName(ticket.user?.studentProfile?.name) || 'Student',
       timestamp: new Date().toISOString(),
       message: message.trim()
     });

@@ -6,6 +6,56 @@ import {
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 
+function FormattedExplanation({ text }) {
+  if (!text) return null;
+  const blocks = [];
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith('[TRICK]:') || trimmed.startsWith('[TRICK]')) {
+      blocks.push({ type: 'trick', content: trimmed.replace(/^\[TRICK\]:?\s*/i, '') });
+    } else if (/^Step\s+\d+/i.test(trimmed) || /^\d+\.\s/.test(trimmed)) {
+      blocks.push({ type: 'step', content: trimmed });
+    } else {
+      blocks.push({ type: 'text', content: trimmed });
+    }
+  }
+
+  if (blocks.length === 0) {
+    return <span><strong className="text-indigo-300">Explanation: </strong>{text.trim()}</span>;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-yellow-400 text-xs font-semibold uppercase tracking-wider mb-1">
+        <Lightbulb className="w-3.5 h-3.5" /> Explanation
+      </div>
+      {blocks.map((b, i) => {
+        if (b.type === 'trick') {
+          return (
+            <div key={i} className="flex items-start gap-2 bg-violet-900/30 border border-violet-700/30 rounded-lg p-2 text-violet-200 text-xs">
+              <span className="text-violet-400 mt-0.5">⚡</span>
+              <span><strong className="text-violet-300">Quick Trick:</strong> {b.content}</span>
+            </div>
+          );
+        }
+        if (b.type === 'step') {
+          return (
+            <div key={i} className="flex items-start gap-2 leading-relaxed">
+              <span className="text-indigo-400 font-bold min-w-[1.5em] mt-px">{i + 1}.</span>
+              <span className="text-indigo-200/80">{b.content}</span>
+            </div>
+          );
+        }
+        return <p key={i} className="text-indigo-200/80 leading-relaxed">{b.content}</p>;
+      })}
+    </div>
+  );
+}
+
 function getGrade(pct) {
   if (pct >= 80) return { label: 'Excellent!',      color: 'text-green-400',  ring: 'border-green-500',  bg: 'bg-green-500/10'  };
   if (pct >= 60) return { label: 'Good Job!',        color: 'text-indigo-400', ring: 'border-indigo-500', bg: 'bg-indigo-500/10' };
@@ -105,9 +155,8 @@ function QuestionReview({ item, idx }) {
             );
           })}
           {explanation && (
-            <div className="mt-2 p-3 bg-indigo-900/20 border border-indigo-700/40 rounded-lg text-indigo-200 text-sm leading-relaxed flex gap-2">
-              <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-400" />
-              <span><strong className="text-indigo-300">Explanation: </strong>{explanation}</span>
+            <div className="mt-2 p-3 bg-indigo-900/20 border border-indigo-700/40 rounded-lg text-indigo-200 text-sm leading-relaxed">
+              <FormattedExplanation text={explanation} />
             </div>
           )}
         </div>
@@ -118,8 +167,8 @@ function QuestionReview({ item, idx }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function PracticeResults({ engine }) {
-  const { summary, questions, feedback, answers, mode, config, reset } = engine;
+export default function PracticeResults({ engine, onReset }) {
+  const { summary, questions, feedback, answers, mode, config } = engine;
   const [tab, setTab] = useState('review');
 
   if (!summary) return null;
@@ -163,7 +212,7 @@ export default function PracticeResults({ engine }) {
       <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={reset}
+            onClick={onReset}
             className="inline-flex items-center gap-2 text-slate-300 hover:text-white transition group"
           >
             <RotateCcw className="w-4 h-4 group-hover:rotate-[-90deg] transition-transform duration-300" />
@@ -203,7 +252,7 @@ export default function PracticeResults({ engine }) {
           </div>
 
           <button
-            onClick={reset}
+            onClick={onReset}
             className="inline-flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-white font-semibold text-sm transition"
           >
             <RotateCcw className="w-4 h-4" /> Practice Again

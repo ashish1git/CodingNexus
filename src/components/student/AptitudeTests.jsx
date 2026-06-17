@@ -105,6 +105,14 @@ export default function AptitudeTests() {
     (t.description || '').toLowerCase().includes(search.toLowerCase())
   );
 
+  const upcomingTests = filtered
+    .filter(t => getStatus(t) === 'upcoming')
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const nextUpcoming = upcomingTests[0];
+  const nextUpcomingCountdown = nextUpcoming
+    ? new Date(nextUpcoming.startTime).getTime() - now
+    : 0;
+
   const ongoingCount = filtered.filter(t => getStatus(t) === 'ongoing').length;
   const completedCount = tests.filter(t => t.myBestAttempt).length;
 
@@ -154,6 +162,67 @@ export default function AptitudeTests() {
             </div>
           </div>
         </div>
+
+        {/* Big Upcoming — prominent next-test banner */}
+        {nextUpcoming && !loading && (
+          <div className="relative overflow-hidden rounded-xl mb-6 border-2 border-amber-500/60 bg-gradient-to-r from-amber-900/40 via-slate-800 to-amber-900/40">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-transparent pointer-events-none" />
+            <div className="relative px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-amber-400" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      Big Upcoming
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getCategoryColor(nextUpcoming.category)}`}>
+                      {getCategoryIcon(nextUpcoming.category)}
+                      <span className="ml-1">{CATEGORIES.find(c => c.value === nextUpcoming.category)?.label || nextUpcoming.category}</span>
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getDifficultyColor(nextUpcoming.difficulty)}`}>
+                      {nextUpcoming.difficulty.charAt(0).toUpperCase() + nextUpcoming.difficulty.slice(1)}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-1">{nextUpcoming.title}</h3>
+                  {nextUpcoming.description && (
+                    <p className="text-slate-300 text-sm line-clamp-1">{nextUpcoming.description}</p>
+                  )}
+                  <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> {nextUpcoming.duration} min
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <BarChart2 className="w-3.5 h-3.5" /> {nextUpcoming.questionCount} questions
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5" /> {nextUpcoming.totalAttempts} attempts
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-shrink-0 text-center sm:text-right ml-14 sm:ml-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-amber-300/80 mb-1">Starts in</p>
+                <p className="text-3xl font-black text-amber-400 tabular-nums tracking-tight">
+                  {formatCountdown(nextUpcomingCountdown)}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {new Date(nextUpcoming.startTime).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                  {' at '}
+                  {new Date(nextUpcoming.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+                {upcomingTests.length > 1 && (
+                  <p className="text-xs text-amber-400/60 mt-1.5 font-medium">
+                    +{upcomingTests.length - 1} more upcoming
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bg-slate-800 rounded-xl p-4 mb-6 border border-slate-700">

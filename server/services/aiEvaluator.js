@@ -7,7 +7,7 @@ const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free'
 // Gemini Direct API support
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const USE_GEMINI_DIRECT = process.env.USE_GEMINI_DIRECT === 'true';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 /**
  * Detect if code uses Python builtins that trivially solve the task
