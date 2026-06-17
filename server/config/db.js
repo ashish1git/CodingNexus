@@ -1,15 +1,9 @@
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
-
-// Load from parent directory if not already loaded
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.join(__dirname, '../../.env');
-config({ path: envPath });
 
 // Get database URL from environment
 const connectionString = process.env.DATABASE_URL;

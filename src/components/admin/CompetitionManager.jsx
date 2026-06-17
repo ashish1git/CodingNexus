@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code
+  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
@@ -46,6 +46,13 @@ const CompetitionManager = () => {
     expectedSpace: ''
   });
   const [competitions, setCompetitions] = useState([]);
+
+  // JSON batch import state
+  const [showJsonModal, setShowJsonModal] = useState(false);
+  const [jsonInput, setJsonInput] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [jsonParsedProblems, setJsonParsedProblems] = useState([]);
+  const [jsonSelectedIndices, setJsonSelectedIndices] = useState(new Set());
 
   // Generate starter code templates for each language based on function signature
   const generateStarterCode = (problem) => {
@@ -475,6 +482,91 @@ public:
 
   const removeProblem = (index) => {
     setProblems(problems.filter((_, i) => i !== index));
+  };
+
+  // ─── JSON Batch Import Handlers ────────────────────────────────────
+
+  const VALID_RETURN_TYPES = ['int', 'int[]', 'int[][]', 'string', 'string[]', 'boolean', 'double', 'float', 'long'];
+  const VALID_PARAM_TYPES = ['int', 'int[]', 'int[][]', 'string', 'string[]', 'boolean', 'double', 'float', 'long', 'char'];
+  const VALID_DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+  const normalizeProblem = (p) => {
+    return {
+      title: String(p.title || 'Untitled'),
+      description: String(p.description || ''),
+      difficulty: VALID_DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'medium',
+      points: typeof p.points === 'number' && p.points > 0 ? p.points : 100,
+      functionName: String(p.functionName || 'solution'),
+      returnType: VALID_RETURN_TYPES.includes(p.returnType) ? p.returnType : 'int',
+      parameters: (Array.isArray(p.parameters) ? p.parameters : [])
+        .filter(pp => pp.name && pp.type)
+        .map(pp => ({ name: String(pp.name), type: VALID_PARAM_TYPES.includes(pp.type) ? pp.type : 'int' }))
+        .length > 0
+        ? (Array.isArray(p.parameters) ? p.parameters : []).filter(pp => pp.name && pp.type).map(pp => ({ name: String(pp.name), type: VALID_PARAM_TYPES.includes(pp.type) ? pp.type : 'int' }))
+        : [{ name: 'nums', type: 'int[]' }],
+      constraints: Array.isArray(p.constraints) ? p.constraints.filter(c => c && String(c).trim()) : [],
+      examples: Array.isArray(p.examples) ? p.examples.filter(ex => ex.input || ex.output).map(ex => ({
+        input: String(ex.input || ''),
+        output: String(ex.output || ''),
+        explanation: String(ex.explanation || '')
+      })) : [],
+      testCases: Array.isArray(p.testCases) ? p.testCases.filter(tc => tc.input !== undefined || tc.output !== undefined).map(tc => ({
+        input: String(tc.input || ''),
+        output: String(tc.output || ''),
+        hidden: Boolean(tc.hidden)
+      })) : [{ input: '1,2,3\n1', output: '0', hidden: false }],
+      expectedComplexity: String(p.expectedComplexity || ''),
+      expectedSpace: String(p.expectedSpace || '')
+    };
+  };
+
+  const handleJsonParse = () => {
+    setJsonError('');
+    try {
+      let parsed = JSON.parse(jsonInput);
+      // Support both array and {problems: [...]} wrapper
+      if (!Array.isArray(parsed)) {
+        if (parsed.problems && Array.isArray(parsed.problems)) {
+          parsed = parsed.problems;
+        } else {
+          throw new Error('JSON must be an array of problems or {problems: [...]}');
+        }
+      }
+      const normalized = parsed.map(normalizeProblem);
+      setJsonParsedProblems(normalized);
+      setJsonSelectedIndices(new Set(normalized.map((_, i) => i))); // select all by default
+      toast.success(`Parsed ${normalized.length} problem(s)`);
+    } catch (e) {
+      setJsonError(e.message);
+      setJsonParsedProblems([]);
+      setJsonSelectedIndices(new Set());
+    }
+  };
+
+  const handleJsonToggleSelect = (index) => {
+    const newSet = new Set(jsonSelectedIndices);
+    if (newSet.has(index)) newSet.delete(index);
+    else newSet.add(index);
+    setJsonSelectedIndices(newSet);
+  };
+
+  const handleJsonAddSelected = () => {
+    if (jsonSelectedIndices.size === 0) {
+      toast.error('Select at least one problem');
+      return;
+    }
+    const selected = jsonParsedProblems
+      .filter((_, i) => jsonSelectedIndices.has(i))
+      .map(p => {
+        const starterCode = generateStarterCode(p);
+        return { ...p, starterCode };
+      });
+    setProblems([...problems, ...selected]);
+    toast.success(`Added ${selected.length} problem(s)`);
+    setShowJsonModal(false);
+    setJsonInput('');
+    setJsonParsedProblems([]);
+    setJsonSelectedIndices(new Set());
   };
 
   const addConstraint = () => {
@@ -1226,7 +1318,17 @@ public:
 
                   {/* Current Problem Form */}
                   <div className="border-2 border-dashed border-gray-300 p-4 rounded-lg">
-                    <h3 className="font-semibold text-gray-800 mb-4">Add New Problem</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-gray-800">Add New Problem</h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowJsonModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition text-sm font-medium shadow-sm"
+                      >
+                        <FileJson className="w-4 h-4" />
+                        Batch Import JSON
+                      </button>
+                    </div>
                     
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
@@ -1708,6 +1810,189 @@ public:
                 </div>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* JSON Batch Import Modal */}
+      {showJsonModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FileJson className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-xl font-bold text-gray-800">Batch Import Problems</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowJsonModal(false);
+                  setJsonInput('');
+                  setJsonError('');
+                  setJsonParsedProblems([]);
+                  setJsonSelectedIndices(new Set());
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {jsonParsedProblems.length > 0 ? (
+              /* Parsed results view */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    Parsed {jsonParsedProblems.length} problem(s). Select which to add:
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setJsonSelectedIndices(new Set(jsonParsedProblems.map((_, i) => i)))}
+                      className="text-xs text-indigo-600 hover:underline"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => setJsonSelectedIndices(new Set())}
+                      className="text-xs text-gray-500 hover:underline"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                {jsonParsedProblems.map((problem, index) => (
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                      jsonSelectedIndices.has(index)
+                        ? 'border-indigo-500 bg-indigo-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => handleJsonToggleSelect(index)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={jsonSelectedIndices.has(index)}
+                        onChange={() => handleJsonToggleSelect(index)}
+                        className="mt-1 h-4 w-4 text-indigo-600 rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-800">{problem.title}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+                          <span>{problem.difficulty}</span>
+                          <span>{problem.points} pts</span>
+                          <span>{problem.testCases.length} test cases</span>
+                          <span>fn: {problem.functionName}({problem.parameters.map(p => `${p.name}:${p.type}`).join(', ')}) → {problem.returnType}</span>
+                        </div>
+                        {problem.constraints.length > 0 && (
+                          <p className="text-xs text-gray-400 mt-1 truncate">
+                            {problem.constraints.slice(0, 2).join(' | ')}{problem.constraints.length > 2 ? ' ...' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={handleJsonAddSelected}
+                    className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium"
+                  >
+                    Add Selected ({jsonSelectedIndices.size})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setJsonParsedProblems([]);
+                      setJsonSelectedIndices(new Set());
+                      setJsonError('');
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    Back to Edit
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Input view */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Paste JSON array of problems
+                  </label>
+                  <textarea
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                    rows={14}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 text-sm font-mono"
+                    placeholder={`[
+  {
+    "title": "Two Sum",
+    "description": "Given an array of integers nums...",
+    "difficulty": "easy",
+    "points": 100,
+    "functionName": "twoSum",
+    "returnType": "int[]",
+    "parameters": [
+      {"name": "nums", "type": "int[]"},
+      {"name": "target", "type": "int"}
+    ],
+    "constraints": [
+      "2 <= nums.length <= 10^4",
+      "-10^9 <= nums[i] <= 10^9"
+    ],
+    "examples": [
+      {"input": "nums = [2,7,11,15], target = 9", "output": "[0,1]", "explanation": "2+7=9"}
+    ],
+    "testCases": [
+      {"input": "2,7,11,15\\n9", "output": "0,1", "hidden": false},
+      {"input": "3,2,4\\n6", "output": "1,2", "hidden": true}
+    ],
+    "expectedComplexity": "O(n)",
+    "expectedSpace": "O(n)"
+  }
+]`}
+                  />
+                </div>
+                {jsonError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    <p className="font-medium">Invalid JSON:</p>
+                    <p className="mt-1">{jsonError}</p>
+                  </div>
+                )}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+                  <p className="font-medium text-gray-700 mb-1">Format Notes:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>Must be a JSON array <code className="bg-gray-200 px-1 rounded">{`[{...}]`}</code> or <code className="bg-gray-200 px-1 rounded">{`{"problems": [...]}`}</code></li>
+                    <li><strong>testCases.input:</strong> comma-separated values, newline (<code className="bg-gray-200 px-1 rounded">{`\\n`}</code>) between array params</li>
+                    <li>E.g. params [nums:int[], target:int] → input <code className="bg-gray-200 px-1 rounded">{`"2,7,11,15\\n9"`}</code></li>
+                    <li>E.g. params [a:int, b:int] → input <code className="bg-gray-200 px-1 rounded">{`"10\\n20"`}</code></li>
+                    <li><strong>Valid types:</strong> int, int[], int[][], string, string[], boolean, double, float, long, char</li>
+                    <li><strong>returnType:</strong> int, int[], int[][], string, string[], boolean, double, float, long</li>
+                    <li><strong>difficulty:</strong> easy, medium, hard</li>
+                  </ul>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={handleJsonParse}
+                    disabled={!jsonInput.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    <FileJson className="w-4 h-4" />
+                    Parse JSON
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowJsonModal(false);
+                      setJsonInput('');
+                      setJsonError('');
+                    }}
+                    className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

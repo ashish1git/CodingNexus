@@ -14,8 +14,6 @@ const formatDisplayName = (name) => {
 
 const router = express.Router();
 
-const router = express.Router();
-
 // All routes require student authentication
 router.use(authenticate);
 router.use(authorizeRole('student'));
