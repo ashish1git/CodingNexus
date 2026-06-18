@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Code, CheckCircle, XCircle, Clock, Trophy,
+  Code, CheckCircle, XCircle, Clock, Trophy,
   Play, Send, AlertCircle, Target, Award, ChevronDown,
   ChevronUp, List, FileText, TestTube, Terminal, Maximize
 } from 'lucide-react';
@@ -1105,13 +1105,6 @@ public:
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link
-                to="/student/competitions"
-                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-[#3e3e3e] rounded-lg"
-                title="Back to competitions"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
               <div className="flex items-center gap-3">
                 <Trophy className="w-5 h-5 text-yellow-400" />
                 <h1 className="text-base font-semibold text-white">{competition.title}</h1>

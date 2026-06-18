@@ -676,7 +676,6 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             const passed = stdout === expected && result.status?.id === 3; // 3 = Accepted
 
             if (passed) totalPassed++;
-            
             totalTime += parseFloat(result.time || 0) * 1000; // Convert to ms
             totalMemory = Math.max(totalMemory, result.memory || 0);
 
