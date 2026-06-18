@@ -52,6 +52,7 @@ const CompetitionProblems = () => {
   const monacoRef = useRef(null);
   const editorGuardsCleanupRef = useRef(null);
   const lastClipboardToastAtRef = useRef(0);
+  const serverTimeOffsetRef = useRef(0); // ms difference between server and client clock
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
@@ -213,7 +214,7 @@ public:
       competitionOngoingRef.current = false;
       return;
     }
-    const now = new Date();
+    const now = getServerNow();
     competitionOngoingRef.current =
       new Date(competition.startTime) <= now && new Date(competition.endTime) > now;
   }, [competition, timeRemaining]);
@@ -350,13 +351,42 @@ public:
     }, 500);
   };
 
+  // Core competition timer / status functions: use server time, not client clock.
+  const getServerNow = () => new Date(Date.now() + serverTimeOffsetRef.current);
+
+  // Timer sync: calibrate client clock against server
+  useEffect(() => {
+    let cancelled = false;
+    let interval;
+
+    const syncTimer = async () => {
+      try {
+        const data = await competitionService.getTimerSync(competitionId);
+        const serverTime = new Date(data.serverTime).getTime();
+        serverTimeOffsetRef.current = serverTime - Date.now();
+      } catch (e) {
+        // non-fatal — fall back to client clock
+        console.warn('Timer sync failed, using client clock:', e.message);
+      }
+      if (!cancelled) {
+        interval = setTimeout(syncTimer, 30000); // re-sync every 30s
+      }
+    };
+
+    syncTimer();
+    return () => {
+      cancelled = true;
+      clearTimeout(interval);
+    };
+  }, [competitionId]);
+
   // Live countdown timer effect
   useEffect(() => {
     if (!competition?.endTime) return;
 
     const updateTimer = () => {
       const end = new Date(competition.endTime);
-      const now = new Date();
+      const now = getServerNow();
       const diff = end - now;
   if (diff <= 0) {
         setTimeRemaining({ hours: 0, minutes: 0, seconds: 0, expired: true });
@@ -448,7 +478,7 @@ public:
   useEffect(() => {
     if (!competition) return;
 
-    const now = new Date();
+    const now = getServerNow();
     const isOngoing = new Date(competition.startTime) <= now && new Date(competition.endTime) > now;
     if (!isOngoing) return;
 
@@ -969,7 +999,7 @@ public:
   // Check if competition has started
   const getCompetitionStatus = () => {
     if (!competition) return 'unknown';
-    const now = new Date();
+    const now = getServerNow();
     const start = new Date(competition.startTime);
     const end = new Date(competition.endTime);
     
@@ -981,7 +1011,7 @@ public:
   // Get time until start (for not-started competitions)
   const getTimeUntilStart = () => {
     if (!competition) return '';
-    const now = new Date();
+    const now = getServerNow();
     const start = new Date(competition.startTime);
     const diff = start - now;
     

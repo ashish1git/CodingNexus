@@ -399,6 +399,31 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
+// Timer sync - returns server time for client clock calibration
+router.get('/:id/timer', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const competition = await prisma.competition.findUnique({
+      where: { id },
+      select: { startTime: true, endTime: true }
+    });
+
+    if (!competition) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+
+    res.json({
+      serverTime: new Date().toISOString(),
+      startTime: competition.startTime.toISOString(),
+      endTime: competition.endTime.toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching timer sync:', error);
+    res.status(500).json({ error: 'Failed to sync timer' });
+  }
+});
+
 // Register for competition
 router.post('/:id/register', authenticate, async (req, res) => {
   try {

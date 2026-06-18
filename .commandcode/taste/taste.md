@@ -9,3 +9,6 @@
 
 # communication
 - Explicitly report or enumerate every change made when performing edits — the user wants to be told what was changed, not just have it done silently. Confidence: 0.70
+
+# datetime
+- Display times in Indian time (IST / en-IN locale) for competition views and admin competition creation. Confidence: 0.80

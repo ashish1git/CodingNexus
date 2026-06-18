@@ -18,6 +18,11 @@ const competitionService = {
     return await apiClient.get(`/competitions/${competitionId}`);
   },
 
+  // Sync server time for client clock calibration
+  getTimerSync: async (competitionId) => {
+    return await apiClient.get(`/competitions/${competitionId}/timer`);
+  },
+
   // Register for competition
   registerForCompetition: async (competitionId) => {
     return await apiClient.post(`/competitions/${competitionId}/register`);

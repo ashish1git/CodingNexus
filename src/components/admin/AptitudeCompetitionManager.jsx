@@ -12,8 +12,18 @@ const DIFFICULTIES = ['easy', 'medium', 'hard'];
 function toLocalInput(dt) {
   if (!dt) return '';
   const d = new Date(dt);
-  const offset = d.getTimezoneOffset() * 60000;
-  return new Date(d - offset).toISOString().slice(0, 16);
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  return new Date(d.getTime() + istOffset).toISOString().slice(0, 16);
+}
+
+function convertISTtoUTC(istDateTimeLocal) {
+  if (!istDateTimeLocal) return '';
+  const [datePart, timePart] = istDateTimeLocal.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  utcDate.setMinutes(utcDate.getMinutes() - 330);
+  return utcDate.toISOString();
 }
 
 const diffStyle = (d) => {
@@ -133,8 +143,8 @@ export default function AptitudeCompetitionManager() {
         ...formData,
         duration: Number(formData.duration),
         maxParticipants: formData.maxParticipants ? Number(formData.maxParticipants) : null,
-        startTime: new Date(formData.startTime).toISOString(),
-        endTime: new Date(formData.endTime).toISOString(),
+        startTime: convertISTtoUTC(formData.startTime),
+        endTime: convertISTtoUTC(formData.endTime),
       };
       if (view === 'edit' && selected) {
         await aptitudeService.adminUpdateCompetition(selected.id, payload);
@@ -290,11 +300,11 @@ export default function AptitudeCompetitionManager() {
             {/* Schedule */}
             <div style={s.grid2}>
               <div>
-                <label style={s.label}>Start Time *</label>
+                <label style={s.label}>Start Time (IST) *</label>
                 <input type="datetime-local" style={s.input} value={formData.startTime} onChange={e => setFormData(f => ({ ...f, startTime: e.target.value }))} />
               </div>
               <div>
-                <label style={s.label}>End Time *</label>
+                <label style={s.label}>End Time (IST) *</label>
                 <input type="datetime-local" style={s.input} value={formData.endTime} onChange={e => setFormData(f => ({ ...f, endTime: e.target.value }))} />
               </div>
             </div>
@@ -414,7 +424,7 @@ export default function AptitudeCompetitionManager() {
                     <span style={{ ...s.badge(...Object.values(diffStyle(c.difficulty))) }}>{c.difficulty}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
-                    <span><Calendar size={11} style={{ display: 'inline', marginRight: 3 }} />{new Date(c.startTime).toLocaleString()} → {new Date(c.endTime).toLocaleString()}</span>
+                    <span><Calendar size={11} style={{ display: 'inline', marginRight: 3 }} />{new Date(c.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} → {new Date(c.endTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     <span><Clock size={11} style={{ display: 'inline', marginRight: 3 }} />{c.duration} min</span>
                     <span><Users size={11} style={{ display: 'inline', marginRight: 3 }} />{c._count?.registrations ?? 0} registered / {c._count?.attempts ?? 0} submitted</span>
                     <span>{c._count?.questions ?? 0} questions</span>
