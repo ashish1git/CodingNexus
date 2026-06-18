@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X
+  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X, Undo2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
@@ -351,6 +351,18 @@ public:
     } catch (error) {
       console.error('Error fetching submissions:', error);
       toast.error('Failed to load submissions');
+    }
+  };
+
+  const handleIncompleteSubmission = async (submissionId) => {
+    if (!window.confirm('Mark this submission as incomplete? The student will be able to resubmit.')) return;
+    try {
+      await competitionService.incompleteSubmission(viewCompetition.id, submissionId);
+      toast.success('Submission marked as incomplete');
+      handleViewSubmissions(viewCompetition.id);
+    } catch (error) {
+      console.error('Error incompleting submission:', error);
+      toast.error('Failed to incomplete submission');
     }
   };
 
@@ -2299,6 +2311,7 @@ public:
                           submission.status === 'completed' ? 'bg-green-100 text-green-800' :
                           submission.status === 'judging' ? 'bg-blue-100 text-blue-800' :
                           submission.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          submission.status === 'incomplete' ? 'bg-gray-100 text-gray-500 line-through' :
                           'bg-red-100 text-red-800'
                         }`}>
                           {submission.status}
@@ -2328,6 +2341,14 @@ public:
                           className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
                         >
                           {selectedSubmission?.submissionId === submission.submissionId ? 'Hide' : 'View Code'}
+                        </button>
+                        <button
+                          onClick={() => handleIncompleteSubmission(submission.submissionId)}
+                          className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center gap-1"
+                          title="Incomplete - allow student to resubmit"
+                        >
+                          <Undo2 className="w-3 h-3" />
+                          Incomplete
                         </button>
                       </div>
                     </div>

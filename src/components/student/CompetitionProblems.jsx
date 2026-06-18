@@ -171,6 +171,20 @@ public:
       if (data.problems && data.problems.length > 0) {
         setSelectedProblem(data.problems[0]);
       }
+      
+      // If admin marked this submission incomplete, load saved code
+      if (data.incompleteResubmit && data.incompleteSubmissionData?.problemSubmissions) {
+        const savedSolutions = {};
+        data.incompleteSubmissionData.problemSubmissions.forEach(ps => {
+          savedSolutions[ps.problemId] = {
+            code: ps.code || '',
+            language: ps.language || 'java',
+            saved: true
+          };
+        });
+        setProblemSolutions(savedSolutions);
+      }
+      
       if (data.hasSubmitted) {
         setSubmitted(true);
       }

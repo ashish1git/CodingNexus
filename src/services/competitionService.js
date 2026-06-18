@@ -63,6 +63,11 @@ const competitionService = {
   // Admin: Get all submissions for a competition
   getCompetitionSubmissions: async (competitionId) => {
     return await apiClient.get(`/competitions/${competitionId}/submissions`);
+  },
+
+  // Admin: Incomplete a submission so student can resubmit
+  incompleteSubmission: async (competitionId, submissionId) => {
+    return await apiClient.put(`/competitions/${competitionId}/submissions/${submissionId}/incomplete`);
   }
 };
 

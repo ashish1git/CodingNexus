@@ -60,7 +60,7 @@ router.get('/', authenticate, async (req, res) => {
         },
         submissions: {
           where: { userId: req.user.id },
-          select: { id: true }
+          select: { id: true, status: true }
         },
         _count: {
           select: { registrations: true }
@@ -72,7 +72,7 @@ router.get('/', authenticate, async (req, res) => {
     // Add computed fields
     const competitionsWithStatus = competitions.map(comp => {
       const isRegistered = comp.registrations.some(reg => reg.userId === req.user.id);
-      const hasSubmitted = comp.submissions.length > 0;
+      const hasSubmitted = comp.submissions.some(s => s.status !== 'incomplete');
       const participantCount = comp._count.registrations;
       
       let status = 'past';
@@ -324,6 +324,33 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'subadmin', 
   }
 });
 
+// Incomplete a submission - delete it so student can resubmit
+router.put('/:id/submissions/:submissionId/incomplete', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    const submission = await prisma.competitionSubmission.findUnique({
+      where: { id: submissionId }
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // Mark as incomplete - keep problem submissions so code is preserved
+    await prisma.competitionSubmission.update({
+      where: { id: submissionId },
+      data: { status: 'incomplete', totalScore: 0, totalTime: 0, rank: null }
+    });
+
+    console.log(`✅ Submission ${submissionId} marked incomplete — student can resubmit`);
+    res.json({ message: 'Submission marked incomplete — student can resubmit with previous code' });
+  } catch (error) {
+    console.error('Error incompleting submission:', error);
+    res.status(500).json({ error: 'Failed to incomplete submission' });
+  }
+});
+
 // Get single competition with problems
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -364,7 +391,14 @@ router.get('/:id', authenticate, async (req, res) => {
             id: true,
             submittedAt: true,
             totalScore: true,
-            status: true
+            status: true,
+            problemSubmissions: {
+              select: {
+                problemId: true,
+                code: true,
+                language: true
+              }
+            }
           }
         },
         _count: {
@@ -384,13 +418,21 @@ router.get('/:id', authenticate, async (req, res) => {
       status = 'ongoing';
     }
 
+    // Exclude incomplete submissions from hasSubmitted check
+    const activeSubmissions = competition.submissions.filter(s => s.status !== 'incomplete');
+    // Get the incomplete submission (if any) for loading saved code
+    const incompleteSub = competition.submissions.find(s => s.status === 'incomplete');
+
     res.json({
       ...competition,
       status,
       isRegistered: competition.registrations.length > 0,
-      hasSubmitted: competition.submissions.length > 0,
+      hasSubmitted: activeSubmissions.length > 0,
+      incompleteResubmit: incompleteSub ? true : false,
+      incompleteSubmissionData: incompleteSub || null,
       participantCount: competition._count.registrations,
       registrations: undefined,
+      submissions: undefined,
       _count: undefined
     });
   } catch (error) {
@@ -522,7 +564,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'You must register before submitting' });
     }
 
-    // Check if already submitted
+    // Check if already submitted (allow resubmission when incomplete)
     const existingSubmission = await prisma.competitionSubmission.findUnique({
       where: {
         competitionId_userId: {
@@ -532,7 +574,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       }
     });
 
-    if (existingSubmission) {
+    if (existingSubmission && existingSubmission.status !== 'incomplete') {
       return res.status(400).json({ error: 'You have already submitted for this competition' });
     }
 
@@ -541,16 +583,30 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'At least one solution must be provided' });
     }
 
-    // Create competition submission
-    const competitionSubmissionId = randomUUID();
-    const competitionSubmission = await prisma.competitionSubmission.create({
-      data: {
-        id: competitionSubmissionId,
-        competitionId: id,
-        userId,
-        status: 'pending'
-      }
-    });
+    let competitionSubmissionId;
+    if (existingSubmission && existingSubmission.status === 'incomplete') {
+      // Reuse the existing incomplete submission
+      competitionSubmissionId = existingSubmission.id;
+      await prisma.competitionSubmission.update({
+        where: { id: competitionSubmissionId },
+        data: { status: 'pending', totalScore: 0, totalTime: 0, rank: null }
+      });
+      // Clear old problem submissions
+      await prisma.problemSubmission.deleteMany({
+        where: { competitionSubmissionId }
+      });
+    } else {
+      // Create new competition submission
+      competitionSubmissionId = randomUUID();
+      await prisma.competitionSubmission.create({
+        data: {
+          id: competitionSubmissionId,
+          competitionId: id,
+          userId,
+          status: 'pending'
+        }
+      });
+    }
 
     // Create problem submissions
     const problemSubmissions = await Promise.all(
@@ -564,7 +620,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
         return prisma.problemSubmission.create({
           data: {
             id: randomUUID(),
-            competitionSubmissionId: competitionSubmission.id,
+            competitionSubmissionId: competitionSubmissionId,
             problemId: solution.problemId,
             userId,
             code: solution.code,
@@ -582,12 +638,12 @@ router.post('/:id/submit', authenticate, async (req, res) => {
 
     res.json({
       message: 'Submission received. Your code is being judged.',
-      submissionId: competitionSubmission.id,
+      submissionId: competitionSubmissionId,
       problemCount: validSubmissions.length
     });
 
     // Execute Judge0 evaluation asynchronously (don't wait for results)
-    executeJudge0Submissions(competitionSubmission.id, validSubmissions, competition.problems);
+    executeJudge0Submissions(competitionSubmissionId, validSubmissions, competition.problems);
   } catch (error) {
     console.error('Error submitting competition:', error);
     res.status(500).json({ error: 'Failed to submit competition' });
