@@ -48,6 +48,7 @@ const CompetitionProblems = () => {
   const problemSolutionsRef = useRef({});
   const selectedProblemRef = useRef(null);
   const expiryAutoSubmitTriggeredRef = useRef(false);
+  const sixtySecWarningShownRef = useRef(false);
   const competitionOngoingRef = useRef(false);
   const monacoRef = useRef(null);
   const editorGuardsCleanupRef = useRef(null);
@@ -56,7 +57,7 @@ const CompetitionProblems = () => {
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
-  useEffect(() => { expiryAutoSubmitTriggeredRef.current = false; }, [competitionId]);
+  useEffect(() => { expiryAutoSubmitTriggeredRef.current = false; sixtySecWarningShownRef.current = false; }, [competitionId]);
 
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
@@ -414,7 +415,15 @@ public:
         }
         return;
       }
-      
+
+      // 60-second warning before auto-submit
+      if (diff <= 60000 && !sixtySecWarningShownRef.current) {
+        sixtySecWarningShownRef.current = true;
+        toast('⏳ Time is running out! Your solutions will be auto-submitted in 60 seconds.', {
+          duration: 5000,
+          style: { background: '#f59e0b', color: '#1e1e23', fontWeight: '600' }
+        });
+      }
 
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
