@@ -19,5 +19,9 @@
 # code-style
 - When adding new features, prefer minimal, non-breaking changes that don't require restructuring existing code or adding new infrastructure dependencies. Confidence: 0.80
 
+# design
+- Preserve existing visual design and styling when making content updates — avoid full UI rewrites unless explicitly requested. Prefer targeted content changes (text, badges, copy) over complete redesigns. Confidence: 0.70
+- Do not expose internal tech stack details (Judge0, Monaco Editor, specific engines/libraries) on public-facing pages like About or Landing — the user considers these implementation secrets. Confidence: 0.85
+
 # workflow
 - For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80

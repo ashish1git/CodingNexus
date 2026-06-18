@@ -88,3 +88,44 @@ export const authorizeRole = (...roles) => {
   };
 };
 
+// Check granular permission for sub-admins.
+// Admin/superadmin always pass. Sub-admins must have the specific permission key set to true.
+export const checkPermission = (permissionKey) => {
+  return (req, res, next) => {
+    const user = req.user;
+
+    // Full access: admin or superadmin always pass
+    if (user.role === 'admin' || user.role === 'superadmin') {
+      return next();
+    }
+
+    // Sub-admin: check individual permission
+    if (user.role === 'subadmin' && user.adminProfile) {
+      const permissions = user.adminProfile.permissions;
+
+      // 'all' means full access
+      if (permissions === 'all') {
+        return next();
+      }
+
+      // Parse JSON permissions object
+      try {
+        const parsed = typeof permissions === 'string' ? JSON.parse(permissions) : permissions;
+        if (parsed[permissionKey] === true) {
+          return next();
+        }
+      } catch (e) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied. Invalid permission configuration.'
+        });
+      }
+    }
+
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Insufficient permissions.'
+    });
+  };
+};
+

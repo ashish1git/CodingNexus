@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users, Edit, Loader } from 'lucide-react';
+import { ArrowLeft, Code, User, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight, History, Activity, Eye, List, Users, Edit, Loader, ShieldAlert } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
 import Loading from '../shared/Loading';
 import apiClient from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../utils/permissions';
 
 const SubmissionEvaluator = () => {
   const { competitionId } = useParams();
+  const { userDetails } = useAuth();
   const [competition, setCompetition] = useState(null);
   const [problems, setProblems] = useState([]);
   const [selectedProblemId, setSelectedProblemId] = useState(null);
@@ -417,8 +420,24 @@ const SubmissionEvaluator = () => {
   
   const totalEvaluatedCount = evaluationKeys.size;
 
+  const canEvaluate = hasPermission(userDetails, 'evaluateCompetitionSubmissions');
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {!canEvaluate && (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center max-w-md">
+            <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p className="text-gray-600 mb-6">You don't have permission to evaluate competition submissions.</p>
+            <Link to="/admin/competitions" className="text-indigo-600 hover:text-indigo-800 font-medium">
+              ← Back to Competitions
+            </Link>
+          </div>
+        </div>
+      )}
+      {canEvaluate && (
+        <>
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -1116,6 +1135,8 @@ const SubmissionEvaluator = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

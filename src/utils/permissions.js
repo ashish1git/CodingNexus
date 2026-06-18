@@ -72,7 +72,27 @@ export const PERMISSIONS = {
   manageCompetitions: {
     key: 'manageCompetitions',
     label: 'Manage Competitions',
-    description: 'Create, edit, and manage programming competitions'
+    description: 'Create and edit programming competitions'
+  },
+  viewCompetitionSubmissions: {
+    key: 'viewCompetitionSubmissions',
+    label: 'View Competition Submissions',
+    description: 'View all competition submissions'
+  },
+  manageCompetitionSubmissions: {
+    key: 'manageCompetitionSubmissions',
+    label: 'Manage Competition Submissions',
+    description: 'Mark submissions incomplete, allow resubmission'
+  },
+  evaluateCompetitionSubmissions: {
+    key: 'evaluateCompetitionSubmissions',
+    label: 'Evaluate Competition Submissions',
+    description: 'Evaluate and grade competition submissions'
+  },
+  deleteCompetitions: {
+    key: 'deleteCompetitions',
+    label: 'Delete Competitions',
+    description: 'Delete competitions permanently'
   },
   viewTickets: {
     key: 'viewTickets',

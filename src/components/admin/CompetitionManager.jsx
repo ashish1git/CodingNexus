@@ -140,8 +140,12 @@ public:
     };
   };
 
-  // Check permissions (use manageCompetitions permission)
+  // Check permissions
   const canManageCompetitions = hasPermission(userDetails, 'manageCompetitions');
+  const canViewSubmissions = hasPermission(userDetails, 'viewCompetitionSubmissions');
+  const canManageSubmissions = hasPermission(userDetails, 'manageCompetitionSubmissions');
+  const canDeleteCompetitions = hasPermission(userDetails, 'deleteCompetitions');
+  const canEvaluateSubmissions = hasPermission(userDetails, 'evaluateCompetitionSubmissions');
   const [loading, setLoading] = useState(true);
   const [viewCompetition, setViewCompetition] = useState(null);
   const [editCompetition, setEditCompetition] = useState(null);
@@ -1090,6 +1094,7 @@ public:
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+                        {canEvaluateSubmissions && (
                         <Link
                           to={`/admin/competitions/${competition.id}/evaluate`}
                           className="text-green-600 hover:text-green-900"
@@ -1097,6 +1102,8 @@ public:
                         >
                           <BarChart3 className="w-4 h-4" />
                         </Link>
+                        )}
+                        {canViewSubmissions && (
                         <button
                           onClick={() => handleViewSubmissions(competition.id)}
                           className="text-purple-600 hover:text-purple-900"
@@ -1104,6 +1111,7 @@ public:
                         >
                           <FileText className="w-4 h-4" />
                         </button>
+                        )}
                         <button
                           onClick={() => handleEditCompetition(competition.id)}
                           className="text-blue-600 hover:text-blue-900"
@@ -1111,7 +1119,7 @@ public:
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        {userDetails?.role === 'superadmin' && (
+                        {canDeleteCompetitions && (
                           <button
                             onClick={() => handleDeleteCompetition(competition.id)}
                             className="text-red-600 hover:text-red-900"
@@ -2349,6 +2357,7 @@ public:
                         >
                           {selectedSubmission?.submissionId === submission.submissionId ? 'Hide' : 'View Code'}
                         </button>
+                        {canManageSubmissions && (
                         <button
                           onClick={() => handleIncompleteSubmission(submission.submissionId)}
                           className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center gap-1"
@@ -2357,6 +2366,7 @@ public:
                           <Undo2 className="w-3 h-3" />
                           Incomplete
                         </button>
+                        )}
                       </div>
                     </div>
 
