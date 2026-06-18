@@ -54,10 +54,69 @@ const CompetitionProblems = () => {
   const editorGuardsCleanupRef = useRef(null);
   const lastClipboardToastAtRef = useRef(0);
   const serverTimeOffsetRef = useRef(0); // ms difference between server and client clock
+  const violationLogRef = useRef([]); // [{type, timestamp, reason, isFullscreen, screenSize, userAgent}]
+  const deviceInfoRef = useRef(null); // captured once at competition start
+  const isFullscreenRef = useRef(false); // kept in sync with isFullscreen
+  const tabSwitchCountRef = useRef(0); // for sessionStorage persist (avoids stale closure)
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
-  useEffect(() => { expiryAutoSubmitTriggeredRef.current = false; sixtySecWarningShownRef.current = false; }, [competitionId]);
+  useEffect(() => { expiryAutoSubmitTriggeredRef.current = false; sixtySecWarningShownRef.current = false; violationLogRef.current = []; deviceInfoRef.current = null; }, [competitionId]);
+  useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
+  useEffect(() => { tabSwitchCountRef.current = tabSwitchCount; }, [tabSwitchCount]);
+
+  // sessionStorage keys for this competition
+  const storageKey = (suffix) => `cn-${competitionId}-${suffix}`;
+
+  // Persist violation state to sessionStorage (survives back-button navigation)
+  const persistViolationState = () => {
+    try {
+      sessionStorage.setItem(storageKey('violations'), JSON.stringify(violationLogRef.current));
+      sessionStorage.setItem(storageKey('tabCount'), String(tabSwitchCountRef.current));
+    } catch (_) { /* quota exceeded, ignore */ }
+  };
+
+  // Restore violation state from sessionStorage on mount
+  useEffect(() => {
+    if (!competitionId) return;
+    try {
+      const savedViolations = sessionStorage.getItem(storageKey('violations'));
+      const savedCount = sessionStorage.getItem(storageKey('tabCount'));
+      if (savedViolations) {
+        const parsed = JSON.parse(savedViolations);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          violationLogRef.current = parsed;
+          console.log('🔄 Restored', parsed.length, 'violation log entries from sessionStorage');
+        }
+      }
+      if (savedCount) {
+        const count = parseInt(savedCount, 10);
+        if (count > 0) {
+          setTabSwitchCount(count);
+          tabSwitchCountRef.current = count; // sync ref immediately before any persist overwrites
+          console.log('🔄 Restored violation count:', count);
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }, [competitionId]);
+
+  // Clear sessionStorage after successful submission
+  const clearViolationStorage = () => {
+    try {
+      sessionStorage.removeItem(storageKey('violations'));
+      sessionStorage.removeItem(storageKey('tabCount'));
+    } catch (_) {}
+  };
+
+  // Shared log builder — usable from anywhere in the component via refs
+  const buildLogEntry = (type, reason) => ({
+    type,
+    reason,
+    timestamp: new Date().toISOString(),
+    isFullscreen: isFullscreenRef.current,
+    screenSize: `${window.innerWidth}x${window.innerHeight}`,
+    userAgent: navigator.userAgent.substring(0, 120)
+  });
 
   // Generate default starter code template when none exists
   const generateStarterCode = (problem, lang) => {
@@ -350,7 +409,8 @@ public:
 
     if (solutions.length > 0) {
       try {
-        await competitionService.submitSolutions(competitionId, solutions);
+        await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
+        clearViolationStorage();
         toast.success('⏰ Solutions auto-submitted - time expired');
       } catch (e) {
         console.error('❌ Auto-submit on timeout failed:', e);
@@ -511,6 +571,25 @@ public:
     let violationCooldown = false;
     const MAX_VIOLATIONS = 3;
 
+    // Capture device fingerprint once at competition start
+    if (!deviceInfoRef.current) {
+      deviceInfoRef.current = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        screenSize: `${window.screen.width}x${window.screen.height}`,
+        windowSize: `${window.innerWidth}x${window.innerHeight}`,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        startTime: new Date().toISOString()
+      };
+      // Log session start with full device fingerprint
+      violationLogRef.current.push({
+        ...buildLogEntry('session_start', 'competition protections activated'),
+        deviceInfo: deviceInfoRef.current
+      });
+      persistViolationState();
+    }
+
     // Auto-submit saved solutions then redirect
     const kickStudent = async (count) => {
       submittedRef.current = true; // MUST set first — prevents beforeunload from blocking the redirect
@@ -521,7 +600,8 @@ public:
         .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
       if (solutions.length > 0) {
         try {
-          await competitionService.submitSolutions(competitionId, solutions);
+          await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
+          clearViolationStorage();
           toast.success('⚠️ Solutions auto-submitted due to violations');
         } catch (e) {
           console.error('Auto-submit failed:', e);
@@ -538,6 +618,10 @@ public:
       if (violationCooldown) return;
       violationCooldown = true;
       setTimeout(() => { violationCooldown = false; }, 1000);
+
+      // Log the violation for server-side submission (with fullscreen proof + device context)
+      violationLogRef.current.push(buildLogEntry('violation', reason));
+      persistViolationState();
 
       setTabSwitchCount(prev => {
         const newCount = prev + 1;
@@ -593,19 +677,34 @@ public:
       if (e.key === 'F11') { e.preventDefault(); return false; }
     };
 
-    // 6️⃣ Fullscreen exit = violation
+    // 6️⃣ Fullscreen exit = violation, log both enter/exit as audit trail
     const handleFullscreenChange = () => {
       const inFullscreen = !!document.fullscreenElement;
       setIsFullscreen(inFullscreen);
-      if (!inFullscreen) recordViolation('exited fullscreen (pressed Escape)');
+      isFullscreenRef.current = inFullscreen;
+      if (!inFullscreen) {
+        violationLogRef.current.push(buildLogEntry('fullscreen_exit', 'student exited fullscreen'));
+        persistViolationState();
+        recordViolation('exited fullscreen (pressed Escape)');
+      } else {
+        violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen'));
+        persistViolationState();
+      }
+    };
+
+    // Helper: silently log clipboard/context-menu attempts (non-violation, just audit)
+    const logActivity = (reason) => {
+      if (submittedRef.current) return;
+      violationLogRef.current.push(buildLogEntry('clipboard_block', reason));
+      persistViolationState();
     };
 
     // 7️⃣ Disable Copy - Ctrl+C / Cmd+C
     const handleCopy = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      logActivity('copy attempt blocked');
       toast.error('🚫 Copy is disabled during competition');
-      console.warn('⚠️ Copy attempt blocked');
       return false;
     };
 
@@ -613,8 +712,8 @@ public:
     const handlePaste = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      logActivity('paste attempt blocked');
       toast.error('🚫 Paste is disabled during competition');
-      console.warn('⚠️ Paste attempt blocked');
       return false;
     };
 
@@ -622,8 +721,8 @@ public:
     const handleContextMenu = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      logActivity('right-click/contextmenu blocked');
       toast.error('🚫 Right-click is disabled during competition');
-      console.warn('⚠️ Right-click attempt blocked');
       return false;
     };
 
@@ -632,36 +731,37 @@ public:
       // 🚫 Block Ctrl+C or Cmd+C (Copy)
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         e.preventDefault();
+        logActivity('Ctrl+C (copy) hotkey blocked');
         toast.error('🚫 Copy is disabled during competition');
-        console.warn('⚠️ Copy hotkey blocked');
         return false;
       }
 
       // 🚫 Block Ctrl+V or Cmd+V (Paste)
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         e.preventDefault();
+        logActivity('Ctrl+V (paste) hotkey blocked');
         toast.error('🚫 Paste is disabled during competition');
-        console.warn('⚠️ Paste hotkey blocked');
         return false;
       }
 
       // 🚫 Block Ctrl+X or Cmd+X (Cut)
       if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
         e.preventDefault();
+        logActivity('Ctrl+X (cut) hotkey blocked');
         toast.error('🚫 Cut is disabled during competition');
-        console.warn('⚠️ Cut hotkey blocked');
         return false;
       }
 
       // Block Ctrl+W
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault();
+        logActivity('Ctrl+W (close tab) blocked');
         toast.error('🚫 Cannot close tab during competition');
         return false;
       }
 
       // Block F11
-      if (e.key === 'F11') { e.preventDefault(); return false; }
+      if (e.key === 'F11') { e.preventDefault(); logActivity('F11 fullscreen key blocked'); return false; }
     };
 
     if (!document.fullscreenElement) setShowFullscreenPrompt(true);
@@ -695,23 +795,34 @@ public:
     try {
       if (elem.requestFullscreen) {
         elem.requestFullscreen().then(() => {
+          isFullscreenRef.current = true;
+          setIsFullscreen(true);
+          violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen manually'));
           toast.success('✅ Fullscreen enabled - tab switching is locked');
-          console.log('🔒 Fullscreen activated');
         }).catch(err => {
           console.error('Fullscreen error:', err);
+          violationLogRef.current.push(buildLogEntry('fullscreen_error', `fullscreen request failed: ${err.message}`));
           toast.error('Could not enable fullscreen: ' + err.message);
         });
       } else if (elem.webkitRequestFullscreen) {
         elem.webkitRequestFullscreen();
+        isFullscreenRef.current = true;
+        setIsFullscreen(true);
+        violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen (webkit)'));
         toast.success('✅ Fullscreen enabled');
       } else if (elem.msRequestFullscreen) {
         elem.msRequestFullscreen();
+        isFullscreenRef.current = true;
+        setIsFullscreen(true);
+        violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen (ms)'));
         toast.success('✅ Fullscreen enabled');
       } else {
+        violationLogRef.current.push(buildLogEntry('fullscreen_error', 'fullscreen not supported by browser'));
         toast.error('Fullscreen not supported in this browser');
       }
     } catch (err) {
       console.error('Error entering fullscreen:', err);
+      violationLogRef.current.push(buildLogEntry('fullscreen_error', `fullscreen error: ${err.message}`));
       toast.error('Could not enter fullscreen: ' + err.message);
     }
   };
@@ -986,8 +1097,9 @@ public:
           language: solution.language
         }));
 
-      await competitionService.submitSolutions(competitionId, solutions);
+      await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
       
+      clearViolationStorage();
       setSubmitted(true);
       setSubmitting(false);
       toast.dismiss();

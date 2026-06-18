@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Calendar, Clock, Users, Award, 
@@ -16,6 +16,15 @@ const Competitions = () => {
   const [filterDifficulty, setFilterDifficulty] = useState('all'); // all, easy, medium, hard
   const [competitions, setCompetitions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const preloadedRef = useRef(false);
+
+  // Preload Monaco + CompetitionProblems chunk on hover (reduces click-to-visible by ~3-5s)
+  const preloadEditor = () => {
+    if (preloadedRef.current) return;
+    preloadedRef.current = true;
+    // Kick off dynamic import — browser fetches the chunk in background
+    import('./CompetitionProblems');
+  };
 
   useEffect(() => {
     fetchCompetitions();
@@ -394,6 +403,7 @@ const Competitions = () => {
                 ) : (
                   <Link
   to={competition.status === "upcoming" ? "#" : `/student/competition/${competition.id}`}
+  onMouseEnter={competition.status === 'ongoing' ? preloadEditor : undefined}
   onClick={(e) => {
     if (competition.status === "upcoming") {
       e.preventDefault();

@@ -108,6 +108,13 @@ export default defineConfig({
     port: 5000,
     host: true,
   },
+  // Monaco Editor: load from CDN instead of bundling (15MB saving, offload to global edge network)
+  optimizeDeps: {
+    exclude: ['@monaco-editor/react']
+  },
+  define: {
+    'import.meta.env.VITE_MONACO_CDN': JSON.stringify('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs')
+  }
 })
 
 function getContentType(filePath) {

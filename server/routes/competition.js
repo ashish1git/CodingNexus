@@ -293,6 +293,7 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'subadmin', 
       totalScore: sub.totalScore,
       totalTime: sub.totalTime,
       submittedAt: sub.submittedAt,
+      violationLog: sub.violationLog,
       problemSubmissions: sub.problemSubmissions.map(ps => ({
         problemId: ps.problemId,
         problemTitle: ps.problem.title,
@@ -531,7 +532,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { solutions } = req.body; // Array of {problemId, code, language}
+    const { solutions, violationLog } = req.body; // Array of {problemId, code, language}
 
     // Check if competition exists and is ongoing
     const competition = await prisma.competition.findUnique({
@@ -589,7 +590,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
       competitionSubmissionId = existingSubmission.id;
       await prisma.competitionSubmission.update({
         where: { id: competitionSubmissionId },
-        data: { status: 'pending', totalScore: 0, totalTime: 0, rank: null }
+        data: { status: 'pending', totalScore: 0, totalTime: 0, rank: null, violationLog: violationLog || null }
       });
       // Clear old problem submissions
       await prisma.problemSubmission.deleteMany({
@@ -603,7 +604,8 @@ router.post('/:id/submit', authenticate, async (req, res) => {
           id: competitionSubmissionId,
           competitionId: id,
           userId,
-          status: 'pending'
+          status: 'pending',
+          violationLog: violationLog || null
         }
       });
     }

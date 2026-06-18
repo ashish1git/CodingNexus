@@ -12,3 +12,12 @@
 
 # datetime
 - Display times in Indian time (IST / en-IN locale) for competition views and admin competition creation. Confidence: 0.80
+
+# architecture
+- Avoid adding complex real-time infrastructure (WebSocket, Socket.IO) for activity monitoring; prefer simple approaches like piggybacking activity logs on the existing submission flow. Confidence: 0.85
+
+# code-style
+- When adding new features, prefer minimal, non-breaking changes that don't require restructuring existing code or adding new infrastructure dependencies. Confidence: 0.80
+
+# workflow
+- For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80

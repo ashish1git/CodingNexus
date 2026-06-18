@@ -1,5 +1,6 @@
 // src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { GuestProvider } from './context/GuestContext';
 import GuestBanner from './components/shared/GuestBanner';
@@ -30,9 +31,10 @@ import QuizAttempt from './components/student/QuizAttempt';
 import QuizList from './components/student/QuizzesList'; // Add this import
 import QuizResults from './components/student/QuizResults'; // Add this import
 import CodeEditor from './components/student/CodeEditor';
+import Loading from './components/shared/Loading';
 import SupportTicket from './components/student/SupportTicket';
 import Competitions from './components/student/Competitions';
-import CompetitionProblems from './components/student/CompetitionProblems';
+const CompetitionProblems = lazy(() => import('./components/student/CompetitionProblems'));
 import CompetitionResults from './components/student/CompetitionResults';
 import StudentCertificates from './components/student/StudentCertificates';
 import AptitudeTests from './components/student/AptitudeTests';
@@ -117,6 +119,7 @@ function App() {
                 },
               }}
             />
+            <Suspense fallback={<Loading fullScreen text="Loading editor..." />}>
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
@@ -470,6 +473,7 @@ function App() {
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
+            </Suspense>
           </div>
         </Router>
         </GuestProvider>

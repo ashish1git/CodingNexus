@@ -349,6 +349,7 @@ model CompetitionSubmission {
   totalTime          Int                 @default(0)
   rank               Int?
   status             String              @default("pending")
+  violationLog       Json?
   competition        Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   problemSubmissions ProblemSubmission[]

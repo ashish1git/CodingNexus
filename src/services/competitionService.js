@@ -29,9 +29,10 @@ const competitionService = {
   },
 
   // Submit solutions
-  submitSolutions: async (competitionId, solutions) => {
+  submitSolutions: async (competitionId, solutions, violationLog = []) => {
     return await apiClient.post(`/competitions/${competitionId}/submit`, {
-      solutions
+      solutions,
+      violationLog
     });
   },
 

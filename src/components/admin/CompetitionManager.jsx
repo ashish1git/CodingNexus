@@ -2316,6 +2316,13 @@ public:
                         }`}>
                           {submission.status}
                         </span>
+                        {/* Violation indicator */}
+                        {submission.violationLog && Array.isArray(submission.violationLog) && submission.violationLog.length > 0 && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 flex items-center gap-1">
+                            <ShieldAlert className="w-3 h-3" />
+                            {submission.violationLog.filter(v => v.type === 'violation').length} violations
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-6">
                         <div>
@@ -2469,6 +2476,105 @@ public:
                             )}
                           </div>
                         ))}
+
+                        {/* Violation Log Section */}
+                        {submission.violationLog && Array.isArray(submission.violationLog) && submission.violationLog.length > 0 && (
+                          <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+                            <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
+                              <ShieldAlert className="w-4 h-4" />
+                              Student Activity Log ({submission.violationLog.length} events)
+                            </h4>
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                              {submission.violationLog.map((entry, vi) => {
+                                const isViolation = entry.type === 'violation';
+                                const isFullscreenExit = entry.type === 'fullscreen_exit';
+                                const isFullscreenEnter = entry.type === 'fullscreen_enter';
+                                const isSession = entry.type === 'session_start';
+                                const isClipboard = entry.type === 'clipboard_block';
+                                const isError = entry.type === 'fullscreen_error';
+
+                                return (
+                                <div key={vi} className={`p-2 rounded border ${
+                                  isViolation || isFullscreenExit ? 'bg-red-100 border-red-300' :
+                                  isClipboard ? 'bg-yellow-50 border-yellow-200' :
+                                  isError ? 'bg-orange-50 border-orange-200' :
+                                  'bg-green-50 border-green-200'
+                                }`}>
+                                  <div className="flex items-start gap-3">
+                                    <span className={`text-xs font-mono whitespace-nowrap mt-0.5 ${
+                                      isViolation || isFullscreenExit ? 'text-red-700' :
+                                      isClipboard ? 'text-yellow-700' :
+                                      isError ? 'text-orange-600' :
+                                      'text-green-700'
+                                    }`}>
+                                      {new Date(entry.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'medium' })}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className={`text-sm ${
+                                        isViolation || isFullscreenExit ? 'text-red-800 font-medium' :
+                                        isError ? 'text-orange-700' :
+                                        'text-gray-700'
+                                      }`}>
+                                        {isViolation || isFullscreenExit ? '🚨 ' :
+                                         isClipboard ? '⚠️ ' :
+                                         isError ? '⚠️ ' :
+                                         isSession ? '🔒 ' :
+                                         isFullscreenEnter ? '✅ ' : ''}
+                                        {entry.reason}
+                                      </span>
+
+                                      {/* Fullscreen status badge */}
+                                      <span className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                        entry.isFullscreen
+                                          ? 'bg-green-200 text-green-800'
+                                          : 'bg-red-200 text-red-800'
+                                      }`}>
+                                        {entry.isFullscreen ? '🟢 FS' : '🔴 FS'}
+                                      </span>
+
+                                      {/* Screen size for mismatch detection */}
+                                      {entry.screenSize && (
+                                        <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200 text-gray-700 font-mono">
+                                          {entry.screenSize}
+                                        </span>
+                                      )}
+
+                                      {/* Device info on session_start */}
+                                      {isSession && entry.deviceInfo && (
+                                        <div className="mt-2 p-2 bg-white rounded border border-green-200 text-xs text-gray-600 grid grid-cols-2 gap-1">
+                                          <div><span className="font-medium">Platform:</span> {entry.deviceInfo.platform || 'N/A'}</div>
+                                          <div><span className="font-medium">Screen:</span> {entry.deviceInfo.screenSize || 'N/A'}</div>
+                                          <div><span className="font-medium">Window:</span> {entry.deviceInfo.windowSize || 'N/A'}</div>
+                                          <div><span className="font-medium">Language:</span> {entry.deviceInfo.language || 'N/A'}</div>
+                                          <div className="col-span-2"><span className="font-medium">Timezone:</span> {entry.deviceInfo.timezone || 'N/A'}</div>
+                                          <div className="col-span-2"><span className="font-medium">User Agent:</span> <span className="break-all">{entry.deviceInfo.userAgent || 'N/A'}</span></div>
+                                        </div>
+                                      )}
+
+                                      {/* User Agent on non-session entries for context */}
+                                      {!isSession && entry.userAgent && (
+                                        <div className="text-[10px] text-gray-400 mt-0.5 truncate" title={entry.userAgent}>
+                                          UA: {entry.userAgent}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No violations */}
+                        {(!submission.violationLog || !Array.isArray(submission.violationLog) || submission.violationLog.length === 0) && (
+                          <div className="border border-green-200 rounded-lg p-3 bg-green-50">
+                            <p className="text-sm text-green-700 flex items-center gap-2">
+                              <ShieldAlert className="w-4 h-4" />
+                              No suspicious activity detected during the competition.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
