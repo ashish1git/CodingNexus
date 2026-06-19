@@ -69,6 +69,18 @@ const competitionService = {
   // Admin: Incomplete a submission so student can resubmit
   incompleteSubmission: async (competitionId, submissionId) => {
     return await apiClient.put(`/competitions/${competitionId}/submissions/${submissionId}/incomplete`);
+  },
+
+  // Save draft code to DB (auto-save / crash recovery)
+  saveDraft: async (competitionId, problemId, code, language) => {
+    return await apiClient.put(`/competitions/${competitionId}/save-code`, {
+      problemId, code, language
+    });
+  },
+
+  // Clear all draft codes after final submission
+  clearDrafts: async (competitionId) => {
+    return await apiClient.delete(`/competitions/${competitionId}/drafts`);
   }
 };
 

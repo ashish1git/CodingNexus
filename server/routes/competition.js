@@ -424,6 +424,17 @@ router.get('/:id', authenticate, async (req, res) => {
     // Get the incomplete submission (if any) for loading saved code
     const incompleteSub = competition.submissions.find(s => s.status === 'incomplete');
 
+    // Load draft codes for the current user (if any)
+    const draftCodes = await prisma.draftCode.findMany({
+      where: { competitionId: id, userId: req.user.id }
+    });
+
+    // Build a draft map: { problemId: { code, language } }
+    const draftMap = {};
+    draftCodes.forEach(d => {
+      draftMap[d.problemId] = { code: d.code, language: d.language };
+    });
+
     res.json({
       ...competition,
       status,
@@ -431,6 +442,7 @@ router.get('/:id', authenticate, async (req, res) => {
       hasSubmitted: activeSubmissions.length > 0,
       incompleteResubmit: incompleteSub ? true : false,
       incompleteSubmissionData: incompleteSub || null,
+      draftCodes: draftMap,              // ← auto-saved code from DB recovery
       participantCount: competition._count.registrations,
       registrations: undefined,
       submissions: undefined,
@@ -731,7 +743,8 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               source_code_len: judge0Payload.source_code.length
             }, null, 2));
 
-       L              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+            const judge0Response = await axios.post(
+              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
               judge0Payload,
               {
                 headers: { 'Content-Type': 'application/json' },
@@ -750,7 +763,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               stderr: (result.stderr || '').substring(0, 100),
               compile_output: (result.compile_output || '').substring(0, 100),
               time: result.time,
-            L  memory: result.memory
+              memory: result.memory
             }, null, 2));
             
             const stdout = (result.stdout || '').trim();
@@ -1327,6 +1340,58 @@ router.get('/:competitionId/evaluator-activity', authenticate, authorizeRole('ad
   } catch (error) {
     console.error('Error fetching evaluator activity:', error);
     res.status(500).json({ error: 'Failed to fetch evaluator activity' });
+  }
+});
+
+// ─── Draft Code (Auto-Save) ────────────────────────────────────────────────
+
+/**
+ * PUT /api/competitions/:id/save-code
+ * Upserts draft code for a problem. Called on "Save Solution" or auto-save.
+ * Ensures students never lose code if their PC crashes mid-competition.
+ */
+router.put('/:id/save-code', authenticate, async (req, res) => {
+  try {
+    const { id: competitionId } = req.params;
+    const userId = req.user.id;
+    const { problemId, code, language } = req.body;
+
+    if (!problemId || code === undefined || !language) {
+      return res.status(400).json({ error: 'Missing required fields: problemId, code, language' });
+    }
+
+    const draft = await prisma.draftCode.upsert({
+      where: {
+        competitionId_userId_problemId: { competitionId, userId, problemId }
+      },
+      update: { code, language },
+      create: { competitionId, userId, problemId, code, language }
+    });
+
+    res.json({ success: true, draft: { id: draft.id, updatedAt: draft.updatedAt } });
+  } catch (error) {
+    console.error('Error saving draft code:', error);
+    res.status(500).json({ error: 'Failed to save code' });
+  }
+});
+
+/**
+ * DELETE /api/competitions/:id/drafts
+ * Clears all draft codes for this competition/user after final submission.
+ */
+router.delete('/:id/drafts', authenticate, async (req, res) => {
+  try {
+    const { id: competitionId } = req.params;
+    const userId = req.user.id;
+
+    await prisma.draftCode.deleteMany({
+      where: { competitionId, userId }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing draft codes:', error);
+    res.status(500).json({ error: 'Failed to clear drafts' });
   }
 });
 

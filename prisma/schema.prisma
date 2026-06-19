@@ -905,3 +905,19 @@ model GuestRouteConfig {
 
   @@index([isEnabled])
 }
+
+/// Auto-saved draft code per problem per competition per user.
+/// Ensures students never lose code if their PC crashes mid-competition.
+model DraftCode {
+  id            String   @id @default(uuid())
+  competitionId String
+  userId        String
+  problemId     String
+  code          String
+  language      String   @default("java")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([competitionId, userId, problemId])
+  @@index([competitionId, userId])
+}

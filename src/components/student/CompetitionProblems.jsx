@@ -245,6 +245,27 @@ public:
         });
         setProblemSolutions(savedSolutions);
       }
+
+      // Restore draft codes from DB (crash recovery / PC malfunction)
+      if (data.draftCodes && Object.keys(data.draftCodes).length > 0) {
+        console.log('📂 Restoring draft codes from DB:', Object.keys(data.draftCodes).length, 'problems');
+        setProblemSolutions(prev => {
+          const merged = { ...prev };
+          Object.entries(data.draftCodes).forEach(([problemId, draft]) => {
+            // Only restore if there's no incomplete submission data for this problem
+            // (incomplete submissions take priority)
+            if (!merged[problemId]?.saved) {
+              merged[problemId] = {
+                code: draft.code || '',
+                language: draft.language || 'java',
+                saved: false,
+                fromDraft: true
+              };
+            }
+          });
+          return merged;
+        });
+      }
       
       if (data.hasSubmitted) {
         setSubmitted(true);
@@ -411,6 +432,7 @@ public:
     if (solutions.length > 0) {
       try {
         await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
+        competitionService.clearDrafts(competitionId).catch(() => {});
         clearViolationStorage();
         toast.success('⏰ Solutions auto-submitted - time expired');
       } catch (e) {
@@ -541,7 +563,9 @@ public:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
-  // Auto-save code as user types (debounced 500ms) so switching problems never loses work
+  // Auto-save code as user types (debounced 500ms) so switching problems never loses work.
+  // Also persists to server every 3s of inactivity for crash recovery.
+  const serverSaveTimerRef = useRef(null);
   useEffect(() => {
     if (!selectedProblemRef.current || !code) return;
     const problemId = selectedProblemRef.current.id;
@@ -556,6 +580,32 @@ public:
       }));
     }, 500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, language]);
+
+  // Debounced server-side save (every 3s of inactivity) for crash recovery
+  useEffect(() => {
+    if (!selectedProblemRef.current || !code?.trim() || submittedRef.current) return;
+
+    if (serverSaveTimerRef.current) clearTimeout(serverSaveTimerRef.current);
+
+    serverSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await competitionService.saveDraft(
+          competitionId,
+          selectedProblemRef.current.id,
+          code,
+          language
+        );
+      } catch (e) {
+        // Silent fail — auto-save is best-effort
+        console.warn('Auto-save to server failed:', e.message);
+      }
+    }, 3000);
+
+    return () => {
+      if (serverSaveTimerRef.current) clearTimeout(serverSaveTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, language]);
 
@@ -603,6 +653,7 @@ public:
       if (solutions.length > 0) {
         try {
           await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
+          competitionService.clearDrafts(competitionId).catch(() => {});
           clearViolationStorage();
           toast.success('⚠️ Solutions auto-submitted due to violations');
         } catch (e) {
@@ -1004,7 +1055,11 @@ public:
 
   // Switch to a different problem, saving current code immediately before switching
   const switchProblem = (newProblem) => {
-    if (selectedProblem && code) {
+    // Save current code to server before switching (crash recovery)
+    if (selectedProblem && code?.trim()) {
+      competitionService.saveDraft(competitionId, selectedProblem.id, code, language)
+        .catch(e => console.warn('Failed to save draft on switch:', e.message));
+
       setProblemSolutions(prev => ({
         ...prev,
         [selectedProblem.id]: {
@@ -1019,12 +1074,13 @@ public:
     setSelectedProblem(newProblem);
   };
 
-  const handleSaveSolution = () => {
+  const handleSaveSolution = async () => {
     if (!code.trim()) {
       toast.error('Please write some code first');
       return;
     }
 
+    // Save to local state immediately (fast UI feedback)
     setProblemSolutions({
       ...problemSolutions,
       [selectedProblem.id]: {
@@ -1035,7 +1091,14 @@ public:
       }
     });
     
-    toast.success('Solution saved!');
+    // Save to server for crash recovery
+    try {
+      await competitionService.saveDraft(competitionId, selectedProblem.id, code, language);
+      toast.success('Solution saved!');
+    } catch (error) {
+      console.error('Failed to save draft to server:', error);
+      toast.error('Saved locally, but server save failed — try again');
+    }
   };
 
   const handleSubmitAll = async (isAutoSubmit = false) => {
@@ -1103,6 +1166,8 @@ public:
 
       await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
       
+      // Clean up draft codes now that final submission is done
+      competitionService.clearDrafts(competitionId).catch(e => console.warn('Failed to clear drafts:', e.message));
       clearViolationStorage();
       setSubmitted(true);
       setSubmitting(false);

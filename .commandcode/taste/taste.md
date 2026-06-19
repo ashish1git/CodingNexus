@@ -25,3 +25,4 @@
 
 # workflow
 - For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80
+- When backend changes involve DB schema modifications or new API routes, proactively run the migration and rebuild/restart the server (Docker/PM2) — don't declare the task done until the deployed server picks up the changes. Confidence: 0.75
