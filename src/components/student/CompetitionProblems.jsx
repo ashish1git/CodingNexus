@@ -1012,6 +1012,8 @@ public:
         }
       }));
     }
+    setTestResults(null);
+    setShowTestCases(false);
     setSelectedProblem(newProblem);
   };
 

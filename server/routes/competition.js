@@ -731,8 +731,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               source_code_len: judge0Payload.source_code.length
             }, null, 2));
 
-            const judge0Response = await axios.post(
-              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+       L              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
               judge0Payload,
               {
                 headers: { 'Content-Type': 'application/json' },
@@ -751,7 +750,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               stderr: (result.stderr || '').substring(0, 100),
               compile_output: (result.compile_output || '').substring(0, 100),
               time: result.time,
-              memory: result.memory
+            L  memory: result.memory
             }, null, 2));
             
             const stdout = (result.stdout || '').trim();
