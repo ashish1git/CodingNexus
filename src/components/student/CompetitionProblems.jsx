@@ -42,6 +42,7 @@ const CompetitionProblems = () => {
   const [showWarningOverlay, setShowWarningOverlay] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
 
   // Refs so protection handlers always see latest values (avoids stale closures)
   const submittedRef = useRef(false);
@@ -476,12 +477,13 @@ public:
         return;
       }
 
-      // 60-second warning before auto-submit
+      // 60-second warning popup before auto-submit
       if (diff <= 60000 && !sixtySecWarningShownRef.current) {
         sixtySecWarningShownRef.current = true;
-        toast('⏳ Time is running out! Your solutions will be auto-submitted in 60 seconds.', {
-          duration: 5000,
-          style: { background: '#f59e0b', color: '#1e1e23', fontWeight: '600' }
+        setShowTimeWarning(true);
+        toast('⚠️ 60 seconds remaining — your solutions will be auto-submitted when time expires.', {
+          duration: 6000,
+          style: { background: '#dc2626', color: '#fff', fontWeight: '600' }
         });
       }
 
@@ -1217,6 +1219,33 @@ public:
               className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-lg"
             >
               🔒 Re-enter Fullscreen &amp; Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ⏰ 60-SECOND WARNING OVERLAY */}
+      {showTimeWarning && !showWarningOverlay && (
+        <div className="fixed inset-0 z-[9997] bg-black/85 flex items-center justify-center">
+          <div className="bg-[#1e1e1e] border-2 border-red-500 rounded-2xl p-10 max-w-md w-full mx-4 text-center shadow-2xl shadow-red-500/20 animate-pulse">
+            <div className="text-6xl mb-4">⏰</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-2">Time is Running Out!</h2>
+            <p className="text-gray-300 mb-4 text-lg">
+              Less than <span className="text-red-400 font-bold text-2xl">60 seconds</span> remaining.
+            </p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mb-4">
+              <p className="text-yellow-400 font-semibold">
+                Your solutions will be <span className="text-red-400">auto-submitted</span> when time expires.
+              </p>
+            </div>
+            <p className="text-gray-400 text-sm mb-6">
+              Make sure all your code is saved. Any unsaved changes will be included in the auto-submission.
+            </p>
+            <button
+              onClick={() => setShowTimeWarning(false)}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-lg"
+            >
+              Got it, I'm almost done!
             </button>
           </div>
         </div>
