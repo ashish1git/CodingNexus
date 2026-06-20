@@ -34,7 +34,7 @@ import CodeEditor from './components/student/CodeEditor';
 import Loading from './components/shared/Loading';
 import SupportTicket from './components/student/SupportTicket';
 import Competitions from './components/student/Competitions';
-const CompetitionProblems = lazy(() => import('./components/student/CompetitionProblems'));
+const CompetitionProblems = lazy(() => import('./components/student/competition/CompetitionProblems'));
 import CompetitionResults from './components/student/CompetitionResults';
 import StudentCertificates from './components/student/StudentCertificates';
 import AptitudeTests from './components/student/AptitudeTests';

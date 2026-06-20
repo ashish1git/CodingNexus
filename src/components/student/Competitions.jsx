@@ -23,7 +23,7 @@ const Competitions = () => {
     if (preloadedRef.current) return;
     preloadedRef.current = true;
     // Kick off dynamic import — browser fetches the chunk in background
-    import('./CompetitionProblems');
+    import('./competition/CompetitionProblems');
   };
 
   useEffect(() => {

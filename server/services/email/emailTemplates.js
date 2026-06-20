@@ -453,6 +453,47 @@ export const generalNotification = (userName, title, message, type = 'info') => 
 };
 
 /**
+ * Password Reset OTP Email
+ */
+export const passwordResetOTP = (userName, otp, moodleId) => {
+  const content = `
+    <p class="greeting">Hello ${userName},</p>
+
+    <p>We received a request to reset your Coding Nexus account password.</p>
+
+    <div class="success-box" style="text-align: center;">
+      <p style="font-size: 14px; margin-bottom: 10px;">Your One-Time Password (OTP)</p>
+      <p style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: ${PRIMARY_COLOR}; margin: 15px 0; font-family: 'Courier New', monospace;">${otp}</p>
+      <p style="font-size: 12px; color: #065f46;">This OTP is valid for 10 minutes</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Request Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Account:</td>
+          <td class="value"><strong>${moodleId}@apsit.edu.in</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Requested On:</td>
+          <td class="value">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="warning-box">
+      <strong>⚠️ Didn't request this?</strong>
+      <p>If you did not request a password reset, please ignore this email. Your account remains secure.</p>
+    </div>
+
+    <div class="section">
+      <p style="margin-top: 30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
+/**
  * Plain Text Fallback
  */
 export const plainTextFallback = (type, data) => {
@@ -480,5 +521,6 @@ export default {
   eventRegistration,
   certificateDelivery,
   generalNotification,
+  passwordResetOTP,
   plainTextFallback
 };

@@ -86,7 +86,7 @@ const StudentManagement = () => {
 
   try {
    // Create email from moodleId
-   const email = `${formData.moodleId}@codingnexus.com`;
+   const email = `${formData.moodleId}@apsit.edu.in`;
 
    // Use the admin endpoint to create student (auto-activated)
    const data = await apiClient.post('/admin/students', {

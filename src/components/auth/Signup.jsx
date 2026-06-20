@@ -68,7 +68,7 @@ const Signup = () => {
 
     try {
       // Convert Moodle ID to email format
-      const email = `${formData.moodleId}@codingnexus.com`;
+      const email = `${formData.moodleId}@apsit.edu.in`;
 
       const userData = {
         name: formData.name,

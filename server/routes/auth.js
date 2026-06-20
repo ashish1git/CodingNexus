@@ -4,8 +4,12 @@ import jwt from 'jsonwebtoken';
 import process from 'node:process';
 import prisma from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
+import { sendEmail } from '../services/email/brevo.service.js';
+import { passwordResetOTP } from '../services/email/emailTemplates.js';
 
 const router = express.Router();
+const OTP_EXPIRY_MINUTES = 10;
+const STUDENT_EMAIL_DOMAIN = '@apsit.edu.in';
 
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
@@ -103,9 +107,9 @@ router.post('/login', async (req, res) => {
     // If input doesn't contain @, also try with common email domains
     if (!email.includes('@')) {
       searchConditions.push(
+        { email: `${email}${STUDENT_EMAIL_DOMAIN}` },
         { email: `${email}@student.mu.ac.in` },
-        { email: `${email}@codingnexus.com` },
-        { email: `${email}@apsit.edu.in` }
+        { email: `${email}@codingnexus.com` }
       );
     } else {
       // If it has @, also extract the moodleId part and search by that
@@ -346,7 +350,12 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
-// Request password reset - verify moodleId exists and return masked info
+// Generate a 6-digit OTP
+const generateOTP = () => {
+  return String(Math.floor(100000 + Math.random() * 900000));
+};
+
+// Request password reset - send OTP to email
 router.post('/forgot-password', async (req, res) => {
   try {
     const { moodleId } = req.body;
@@ -356,22 +365,20 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const input = moodleId.trim();
-    
+
     // Build search conditions - handle multiple formats
     const searchConditions = [
       { moodleId: input },
       { email: input }
     ];
 
-    // If input doesn't contain @, also try with common email domains
     if (!input.includes('@')) {
       searchConditions.push(
+        { email: `${input}${STUDENT_EMAIL_DOMAIN}` },
         { email: `${input}@student.mu.ac.in` },
-        { email: `${input}@codingnexus.com` },
-        { email: `${input}@apsit.edu.in` }
+        { email: `${input}@codingnexus.com` }
       );
     } else {
-      // If it has @, also extract the moodleId part
       const moodleIdPart = input.split('@')[0];
       searchConditions.push({ moodleId: moodleIdPart });
     }
@@ -383,7 +390,7 @@ router.post('/forgot-password', async (req, res) => {
         role: 'student'
       },
       include: {
-        studentProfile: true
+        studentProfile: true,
       }
     });
 
@@ -391,23 +398,73 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'No account found with this Moodle ID' });
     }
 
-    const phone = user.studentProfile?.phone || '';
-    const phoneHint = phone.length >= 2 ? phone.slice(-2) : '**';
+    // Determine the email to send OTP to
+    // Handle cases where stored email is just the moodleId without domain
+    const userMoodleId = user.moodleId || moodleId;
+    let targetEmail = user.email;
+    if (!targetEmail || !targetEmail.includes('@')) {
+      targetEmail = `${userMoodleId}${STUDENT_EMAIL_DOMAIN}`;
+    }
 
-    // Get masked name (first name only) — name in DB is "Last First Middle", so parts[1] is first name
+    // Generate 6-digit OTP
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    // Invalidate any existing unused OTPs for this user
+    await prisma.passwordResetOTP.updateMany({
+      where: {
+        userId: user.id,
+        isUsed: false,
+        expiresAt: { gt: new Date() }
+      },
+      data: { isUsed: true }
+    });
+
+    // Store new OTP
+    await prisma.passwordResetOTP.create({
+      data: {
+        userId: user.id,
+        otp,
+        expiresAt
+      }
+    });
+
+    // Get student name for email
     const fullName = user.studentProfile?.name || 'Student';
     const nameParts = fullName.trim().split(/\s+/);
-    const firstName = nameParts.length >= 2 ? nameParts[1] : nameParts[0];
-    const maskedName = firstName.length > 2 
-      ? firstName[0] + '*'.repeat(firstName.length - 2) + firstName[firstName.length - 1]
-      : firstName;
+    const displayName = nameParts.length >= 2 ? nameParts[1] : nameParts[0];
+
+    // Send OTP via Brevo
+    const emailResult = await sendEmail({
+      to: targetEmail,
+      subject: 'Password Reset OTP - Coding Nexus',
+      html: passwordResetOTP(displayName, otp, moodleId),
+      text: `Hello ${displayName},\n\nYour OTP for password reset is: ${otp}\n\nThis OTP is valid for ${OTP_EXPIRY_MINUTES} minutes.\n\nIf you did not request this, please ignore this email.\n\nBest regards,\nCoding Nexus Team`
+    });
+
+    if (!emailResult.success) {
+      console.error('❌ Failed to send OTP email:', emailResult.error);
+      return res.status(500).json({ success: false, error: 'Failed to send OTP email. Please try again later.' });
+    }
+
+    // Mask email for display
+    const emailParts = targetEmail.split('@');
+    const maskedLocal = emailParts[0].length > 3
+      ? emailParts[0][0] + '***' + emailParts[0][emailParts[0].length - 1]
+      : emailParts[0][0] + '***';
+    const maskedEmail = `${maskedLocal}@${emailParts[1]}`;
+
+    // Mask name
+    const maskedName = displayName.length > 2
+      ? displayName[0] + '*'.repeat(displayName.length - 2) + displayName[displayName.length - 1]
+      : displayName;
 
     res.json({
       success: true,
       data: {
         maskedName,
-        phoneHint,
-        hasPhone: !!phone
+        maskedEmail,
+        message: `OTP sent to ${maskedEmail}`
       }
     });
   } catch (error) {
@@ -416,47 +473,47 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password - verify phone last 5 digits and update password
-router.post('/reset-password', async (req, res) => {
+// Verify OTP and reset password
+router.post('/verify-reset-otp', async (req, res) => {
   try {
-    const { moodleId, phoneLast5, newPassword } = req.body;
+    const { moodleId, otp, newPassword } = req.body;
 
-    if (!moodleId || !phoneLast5 || !newPassword) {
-      return res.status(400).json({ success: false, error: 'All fields are required' });
+    if (!moodleId || !otp || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Moodle ID, OTP, and new password are required' });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
     }
 
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ success: false, error: 'OTP must be a 6-digit number' });
+    }
+
     const input = moodleId.trim();
-    
-    // Build search conditions - handle multiple formats
+
+    // Build search conditions
     const searchConditions = [
       { moodleId: input },
       { email: input }
     ];
 
-    // If input doesn't contain @, also try with common email domains
     if (!input.includes('@')) {
       searchConditions.push(
+        { email: `${input}${STUDENT_EMAIL_DOMAIN}` },
         { email: `${input}@student.mu.ac.in` },
-        { email: `${input}@codingnexus.com` },
-        { email: `${input}@apsit.edu.in` }
+        { email: `${input}@codingnexus.com` }
       );
     } else {
       const moodleIdPart = input.split('@')[0];
       searchConditions.push({ moodleId: moodleIdPart });
     }
 
-    // Find user by moodleId or email
+    // Find user
     const user = await prisma.user.findFirst({
       where: {
         OR: searchConditions,
         role: 'student'
-      },
-      include: {
-        studentProfile: true
       }
     });
 
@@ -464,27 +521,32 @@ router.post('/reset-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Account not found' });
     }
 
-    // Verify phone last 5 digits
-    const phone = user.studentProfile?.phone || '';
-    const actualLast5 = phone.length >= 5 ? phone.slice(-5) : '';
+    // Find valid OTP
+    const otpRecord = await prisma.passwordResetOTP.findFirst({
+      where: {
+        userId: user.id,
+        otp,
+        isUsed: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
-    if (!actualLast5) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No phone number registered. Please contact admin to reset your password.' 
-      });
-    }
-
-    if (phoneLast5 !== actualLast5) {
-      return res.status(400).json({ success: false, error: 'Phone verification failed' });
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired OTP. Please request a new one.' });
     }
 
     // Hash new password and update
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     await prisma.user.update({
       where: { id: user.id },
       data: { password: hashedPassword }
+    });
+
+    // Mark OTP as used
+    await prisma.passwordResetOTP.update({
+      where: { id: otpRecord.id },
+      data: { isUsed: true }
     });
 
     res.json({ success: true, message: 'Password reset successfully' });

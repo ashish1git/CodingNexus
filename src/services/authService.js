@@ -9,7 +9,7 @@ export const authService = {
       // Normalize email - add domain if not present
       let studentEmail = email;
       if (!studentEmail.includes('@')) {
-        studentEmail = `${studentEmail}@codingnexus.com`;
+        studentEmail = `${studentEmail}@apsit.edu.in`;
       }
 
       const response = await apiClient.post('/auth/signup', {
@@ -191,12 +191,15 @@ export const authService = {
     }
   },
 
-  // Request password reset - verify moodleId exists
+  // Request password reset - sends OTP to email
   requestPasswordReset: async (moodleId) => {
     try {
       const response = await apiClient.post('/auth/forgot-password', {
         moodleId
       });
+      if (response.success) {
+        toast.success('OTP sent to your registered email!');
+      }
       return response;
     } catch (error) {
       console.error('Request password reset error:', error);
@@ -205,22 +208,22 @@ export const authService = {
     }
   },
 
-  // Reset password with phone verification
-  resetPassword: async (moodleId, phoneLast5, newPassword) => {
+  // Verify OTP and reset password
+  verifyResetOtp: async (moodleId, otp, newPassword) => {
     try {
-      const response = await apiClient.post('/auth/reset-password', {
+      const response = await apiClient.post('/auth/verify-reset-otp', {
         moodleId,
-        phoneLast5,
+        otp,
         newPassword
       });
 
       if (response.success) {
-        toast.success('Password reset successfully!');
+        toast.success('Password reset successfully! Please login with your new password.');
       }
       return response;
     } catch (error) {
-      console.error('Reset password error:', error);
-      toast.error(error.message || 'Failed to reset password');
+      console.error('Verify OTP error:', error);
+      toast.error(error.message || 'Failed to verify OTP');
       return { success: false, error: error.message };
     }
   },
