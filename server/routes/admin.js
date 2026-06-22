@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
+import { sendEmail } from '../services/email/brevo.service.js';
+import { subadminWelcome, ticketReplyNotification } from '../services/email/emailTemplates.js';
 
 const router = express.Router();
 
@@ -1620,6 +1622,27 @@ router.put('/tickets/:id', async (req, res) => {
       }
     })() : [];
 
+    // Send email notification to student if requested
+    if (reply && reply.trim() && req.body.notifyStudent) {
+      try {
+        const ticketCreator = await prisma.user.findUnique({
+          where: { id: ticket.userId },
+          select: { email: true, studentProfile: { select: { name: true } } }
+        });
+        if (ticketCreator?.email) {
+          const studentName = ticketCreator.studentProfile?.name || ticketCreator.email.split('@')[0];
+          await sendEmail({
+            to: ticketCreator.email,
+            subject: `Ticket Update: ${ticket.subject}`,
+            html: ticketReplyNotification(studentName, ticket.subject, reply.trim()),
+            text: `Hello ${studentName},\n\nYour support ticket has received a response.\n\nSubject: ${ticket.subject}\nReply: ${reply.trim()}\n\nBest regards,\nCoding Nexus Team`
+          });
+        }
+      } catch (emailErr) {
+        console.error('Failed to send ticket notification email:', emailErr);
+      }
+    }
+
     res.json({ 
       success: true, 
       data: {
@@ -1696,6 +1719,38 @@ router.post('/subadmins', async (req, res) => {
         }
       }
     });
+
+    // Build human-readable permissions list for email
+    const permLabels = {
+      manageStudents: 'Manage Students', manageNotes: 'Manage Notes',
+      manageAnnouncements: 'Manage Announcements', markAttendance: 'Mark Attendance',
+      createQuizzes: 'Create Quizzes', manageCompetitions: 'Manage Competitions',
+      viewCompetitionSubmissions: 'View Competition Submissions', manageCertificates: 'Manage Certificates',
+      manageEvents: 'Manage Events', viewTickets: 'View Tickets',
+      respondTickets: 'Respond to Tickets', manageSubAdmins: 'Manage Sub-Admins',
+      sendBulkEmails: 'Send Bulk Emails', manageAttendanceSessions: 'Manage Attendance Sessions',
+      manageGuestAccess: 'Manage Guest Access', manageAptitude: 'Manage Aptitude',
+      manageStudents: 'Manage Students', manageNotes: 'Manage Notes',
+      qrCodeGeneration: 'QR Code Generation'
+    };
+    let permsList = ['All permissions'];
+    if (permissions && typeof permissions === 'object') {
+      permsList = Object.entries(permissions)
+        .filter(([, v]) => v)
+        .map(([k]) => permLabels[k] || k.replace(/([A-Z])/g, ' $1').trim());
+    }
+
+    // Send welcome email
+    const emailResult = await sendEmail({
+      to: email,
+      subject: 'Welcome to Coding Nexus — Sub-Admin Access Granted',
+      html: subadminWelcome(name, email, password, permsList),
+      text: `Hello ${name},\n\nYou have been added as a Sub-Admin for Coding Nexus.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPermissions: ${permsList.join(', ')}\n\nPlease login at https://codingnexus.apsit.edu.in/admin-login\n\nBest regards,\nCoding Nexus Team`
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to send subadmin welcome email:', emailResult.error);
+    }
 
     res.json({ success: true });
   } catch (error) {

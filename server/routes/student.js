@@ -164,8 +164,17 @@ router.get('/quizzes/:id/attempt', async (req, res) => {
       return res.json({ success: false, data: null });
     }
 
-    console.log('✅ Attempt found:', { score: attempt.score, maxScore: attempt.maxScore });
-    res.json({ success: true, data: attempt });
+    // Compute rank among all attempts for this quiz
+    const betterAttempts = await prisma.quizAttempt.count({
+      where: {
+        quizId: req.params.id,
+        score: { gt: attempt.score }
+      }
+    });
+    const rank = betterAttempts + 1;
+
+    console.log('✅ Attempt found:', { score: attempt.score, maxScore: attempt.maxScore, rank });
+    res.json({ success: true, data: { ...attempt, rank } });
   } catch (error) {
     console.error('❌ Error fetching attempt:', error.message);
     res.status(500).json({ success: false, error: error.message });

@@ -208,6 +208,20 @@ export const authService = {
     }
   },
 
+  // Verify OTP only (step 2 of forgot password flow)
+  verifyOtp: async (moodleId, otp) => {
+    try {
+      const response = await apiClient.post('/auth/verify-otp', {
+        moodleId,
+        otp
+      });
+      return response;
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // Verify OTP and reset password
   verifyResetOtp: async (moodleId, otp, newPassword) => {
     try {

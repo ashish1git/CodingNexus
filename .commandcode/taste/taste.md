@@ -30,3 +30,9 @@
 
 # debugging
 - When debugging "Cannot access 'X' before initialization" TDZ errors in a Vite/Rollup production build, build with `--minify false` to reveal actual variable names instead of minified single-letter names (S,N,etc.) - this immediately identifies whether the error is in your code or a dependency. Confidence: 0.85
+
+# logging
+- Only log unusual/exceptional events (violations, errors, warnings); avoid logging every normal state transition (e.g. fullscreen enter/exit on every toggle) to prevent log noise. Confidence: 0.70
+
+# prisma
+- After adding DB fields via raw SQL (not Prisma migrations), run `npx prisma generate` and rebuild the Docker image — otherwise the Prisma client won't know about the new fields and queries will throw 500 errors. Confidence: 0.75

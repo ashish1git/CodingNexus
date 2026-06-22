@@ -94,6 +94,15 @@ export default function EventManagement() {
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
   const [bulkCertParticipants, setBulkCertParticipants] = useState([]);
 
+  // Certificate template modal state
+  const [certTemplateEvent, setCertTemplateEvent] = useState(null);
+  const [certTemplateUrl, setCertTemplateUrl] = useState('');
+  const [certNameX, setCertNameX] = useState(421);
+  const [certNameY, setCertNameY] = useState(328);
+  const [sampleName, setSampleName] = useState('Test Student Name');
+  const [certNameColor, setCertNameColor] = useState('#000000');
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -359,6 +368,56 @@ export default function EventManagement() {
     } catch (err) { 
       toast.error(err.response?.data?.error || 'Failed to update certificate name'); 
     }
+  };
+
+  // Certificate template management
+  const openCertTemplate = async (event) => {
+    setCertTemplateEvent(event);
+    setSampleName('Test Student Name');
+    try {
+      const res = await axios.get(`${API}/events/admin/events/${event.id}/certificate/template`, { headers });
+      if (res.data.success && res.data.data) {
+        setCertTemplateUrl(res.data.data.certificateTemplateUrl || '');
+        setCertNameX(res.data.data.certificateNameX || 421);
+        setCertNameY(res.data.data.certificateNameY || 328);
+        setCertNameColor(res.data.data.certificateNameColor || '#000000');
+      } else {
+        setCertTemplateUrl('');
+        setCertNameX(421);
+        setCertNameY(328);
+        setCertNameColor('#000000');
+      }
+    } catch {
+      setCertTemplateUrl('');
+      setCertNameX(421);
+      setCertNameY(328);
+      setCertNameColor('#000000');
+    }
+  };
+
+  const handleTemplateUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Only image files allowed');
+    if (file.size > 10 * 1024 * 1024) return toast.error('File must be under 10MB');
+    setUploadingTemplate(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await axios.post(`${API}/events/admin/events/${certTemplateEvent.id}/certificate/template`, fd, { headers });
+      if (res.data.success) {
+        setCertTemplateUrl(res.data.url);
+        toast.success('Template uploaded! Adjust name position and preview.');
+      }
+    } catch (err) { toast.error(err.response?.data?.error || 'Upload failed'); }
+    finally { setUploadingTemplate(false); }
+  };
+
+  const handleSavePosition = async () => {
+    try {
+      await axios.put(`${API}/events/admin/events/${certTemplateEvent.id}/certificate/name-position`, { x: certNameX, y: certNameY, color: certNameColor }, { headers });
+      toast.success('Name position saved');
+    } catch (err) { toast.error('Failed to save position'); }
   };
 
   const deleteRegistration = async (eventId, participantId, participantName) => {
@@ -632,6 +691,9 @@ export default function EventManagement() {
                   <div className="flex gap-2 pt-4 border-t border-gray-100">
                     <button onClick={() => openRegistrations(event)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition text-sm font-medium">
                       <Users className="w-4 h-4" /> Registrations
+                    </button>
+                    <button onClick={() => openCertTemplate(event)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition text-sm font-medium">
+                      <Award className="w-4 h-4" /> Certificate
                     </button>
                     <button onClick={() => openMedia(event)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition text-sm font-medium">
                       <FileText className="w-4 h-4" /> Media
@@ -1053,6 +1115,130 @@ export default function EventManagement() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CERTIFICATE TEMPLATE MODAL */}
+      {certTemplateEvent && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-xl w-full max-w-4xl shadow-xl max-h-[95vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Certificate Template</h2>
+                <p className="text-gray-500 text-sm">{certTemplateEvent.title}</p>
+              </div>
+              <button onClick={() => { setCertTemplateEvent(null); setCertTemplateUrl(''); }} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Background Template</label>
+                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 transition bg-gray-50">
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm text-gray-600">{uploadingTemplate ? 'Uploading...' : certTemplateUrl ? 'Replace template image' : 'Upload certificate background image (PNG/JPG)'}</span>
+                  <input type="file" accept="image/*" onChange={handleTemplateUpload} className="hidden" disabled={uploadingTemplate} />
+                </label>
+              </div>
+
+              {/* Template preview with live overlay */}
+              {certTemplateUrl && (
+                <div className="relative w-full border border-gray-300 rounded-lg bg-gray-100 overflow-hidden shadow-inner" style={{ aspectRatio: '842/595', maxHeight: '55vh' }}>
+                  <img src={certTemplateUrl} alt="Certificate template" className="absolute inset-0 w-full h-full object-contain" />
+                  <div style={{
+                    position: 'absolute',
+                    left: `${(certNameX / 842) * 100}%`,
+                    top: `${(certNameY / 595) * 100}%`,
+                    transform: 'translate(-50%, -50%)',
+                    fontSize: 'clamp(12px, 3vw, 24px)',
+                    fontWeight: 700,
+                    color: certNameColor,
+                    fontFamily: "'Times New Roman', serif",
+                    whiteSpace: 'nowrap',
+                    textShadow: certNameColor === '#FFFFFF'
+                      ? '0 0 6px rgba(0,0,0,0.5)' 
+                      : '0 0 6px rgba(255,255,255,0.7)',
+                    pointerEvents: 'none',
+                    zIndex: 10
+                  }}>
+                    {sampleName || 'Sample Name'}
+                  </div>
+                </div>
+              )}
+
+              {/* Controls grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Sample Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sample Name</label>
+                  <input type="text" value={sampleName} onChange={e => setSampleName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500" />
+                </div>
+
+                {/* Font Color */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Font Color</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input type="color" value={certNameColor} onChange={e => setCertNameColor(e.target.value)}
+                      className="w-9 h-9 rounded cursor-pointer border border-gray-300 shrink-0" />
+                    <span className="text-xs text-gray-500 font-mono w-16">{certNameColor}</span>
+                    {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000', '#800080', '#FF8C00', '#8B4513'].map(c => (
+                      <button key={c} onClick={() => setCertNameColor(c)}
+                        className={`w-6 h-6 rounded-full border-2 transition shrink-0 ${certNameColor === c ? 'border-indigo-600 scale-110 ring-1 ring-indigo-300' : 'border-gray-300 hover:scale-110'}`}
+                        style={{ backgroundColor: c }} title={c} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* X/Y Position sliders */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">X Position</label>
+                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{certNameX}px</span>
+                  </div>
+                  <input type="range" min="100" max="742" value={certNameX} onChange={e => setCertNameX(Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
+                  <div className="flex justify-between text-xs text-gray-400 mt-0.5"><span>Left 100</span><span>Center 421</span><span>Right 742</span></div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Y Position</label>
+                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{certNameY}px</span>
+                  </div>
+                  <input type="range" min="100" max="500" value={certNameY} onChange={e => setCertNameY(Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
+                  <div className="flex justify-between text-xs text-gray-400 mt-0.5"><span>Top 100</span><span>Default 328</span><span>Bottom 500</span></div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2 border-t border-gray-100">
+                <button onClick={handleSavePosition} className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition text-sm font-medium flex items-center justify-center gap-1.5">
+                  <Check className="w-4 h-4" /> Save Position & Color
+                </button>
+                <a href={`${API}/events/admin/events/${certTemplateEvent.id}/certificate/preview`}
+                  onClick={e => {
+                    e.preventDefault();
+                    axios.post(`${API}/events/admin/events/${certTemplateEvent.id}/certificate/preview`,
+                      { participantName: sampleName, division: 'FY AIML' },
+                      { headers, responseType: 'blob' }
+                    ).then(res => {
+                      const blob = new Blob([res.data], { type: 'application/pdf' });
+                      window.open(URL.createObjectURL(blob), '_blank');
+                    }).catch(() => toast.error('Preview failed'));
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm font-medium">
+                  <Eye className="w-4 h-4" /> Generate PDF Preview
+                </a>
+              </div>
             </div>
           </div>
         </div>

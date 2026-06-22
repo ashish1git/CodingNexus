@@ -157,13 +157,14 @@ export default function useCompetitionProtection(competition, { submittedRef, se
       const inFullscreen = !!document.fullscreenElement;
       setIsFullscreen(inFullscreen);
       isFullscreenRef.current = inFullscreen;
-      if (!inFullscreen) {
+      if (inFullscreen) {
+        setShowFullscreenPrompt(false);
+        violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen'));
+        persistNow();
+      } else {
         violationLogRef.current.push(buildLogEntry('fullscreen_exit', 'student exited fullscreen'));
         persistNow();
         recordViolation('exited fullscreen (pressed Escape)');
-      } else {
-        violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen'));
-        persistNow();
       }
     };
 
@@ -254,6 +255,11 @@ export default function useCompetitionProtection(competition, { submittedRef, se
   }, [competition]);
 
   const enterFullscreen = () => {
+    // Already in fullscreen — nothing to do
+    if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+      return;
+    }
+
     const elem = document.documentElement;
     const tryRequest = (method) => {
       try {
@@ -262,10 +268,9 @@ export default function useCompetitionProtection(competition, { submittedRef, se
           promise.then(() => {
             isFullscreenRef.current = true;
             setIsFullscreen(true);
-            violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen manually'));
-            persistNow();
             toast.success('✅ Fullscreen enabled - tab switching is locked');
           }).catch(err => {
+            // fullscreenchange handler already logs the event; only log on failure
             violationLogRef.current.push(buildLogEntry('fullscreen_error', `fullscreen request failed: ${err.message}`));
             persistNow();
             toast.error('Could not enable fullscreen: ' + err.message);
@@ -273,8 +278,6 @@ export default function useCompetitionProtection(competition, { submittedRef, se
         } else {
           isFullscreenRef.current = true;
           setIsFullscreen(true);
-          violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen (webkit/ms)'));
-          persistNow();
           toast.success('✅ Fullscreen enabled');
         }
       } catch (err) {

@@ -481,6 +481,10 @@ model Event {
   quizzes              EventQuiz[]
   mediaFiles           EventMedia[]
   hackathonRegistrations HackathonRegistration[]
+  certificateTemplateUrl String?                // Cloudinary URL for certificate background template
+  certificateNameX      Int?                    // X position of name on certificate (default center=421)
+  certificateNameY      Int?                    // Y position of name on certificate (default=328)
+  certificateNameColor  String?                 // Font color for name (default #000000)
 
   @@index([status])
   @@index([eventDate])

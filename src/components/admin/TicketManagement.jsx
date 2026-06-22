@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, MessageCircle, Send, Clock, CheckCircle, AlertCircle,
-  Search, Filter, X, ShieldAlert, MessageSquare, MessageSquareOff
+  Search, Filter, X, ShieldAlert, MessageSquare, MessageSquareOff, Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -18,6 +18,7 @@ const TicketManagement = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [notifyStudent, setNotifyStudent] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -205,6 +206,7 @@ const TicketManagement = () => {
       // Send to server
       const response = await adminService.updateTicket(selectedTicket.id, {
         reply: replyText,
+        notifyStudent,
         status: selectedTicket.status === 'open' ? 'in-progress' : selectedTicket.status
       });
       
@@ -643,7 +645,19 @@ const TicketManagement = () => {
                     placeholder="Type your response here..."
                     required
                   ></textarea>
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={notifyStudent}
+                        onChange={e => setNotifyStudent(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <Bell className={`w-4 h-4 ${notifyStudent ? 'text-indigo-600' : 'text-gray-400'}`} />
+                      <span className={`text-sm font-medium ${notifyStudent ? 'text-indigo-700' : 'text-gray-500'}`}>
+                        Notify student by email
+                      </span>
+                    </label>
                     <button
                       type="submit"
                       disabled={submitting}

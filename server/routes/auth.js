@@ -398,6 +398,29 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'No account found with this Moodle ID' });
     }
 
+    // Check cooldown — only one password reset per user per 24 hours
+    const recentReset = await prisma.passwordResetOTP.findFirst({
+      where: {
+        userId: user.id,
+        createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (recentReset) {
+      const cooldownEnd = new Date(recentReset.createdAt.getTime() + 24 * 60 * 60 * 1000);
+      const msLeft = cooldownEnd - new Date();
+      const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60));
+      const minsLeft = Math.ceil((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+      const timeStr = hoursLeft > 0
+        ? `${hoursLeft}h ${minsLeft}m`
+        : `${minsLeft} minute${minsLeft !== 1 ? 's' : ''}`;
+      return res.status(429).json({
+        success: false,
+        error: `Password reset already requested recently. Please try again in ${timeStr}. If urgent, contact the Coding Nexus Team at codingnexus@apsit.edu.in.`
+      });
+    }
+
     // Determine the email to send OTP to
     // Handle cases where stored email is just the moodleId without domain
     const userMoodleId = user.moodleId || moodleId;
@@ -469,6 +492,69 @@ router.post('/forgot-password', async (req, res) => {
     });
   } catch (error) {
     console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Verify OTP only (separate from password reset)
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { moodleId, otp } = req.body;
+
+    if (!moodleId || !otp) {
+      return res.status(400).json({ success: false, error: 'Moodle ID and OTP are required' });
+    }
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ success: false, error: 'OTP must be a 6-digit number' });
+    }
+
+    const input = moodleId.trim();
+    const searchConditions = [
+      { moodleId: input },
+      { email: input }
+    ];
+
+    if (!input.includes('@')) {
+      searchConditions.push(
+        { email: `${input}${STUDENT_EMAIL_DOMAIN}` },
+        { email: `${input}@student.mu.ac.in` },
+        { email: `${input}@codingnexus.com` }
+      );
+    } else {
+      const moodleIdPart = input.split('@')[0];
+      searchConditions.push({ moodleId: moodleIdPart });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { OR: searchConditions, role: 'student' }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+
+    const otpRecord = await prisma.passwordResetOTP.findFirst({
+      where: {
+        userId: user.id,
+        otp,
+        isUsed: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired OTP. Please request a new one.' });
+    }
+
+    // OTP is valid — pass otpId so the reset step can use the same OTP record
+    res.json({
+      success: true,
+      data: { otpId: otpRecord.id }
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Clock, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle, ChevronLeft, ChevronRight, ShieldAlert, Maximize2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { studentService } from "../../services/studentService";
+import useQuizProtection from "./quiz/hooks/useQuizProtection";
 
 const QuizAttempt = () => {
   const { quizId } = useParams();
@@ -18,6 +19,26 @@ const QuizAttempt = () => {
   const [submitting, setSubmitting] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const submittingRef = useRef(false);
+
+  // Quiz protection — fullscreen + violation tracking
+  const {
+    tabSwitchCount,
+    showWarningOverlay,
+    setShowWarningOverlay,
+    showFullscreenPrompt,
+    setShowFullscreenPrompt,
+    enterFullscreen,
+    MAX_VIOLATIONS,
+  } = useQuizProtection({
+    onMaxViolations: () => {
+      // Auto-submit when 3 violations reached
+      if (!submittingRef.current) {
+        submittingRef.current = true;
+        handleImmediateSubmit();
+      }
+    }
+  });
 
   useEffect(() => {
     if (!quizId || !userDetails) return;
@@ -125,6 +146,23 @@ const QuizAttempt = () => {
     };
   };
 
+  // Immediate submit (used by auto-kick on 3 violations)
+  const handleImmediateSubmit = async () => {
+    if (!quiz) return;
+    setSubmitting(true);
+    try {
+      const result = calculateScore();
+      const attemptData = { quizId, answers, score: result.score, maxScore: result.total };
+      const res = await studentService.submitQuizAttempt(quizId, attemptData);
+      if (res.success) {
+        toast.error(`🚫 Auto-submitted due to violations. Score: ${result.score}/${result.total}`);
+        navigate(`/student/quiz/results/${quizId}`);
+      }
+    } catch (err) {
+      console.error("Auto-submit error:", err);
+    } finally { setSubmitting(false); }
+  };
+
   const handleSubmit = async () => {
     if (submitting || !quiz) return;
     setSubmitting(true);
@@ -185,6 +223,18 @@ const QuizAttempt = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
+            {/* Violations counter */}
+            {tabSwitchCount > 0 && (
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                tabSwitchCount >= MAX_VIOLATIONS - 1
+                  ? 'bg-red-900/30 text-red-400 border-red-700/50'
+                  : 'bg-amber-900/30 text-amber-400 border-amber-700/50'
+              }`}>
+                <ShieldAlert className="w-4 h-4" />
+                <span className="text-xs font-bold">{tabSwitchCount}/{MAX_VIOLATIONS}</span>
+              </div>
+            )}
+
             {/* Time Remaining */}
             <div
               className={`flex items-center gap-3 px-4 py-2 rounded-lg border font-mono text-lg font-bold flex-shrink-0 ${
@@ -359,6 +409,53 @@ const QuizAttempt = () => {
                 {submitting ? "Submitting..." : "Submit Now"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 Fullscreen Prompt Overlay */}
+      {showFullscreenPrompt && !showWarningOverlay && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border-2 border-yellow-500 rounded-2xl p-8 sm:p-10 max-w-md w-full text-center shadow-2xl shadow-yellow-500/20">
+            <div className="text-5xl mb-4">🔒</div>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-2">Fullscreen Required</h2>
+            <p className="text-slate-300 mb-6 text-sm">
+              This quiz must be taken in fullscreen mode.<br />
+              Tab switching is monitored — <span className="text-red-400 font-semibold">{MAX_VIOLATIONS} violations</span> will auto-submit your quiz.
+            </p>
+            <button
+              onClick={enterFullscreen}
+              className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-xl transition-colors text-base flex items-center justify-center gap-2"
+            >
+              <Maximize2 className="w-5 h-5" />
+              Enter Fullscreen & Start Quiz
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ Violation Warning Overlay */}
+      {showWarningOverlay && (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border-2 border-red-500 rounded-2xl p-8 sm:p-10 max-w-md w-full text-center shadow-2xl shadow-red-500/20">
+            <div className="text-5xl mb-4">🚨</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-2">Tab Switch Detected!</h2>
+            <p className="text-slate-300 mb-3 text-sm">You switched away from the quiz window.</p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 mb-4 inline-block">
+              <span className="text-red-400 font-bold text-lg">Violations: {tabSwitchCount} / {MAX_VIOLATIONS}</span>
+            </div>
+            <p className="text-yellow-400 text-sm font-semibold mb-6">
+              ⚠️ After {MAX_VIOLATIONS} violations your quiz will be auto-submitted and you will be removed.
+            </p>
+            <button
+              onClick={() => {
+                setShowWarningOverlay(false);
+                enterFullscreen();
+              }}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors text-base"
+            >
+              🔒 Re-enter Fullscreen & Continue
+            </button>
           </div>
         </div>
       )}

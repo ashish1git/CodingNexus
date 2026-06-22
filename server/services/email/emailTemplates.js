@@ -510,9 +510,103 @@ export const plainTextFallback = (type, data) => {
     case 'certificateDelivery':
       return `Hello ${data.userName},\n\nCongratulations! Your certificate for ${data.eventName} is ready!\n\nEvent: ${data.eventName}\nIssued On: ${new Date().toLocaleDateString()}\n\nBest regards,\nCoding Nexus Team`;
     
+    case 'subadminWelcome':
+      return `Hello ${data.name},\n\nYou have been added as a Sub-Admin for Coding Nexus.\n\nLogin Credentials:\nEmail: ${data.email}\nPassword: ${data.password}\n\nPermissions: ${data.permissions}\n\nPlease login at https://codingnexus.apsit.edu.in/admin-login\n\nBest regards,\nCoding Nexus Team`;
+
+    case 'ticketReply':
+      return `Hello ${data.name},\n\nYour support ticket has received a response.\n\nSubject: ${data.subject}\nReply: ${data.reply}\n\nYou can view the full conversation by logging into your account.\n\nBest regards,\nCoding Nexus Team`;
+    
     default:
       return `Hello ${data.userName},\n\n${data.message}\n\nBest regards,\nCoding Nexus Team`;
   }
+};
+
+/**
+ * Sub-admin Welcome Email
+ */
+export const subadminWelcome = (name, email, password, permissionsList) => {
+  const content = `
+    <p class="greeting">Hello ${name},</p>
+
+    <p>You have been added as a <strong>Sub-Admin</strong> for Coding Nexus. 🎉</p>
+
+    <div class="success-box">
+      <strong>✓ Account Created Successfully</strong>
+      <p>Your login credentials are provided below.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Login Credentials</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Email:</td>
+          <td class="value"><strong>${email}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Password:</td>
+          <td class="value"><code style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:14px;">${password}</code></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Your Permissions</div>
+      <div class="info-box">
+        <ul style="margin:0;padding-left:20px;">
+          ${permissionsList.map(p => `<li style="margin-bottom:4px;">${p}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+
+    <div class="section" style="text-align:center;">
+      <a href="https://codingnexus.apsit.edu.in/admin-login" class="button">Login to Admin Panel</a>
+    </div>
+
+    <div class="warning-box">
+      <strong>🔒 Security Notice:</strong>
+      <p>Please change your password after your first login. Never share your credentials with anyone.</p>
+    </div>
+
+    <div class="section">
+      <p style="margin-top:30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
+/**
+ * Ticket Reply Notification Email
+ */
+export const ticketReplyNotification = (studentName, subject, replyMessage) => {
+  const content = `
+    <p class="greeting">Hello ${studentName},</p>
+
+    <p>Your support ticket has received a response from our team. 📬</p>
+
+    <div class="section">
+      <div class="section-title">Ticket Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Subject:</td>
+          <td class="value"><strong>${subject}</strong></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="info-box">
+      <strong>Admin Response:</strong>
+      <p style="margin-top:8px;">${replyMessage}</p>
+    </div>
+
+    <div class="section" style="text-align:center;">
+      <p style="color:#555;">You can view the full conversation by logging into your account.</p>
+    </div>
+
+    <div class="section">
+      <p style="margin-top:30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
 };
 
 export default {
@@ -522,5 +616,7 @@ export default {
   certificateDelivery,
   generalNotification,
   passwordResetOTP,
+  subadminWelcome,
+  ticketReplyNotification,
   plainTextFallback
 };

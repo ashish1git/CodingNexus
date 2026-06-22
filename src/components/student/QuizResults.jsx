@@ -230,6 +230,16 @@ const QuizResults = () => {
                   {attempt.percentage}%
                 </p>
               </div>
+
+              {attempt.rank && (
+                <div className="flex flex-col items-center justify-center px-6 py-3 rounded-xl bg-indigo-900/30 border border-indigo-700/50">
+                  <p className="text-xs text-indigo-300 mb-1">Your Rank</p>
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-yellow-400" />
+                    <span className="text-3xl font-bold text-yellow-400">#{attempt.rank}</span>
+                  </div>
+                </div>
+              )}
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">

@@ -31,7 +31,11 @@ export async function generateCertificatePDF({
   eventDate,
   certificateNumber,
   templateType = 'participation',
-  issueDate
+  issueDate,
+  templateUrl,    // Cloudinary URL for custom template
+  nameX,           // Custom X position for name (default: center)
+  nameY,           // Custom Y position for name (default: 328)
+  nameColor        // Custom font color for name (default: #000000)
 }) {
   const doc = new PDFDocument({
     layout: 'landscape',
@@ -46,51 +50,59 @@ export async function generateCertificatePDF({
   console.log('📄 Certificate Generator:');
   console.log('   Template path:', TEMPLATE_PATH);
   console.log('   Template exists:', hasTemplate);
+  console.log('   Custom templateUrl:', templateUrl || 'none');
+  console.log('   Name position:', { x: nameX, y: nameY });
 
-  if (hasTemplate) {
+  // Try custom template URL first, then local file, then fallback
+  if (templateUrl) {
     try {
-      // Load template PNG and convert to JPEG for PDFKit compatibility
-      const templatePng = fs.readFileSync(TEMPLATE_PATH);
-      console.log('   Template PNG loaded, size:', templatePng.length, 'bytes');
-      
-      // Convert PNG to JPEG with sharp (PDFKit handles JPEG better)
-      // Explicitly specify input format and flatten transparency
-      const templateBuffer = await sharp(templatePng, { failOnError: false })
-        .flatten({ background: { r: 255, g: 255, b: 255 } }) // Replace transparency with white
-        .jpeg({ quality: 95 })
-        .toBuffer();
-      console.log('   Template converted to JPEG, size:', templateBuffer.length, 'bytes');
-      
-      // Use converted template as background
+      console.log('   Fetching custom template from:', templateUrl);
+      const response = await fetch(templateUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const templateBuffer = Buffer.from(await response.arrayBuffer());
+      console.log('   Custom template loaded, size:', templateBuffer.length, 'bytes');
+
       doc.image(templateBuffer, 0, 0, {
         width: pageWidth,
         height: pageHeight
       });
 
-      // Overlay text on template - ADJUST THESE VALUES based on your template layout
       overlayTextOnTemplate(doc, {
         participantName,
         issueDate,
         pageWidth,
-        pageHeight
+        pageHeight,
+        nameX: nameX ?? null,
+        nameY: nameY ?? null,
+        nameColor: nameColor ?? null
       });
     } catch (imageError) {
-      console.error('   ❌ Failed to load template image:', imageError.message);
-      console.log('   Falling back to default design');
-      // Fallback to default design if template fails
-      drawFallbackCertificate(doc, {
-        participantName,
-        division,
-        eventName,
-        eventDate,
-        certificateNumber,
-        templateType,
-        pageWidth,
-        pageHeight
+      console.error('   ❌ Failed to load custom template:', imageError.message);
+      console.log('   Falling back to local template or default design');
+      if (hasTemplate) {
+        tryFallbackTemplate(doc, { participantName, issueDate, pageWidth, pageHeight, nameX, nameY, nameColor });
+      } else {
+        drawFallbackCertificate(doc, { participantName, division, eventName, eventDate, certificateNumber, templateType, pageWidth, pageHeight });
+      }
+    }
+  } else if (hasTemplate) {
+    try {
+      const templatePng = fs.readFileSync(TEMPLATE_PATH);
+      const templateBuffer = await sharp(templatePng, { failOnError: false })
+        .flatten({ background: { r: 255, g: 255, b: 255 } })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+      doc.image(templateBuffer, 0, 0, { width: pageWidth, height: pageHeight });
+      overlayTextOnTemplate(doc, {
+        participantName, issueDate, pageWidth, pageHeight,
+        nameX: nameX ?? null, nameY: nameY ?? null,
+        nameColor: nameColor ?? null
       });
+    } catch (err) {
+      console.error('Local template failed:', err.message);
+      drawFallbackCertificate(doc, { participantName, division, eventName, eventDate, certificateNumber, templateType, pageWidth, pageHeight });
     }
   } else {
-    // No template - draw certificate from scratch
     drawFallbackCertificate(doc, {
       participantName,
       division,
@@ -116,38 +128,45 @@ function overlayTextOnTemplate(doc, options) {
     participantName,
     issueDate,
     pageWidth,
-    pageHeight
+    pageHeight,
+    nameX,
+    nameY,
+    nameColor
   } = options;
 
-  // Text color for name (visible on template)
-  const nameColor = '#000000';      // Black for participant name
-  const issueDateColor = '#FFFFFF'; // White for issue date
+  const textColor = nameColor || '#000000';
+  const issueDateColor = '#FFFFFF';
 
-  // ==================== PARTICIPANT NAME ====================
-  // Position: Center, adjust Y value based on your template's blank space
-  // Font size 28 works well for names up to ~30 characters
-  // For longer names, PDFKit will automatically wrap or you can reduce fontSize further
-  
-  doc.fontSize(28)                    // ← ADJUST: Font size (24-32 range recommended)
-    .fillColor(nameColor)             // ← ADJUST: Color (#000000 = black)
-    .font('Times-Bold')
-    .text(participantName || 'Participant Name', 0, 328, {  // ← ADJUST: Y position (305-335)
+  const xPos = nameX != null ? nameX : null;  // null = center; otherwise absolute left offset
+  const yPos = nameY != null ? nameY : 328;
+
+  const fontSize = 28;
+  doc.fontSize(fontSize)
+    .fillColor(textColor)
+    .font('Times-Bold');
+
+  if (xPos != null) {
+    // Custom X: position text starting at xPos, left-aligned
+    doc.text(participantName || 'Participant Name', xPos, yPos, {
+      width: pageWidth - xPos - 20,
+      align: 'left'
+    });
+  } else {
+    // Centered (default)
+    doc.text(participantName || 'Participant Name', 0, yPos, {
       align: 'center',
       width: pageWidth
     });
-
-  // ==================== ISSUE DATE (Bottom Right Corner) ====================
-  if (issueDate) {
-    doc.fontSize(9)                    // Small font for issue date
-      .fillColor(issueDateColor)       // White color
-      .font('Helvetica')
-      .text(`Issued: ${issueDate}`, pageWidth - 170, pageHeight - 30, {  // Bottom right corner
-        align: 'right',
-        width: 150
-      });
   }
 
-  // Note: All other elements (signatures, event details) are already on the template
+  if (issueDate) {
+    doc.fontSize(9)
+      .fillColor(issueDateColor)
+      .font('Helvetica')
+      .text(`Issued: ${issueDate}`, pageWidth - 170, pageHeight - 30, {
+        align: 'right', width: 150
+      });
+  }
 }
 
 /**

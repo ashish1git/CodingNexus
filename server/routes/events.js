@@ -914,6 +914,63 @@ router.post('/admin/events/:eventId/attendance/:participantId', authenticate, re
   }
 });
 
+// 10a. Get certificate template info
+router.get('/admin/events/:eventId/certificate/template', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: req.params.eventId },
+      select: { certificateTemplateUrl: true, certificateNameX: true, certificateNameY: true, certificateNameColor: true }
+    });
+    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error('Get certificate template error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 10b. Certificate template upload
+router.post('/admin/events/:eventId/certificate/template', authenticate, requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+
+    const result = await uploadToCloudinary(req.file.buffer, `events/certificates/${eventId}`);
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { certificateTemplateUrl: result.secure_url }
+    });
+
+    res.json({ success: true, url: result.secure_url });
+  } catch (error) {
+    console.error('Template upload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 10c. Save certificate name position
+router.put('/admin/events/:eventId/certificate/name-position', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { x, y } = req.body;
+    if (x == null || y == null) return res.status(400).json({ success: false, error: 'X and Y coordinates required' });
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        certificateNameX: Math.round(x),
+        certificateNameY: Math.round(y),
+        ...(req.body.color ? { certificateNameColor: req.body.color } : {})
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save name position error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 11. Admin: Preview certificate template with test data (MUST BE BEFORE :participantId route)
 router.post('/admin/events/:eventId/certificate/preview', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -951,7 +1008,11 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
       eventDate,
       certificateNumber: `PREVIEW-${Date.now()}`,
       templateType: 'participation',
-      issueDate: issueDateFormatted
+      issueDate: issueDateFormatted,
+      templateUrl: event.certificateTemplateUrl || undefined,
+      nameX: event.certificateNameX || undefined,
+      nameY: event.certificateNameY || undefined,
+      nameColor: event.certificateNameColor || undefined
     });
 
     pdfDoc.pipe(res);
@@ -2266,7 +2327,11 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
       eventDate,
       certificateNumber: certNumber,
       templateType,
-      issueDate: issueDateFormatted
+      issueDate: issueDateFormatted,
+      templateUrl: event.certificateTemplateUrl || undefined,
+      nameX: event.certificateNameX || undefined,
+      nameY: event.certificateNameY || undefined,
+      nameColor: event.certificateNameColor || undefined
     });
 
     pdfDoc.pipe(res);
@@ -2398,7 +2463,11 @@ router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest,
       eventDate,
       certificateNumber: certNumber,
       templateType,
-      issueDate: issueDateFormatted
+      issueDate: issueDateFormatted,
+      templateUrl: event.certificateTemplateUrl || undefined,
+      nameX: event.certificateNameX || undefined,
+      nameY: event.certificateNameY || undefined,
+      nameColor: event.certificateNameColor || undefined
     });
 
     pdfDoc.pipe(res);
