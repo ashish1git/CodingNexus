@@ -19,11 +19,14 @@ import { useNavigate } from 'react-router-dom';
 import { studentService } from '../../services/studentService';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
+import { ServerTimeProvider, useServerTime } from '../events/ServerTimeProvider';
+import { getQuizStatus } from '../events/utils/eventTimeUtils';
 import toast from 'react-hot-toast';
 
-const QuizList = () => {
+const QuizListInner = () => {
   const navigate = useNavigate();
   const { currentUser, userDetails } = useAuth();
+  const { serverNow } = useServerTime();
   const [refreshAttempted, setRefreshAttempted] = useState(false); // Prevent infinite refresh loops
   
   // Debug: Log user details on component mount ONCE
@@ -212,13 +215,6 @@ const QuizList = () => {
     fetchQuizzes();
   }, []); // Run once on mount (no polling to reduce server load)
 
-  const getQuizStatus = (quiz) => {
-    const now = new Date();
-    if (now >= quiz.startTime && now <= quiz.endTime) return 'active';
-    if (now < quiz.startTime) return 'upcoming';
-    return 'ended';
-  };
-
   const getQuizAttempt = (quizId) => {
     const attempt = quizAttempts.find(attempt => attempt.quizId === quizId);
     if (!attempt) return null;
@@ -234,7 +230,7 @@ const QuizList = () => {
   };
 
   const handleQuizClick = (quiz) => {
-    const status = getQuizStatus(quiz);
+    const status = getQuizStatus(quiz, serverNow);
     const attempt = getQuizAttempt(quiz.id);
     
     if (attempt) {
@@ -294,7 +290,7 @@ const QuizList = () => {
       // For upcoming view, show ALL quizzes (including attempted ones) but mark them differently
       filtered = quizzes.filter(quiz => {
         const matchesSearch = quiz.title?.toLowerCase().includes(searchTerm.toLowerCase());
-        const status = getQuizStatus(quiz);
+        const status = getQuizStatus(quiz, serverNow);
         const matchesFilter = filterStatus === 'all' || filterStatus === status;
         return matchesSearch && matchesFilter;
       });
@@ -469,7 +465,7 @@ const QuizList = () => {
         ) : filteredQuizzes.length > 0 ? (
           <div className="grid grid-cols-1 gap-4">
             {filteredQuizzes.map((quiz) => {
-              const status = getQuizStatus(quiz);
+              const status = getQuizStatus(quiz, serverNow);
               const attempt = getQuizAttempt(quiz.id);
               
               return (
@@ -626,4 +622,10 @@ const QuizList = () => {
   );
 };
 
-export default QuizList;
+export default function QuizList(props) {
+  return (
+    <ServerTimeProvider fetchTime={studentService.getServerTime}>
+      <QuizListInner {...props} />
+    </ServerTimeProvider>
+  );
+}

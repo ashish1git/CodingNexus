@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, ArrowLeft, Award, Calendar, Timer, RefreshCw } from 'lucide-react';
+import { Clock, CheckCircle, ArrowLeft, Award, Calendar, Timer, RefreshCw } from 'lucide-react';
 import { eventService } from '../../services/eventService';
+import { ServerTimeProvider, useServerTime } from '../events/ServerTimeProvider';
+import { getQuizStatus } from '../events/utils/eventTimeUtils';
 import toast from 'react-hot-toast';
 
-export default function EventQuizList() {
+function QuizListContent() {
   const navigate = useNavigate();
+  const { serverNow } = useServerTime();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, active, upcoming, attempted
@@ -29,15 +32,9 @@ export default function EventQuizList() {
     }
   };
 
-  const getQuizStatus = (quiz) => {
-    const now = new Date();
-    const start = new Date(quiz.startTime);
-    const end = new Date(quiz.endTime);
-    if (quiz.attempted) return 'attempted';
-    if (now < start) return 'upcoming';
-    if (now > end) return 'ended';
-    return 'active';
-  };
+  // Use imported getQuizStatus with server time
+
+  const statusFor = (quiz) => getQuizStatus(quiz, serverNow);
 
   const getStatusStyle = (status) => {
     switch (status) {
@@ -60,7 +57,7 @@ export default function EventQuizList() {
   };
 
   const filteredQuizzes = quizzes.filter(q => {
-    const status = getQuizStatus(q);
+    const status = statusFor(q);
     if (filter === 'all') return true;
     if (filter === 'active') return status === 'active';
     if (filter === 'upcoming') return status === 'upcoming';
@@ -129,7 +126,7 @@ export default function EventQuizList() {
         ) : (
           <div className="grid gap-4">
             {filteredQuizzes.map(quiz => {
-              const status = getQuizStatus(quiz);
+              const status = statusFor(quiz);
               return (
                 <div
                   key={quiz.id}
@@ -204,5 +201,13 @@ export default function EventQuizList() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function EventQuizList() {
+  return (
+    <ServerTimeProvider>
+      <QuizListContent />
+    </ServerTimeProvider>
   );
 }

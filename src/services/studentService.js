@@ -3,6 +3,12 @@ import { apiClient } from './apiClient';
 import toast from 'react-hot-toast';
 
 export const studentService = {
+  // ============ SERVER TIME ============
+
+  async getServerTime() {
+    return apiClient.get('/timer');
+  },
+
   // ============ NOTES ============
   
   async getNotes() {

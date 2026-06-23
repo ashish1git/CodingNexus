@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import logger from './utils/logger.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
@@ -14,6 +15,7 @@ import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-s
 import eventRoutes from './routes/events.js';
 import codeRoutes from './routes/code.js';
 import teamApplicationsRoutes from './routes/team-applications.js';
+import recruitmentRoutes from './routes/recruitment.js';
 import guestRoutes from './routes/guest.js';
 import aptitudeRoutes from './routes/aptitude.js';
 import aptitudeQuestionRoutes from './routes/aptitude/questions.js';
@@ -31,11 +33,11 @@ testDatabaseConnection();
 function testDatabaseConnection() {
   prisma.$connect()
     .then(() => {
-      console.log('✅ Database connected successfully');
+      logger.ok('Database connected successfully');
     })
     .catch((error) => {
-      console.error('❌ Database connection failed:', error.message);
-      console.error('Server will continue but database operations will fail');
+      logger.error('Database connection failed:', error.message);
+      logger.error('Server will continue but database operations will fail');
     });
 }
 
@@ -61,9 +63,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api', (req, res, next) => {
-  console.log(`\n📨 [API REQUEST] ${req.method} ${req.path}`);
-  console.log('   Competition path:', req.path.includes('/competitions'));
-  console.log('   Execute-test:', req.path.includes('/execute-test'));
+  logger.apiRequest(req);
   next();
 });
 
@@ -78,6 +78,7 @@ app.use('/api/submissions', asyncSubmissionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/code', codeRoutes);
 app.use('/api/team-applications', teamApplicationsRoutes);
+app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/guest', guestRoutes);
 app.use('/api/aptitude/ai-questions', aptitudeAiRoutes);
 app.use('/api/aptitude/practice', aptitudePracticeRoutes);
@@ -85,9 +86,13 @@ app.use('/api/aptitude/competition', aptitudeCompetitionRoutes);
 app.use('/api/aptitude/questions', aptitudeQuestionRoutes);
 app.use('/api/aptitude', aptitudeRoutes);
 
-// Health check
+// Health check & server time
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
+});
+
+app.get('/api/timer', (req, res) => {
+  res.json({ serverTime: new Date().toISOString() });
 });
 
 const distPath = path.join(__dirname, '../dist');
@@ -148,7 +153,7 @@ app.get('/*path', (req, res, next) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).json({
     success: false,
     error: err.message || 'Internal server error'
@@ -156,47 +161,45 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Server is listening and will stay alive...`);
+  logger.ok(`Server running on port ${PORT}`);
 
   const pollingEnabled = process.env.ENABLE_POLLING === 'true';
 
   if (!pollingEnabled) {
-    console.log('⏸️  Polling job disabled (set ENABLE_POLLING=true to enable)');
-    console.log('   Submissions will still work - results will be fetched on-demand');
+    logger.info('Polling job disabled (set ENABLE_POLLING=true to enable)');
     return;
   }
 
   const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '15000', 10);
-  console.log(`⏱️  Background polling job configured (${POLL_INTERVAL}ms intervals)`);
+  logger.info(`Background polling job configured (${POLL_INTERVAL}ms intervals)`);
 
   setTimeout(() => {
-    console.log('🎯 Starting background polling job...');
+    logger.info('Starting background polling job...');
 
     setInterval(async () => {
       try {
         await checkPendingSubmissions();
       } catch (error) {
-        console.error('❌ Background job error:', error.message);
+        logger.error('Background job error:', error.message);
       }
     }, POLL_INTERVAL);
   }, 2000);
 });
 
 server.on('error', (error) => {
-  console.error('🚨 Server error:', error);
+  logger.error('Server error:', error);
   if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use`);
+    logger.error(`Port ${PORT} is already in use`);
     process.exit(1);
   }
 });
 
-console.log(`✅ Server initialization complete - process will stay alive`);
+logger.ok('Server initialization complete');
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.error('Uncaught Exception:', error);
 });

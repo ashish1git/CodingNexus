@@ -942,3 +942,40 @@ model PasswordResetOTP {
   @@index([otp])
   @@index([expiresAt])
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Role-Based Recruitment System
+// ──────────────────────────────────────────────────────────────────
+
+/// Controls which recruitment roles are open for applications and their deadlines.
+model RecruitmentConfig {
+  id        String    @id @default(uuid())
+  role      String    @unique         // "DSA Trainer" | "Content Team" | "Cinematography Team" | "Design Team" | "Technical Team"
+  isOpen    Boolean   @default(false)
+  expiresAt DateTime?                 // null = no expiry
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([role])
+  @@index([isOpen])
+}
+
+/// Individual application submission for a recruitment role.
+/// Role-specific answers stored as JSON in roleAnswers.
+model RecruitmentSubmission {
+  id          String    @id @default(uuid())
+  role        String                    // Which role the user applied for
+  fullName    String
+  moodleId    String
+  whatsappNo  String
+  email       String
+  branch      String
+  year        String                    // FE / SE / TE / BE
+  roleAnswers Json                      // Role-specific Q&A as JSON object
+  submittedAt DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([role])
+  @@index([email])
+  @@index([submittedAt])
+}

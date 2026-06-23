@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
 import { sendRegistrationConfirmation, sendCertificateEmail, sendEventReminder } from '../services/emailService.js';
 import { generateCertificatePDF } from '../utils/certificateGenerator.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.get('/public/events', async (req, res) => {
       events: formattedEvents
     });
   } catch (error) {
-    console.error('Error fetching events:', error);
+    logger.error('Error fetching events:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch events' 
@@ -108,7 +109,7 @@ router.get('/public/events/:id', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching event:', error);
+    logger.error('Error fetching event:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch event details' 
@@ -302,10 +303,10 @@ router.post('/public/events/:id/register', async (req, res) => {
     // For event guests, we don't need email verification token
     sendRegistrationConfirmation(event, participant, null)
       .then(result => {
-        console.log('✅ Registration email sent:', result);
+        logger.ok('Registration email sent:', result);
       })
       .catch(error => {
-        console.error('❌ Email failed:', error.message);
+        logger.error('❌ Email failed:', error.message);
         // Don't fail registration if email fails
       });
 
@@ -354,7 +355,7 @@ router.post('/public/events/:id/register', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error.message, error.stack);
+    logger.error('Registration error:', error.message, error.stack);
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Registration failed. Please try again.',
@@ -564,7 +565,7 @@ router.post('/event-login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Event login error:', error);
+    logger.error('Event login error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Login failed. Please try again.' 
@@ -609,7 +610,7 @@ router.get('/verify-email', async (req, res) => {
       message: 'Email verified successfully! You can now login.'
     });
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Verification failed' 
@@ -691,7 +692,7 @@ router.post('/admin/events', authenticate, requireAdmin, async (req, res) => {
       event
     });
   } catch (error) {
-    console.error('Create event error:', error);
+    logger.error('Create event error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create event' 
@@ -721,7 +722,7 @@ router.get('/admin/events', authenticate, requireAdmin, async (req, res) => {
       events: events
     });
   } catch (error) {
-    console.error('Error fetching events:', error);
+    logger.error('Error fetching events:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch events' 
@@ -753,7 +754,7 @@ router.patch('/admin/events/:id/status', authenticate, requireAdmin, async (req,
       event
     });
   } catch (error) {
-    console.error('Update status error:', error);
+    logger.error('Update status error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update event status' 
@@ -829,7 +830,7 @@ router.get('/admin/events/:id/registrations', authenticate, requireAdmin, async 
       registrations: enrichedRegistrations
     });
   } catch (error) {
-    console.error('Error fetching registrations:', error);
+    logger.error('Error fetching registrations:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch registrations' 
@@ -869,7 +870,7 @@ router.delete('/admin/events/:eventId/registrations/:participantId', authenticat
       message: 'Registration deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting registration:', error);
+    logger.error('Error deleting registration:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete registration' 
@@ -906,7 +907,7 @@ router.post('/admin/events/:eventId/attendance/:participantId', authenticate, re
       message: 'Attendance marked successfully'
     });
   } catch (error) {
-    console.error('Mark attendance error:', error);
+    logger.error('Mark attendance error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to mark attendance' 
@@ -924,7 +925,7 @@ router.get('/admin/events/:eventId/certificate/template', authenticate, requireA
     if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
     res.json({ success: true, data: event });
   } catch (error) {
-    console.error('Get certificate template error:', error);
+    logger.error('Get certificate template error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -943,7 +944,7 @@ router.post('/admin/events/:eventId/certificate/template', authenticate, require
 
     res.json({ success: true, url: result.secure_url });
   } catch (error) {
-    console.error('Template upload error:', error);
+    logger.error('Template upload error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -966,7 +967,7 @@ router.put('/admin/events/:eventId/certificate/name-position', authenticate, req
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Save name position error:', error);
+    logger.error('Save name position error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1017,7 +1018,7 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
 
     pdfDoc.pipe(res);
   } catch (error) {
-    console.error('Certificate preview error:', error);
+    logger.error('Certificate preview error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate preview' });
   }
 });
@@ -1025,10 +1026,6 @@ router.post('/admin/events/:eventId/certificate/preview', authenticate, requireA
 // 12. Generate certificate (admin)
 router.post('/admin/events/:eventId/certificate/:participantId', authenticate, requireAdmin, async (req, res) => {
   const { eventId, participantId } = req.params;
-
-  console.log('🎫 Admin APPROVE certificate route HIT');
-  console.log('   Event ID:', eventId);
-  console.log('   Participant ID:', participantId);
 
   try {
     // Get registration
@@ -1049,7 +1046,6 @@ router.post('/admin/events/:eventId/certificate/:participantId', authenticate, r
     });
 
     if (existingCert) {
-      console.log('   ⚠️ Certificate already exists:', existingCert.id);
       return res.status(400).json({ 
         success: false, 
         error: 'Certificate already generated for this participant' 
@@ -1062,20 +1058,15 @@ router.post('/admin/events/:eventId/certificate/:participantId', authenticate, r
       where: { id: registration.id },
       data: {
         certificateApprovedByAdmin: true
-        // DON'T set certificateGenerated: true here!
-        // That only happens when student actually downloads
       }
     });
-
-    console.log('   ✅ Certificate APPROVED (not issued yet)');
-    console.log('   Student can now download and enter their certificate name');
 
     res.json({
       success: true,
       message: 'Certificate approved. Student can now download and enter their name.'
     });
   } catch (error) {
-    console.error('Certificate issue error:', error);
+    logger.error('Certificate approval error:', error);
     res.status(500).json({ success: false, error: 'Failed to issue certificate' });
   }
 });
@@ -1084,10 +1075,6 @@ router.post('/admin/events/:eventId/certificate/:participantId', authenticate, r
 router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdmin, async (req, res) => {
   const { eventId } = req.params;
   const { attendanceRequired } = req.body;
-
-  console.log('📦 Bulk certificate approval route HIT');
-  console.log('   Event ID:', eventId);
-  console.log('   Attendance required:', attendanceRequired);
 
   try {
     // First get all quiz attendees for this event (from actual quiz attempts)
@@ -1104,7 +1091,6 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
         select: { participantId: true }
       });
       quizAttendedParticipants = new Set(quizAttempts.map(a => a.participantId));
-      console.log('   Quiz attendees found:', quizAttendedParticipants.size);
     }
 
     // Get all confirmed registrations that are NOT already approved and NOT already downloaded
@@ -1112,23 +1098,19 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
       where: {
         eventId,
         registrationStatus: 'confirmed',
-        certificateGenerated: false,  // Not yet downloaded
-        certificateApprovedByAdmin: false  // Not yet approved
+        certificateGenerated: false,
+        certificateApprovedByAdmin: false
       },
       include: {
         participant: true
       }
     });
 
-    console.log('   Total registrations to check:', registrations.length);
-
     // Filter registrations: ONLY students who attended quiz
     const filteredRegistrations = registrations.filter(reg => {
       const quizAttended = reg.quizAttended || quizAttendedParticipants.has(reg.participantId);
-      return quizAttended;  // MUST have attended quiz
+      return quizAttended;
     });
-
-    console.log('   Students with quiz attendance:', filteredRegistrations.length);
 
     if (filteredRegistrations.length === 0) {
       return res.json({
@@ -1141,17 +1123,14 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
     const results = [];
 
     // Only APPROVE certificates - don't create EventCertificate records yet
-    // Student will create that when they download and enter their name
     for (const registration of filteredRegistrations) {
       try {
         await prisma.eventRegistration.update({
           where: { id: registration.id },
           data: {
-            certificateApprovedByAdmin: true  // Just approve - student will download later
+            certificateApprovedByAdmin: true
           }
         });
-
-        console.log('   ✅ Approved certificate for:', registration.participant.name);
 
         results.push({
           participantId: registration.participantId,
@@ -1159,7 +1138,7 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
           success: true
         });
       } catch (error) {
-        console.error('   ❌ Failed to approve for:', registration.participant.name, error);
+        logger.error('Failed to approve for:', registration.participant.name, error);
         results.push({
           participantId: registration.participantId,
           participantName: registration.participant.name,
@@ -1171,8 +1150,6 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
 
     const approvedCount = results.filter(r => r.success).length;
 
-    console.log('   📦 Bulk approval complete:', approvedCount, 'students approved');
-
     res.json({
       success: true,
       message: `Approved ${approvedCount} students who attended the quiz. They can now download and enter their certificate name.`,
@@ -1180,7 +1157,7 @@ router.post('/admin/events/:eventId/certificates/bulk', authenticate, requireAdm
       results
     });
   } catch (error) {
-    console.error('Bulk certificate generation error:', error);
+    logger.error('Bulk certificate generation error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to generate certificates' 
@@ -1221,19 +1198,13 @@ router.patch('/admin/events/:eventId/certificate/:participantId/name', authentic
       certificateName: newName.trim()
     });
   } catch (error) {
-    console.error('Edit certificate name error:', error);
+    logger.error('Edit certificate name error:', error);
     res.status(500).json({ success: false, error: 'Failed to update certificate name' });
   }
 });
 
 // 14. Admin: Revoke/Delete certificate (MUST BE BEFORE /admin/events/:id to avoid route conflict)
-// This allows student to re-download with a corrected name
 router.delete('/admin/events/:eventId/certificate/:participantId', authenticate, requireAdmin, async (req, res) => {
-  console.log('🗑️ ==========================================');
-  console.log('🗑️ Certificate RESET/REVOKE route HIT');
-  console.log('   Event ID:', req.params.eventId);
-  console.log('   Participant ID:', req.params.participantId);
-  
   try {
     const { eventId, participantId } = req.params;
 
@@ -1242,47 +1213,35 @@ router.delete('/admin/events/:eventId/certificate/:participantId', authenticate,
       where: { eventId, participantId }
     });
 
-    console.log('   Certificate found:', certificate ? { id: certificate.id, name: certificate.certificateName } : 'NONE');
-
     // Delete certificate if it exists
     if (certificate) {
       await prisma.eventCertificate.delete({
         where: { id: certificate.id }
       });
-      console.log('   ✅ EventCertificate DELETED:', certificate.id);
-    } else {
-      console.log('   ⚠️ No EventCertificate record to delete');
     }
 
     // Always update registration to revoke certificate status
-    const updated = await prisma.eventRegistration.updateMany({
+    await prisma.eventRegistration.updateMany({
       where: { eventId, participantId },
       data: {
         certificateGenerated: false,
         certificateId: null,
-        certificateApprovedByAdmin: false  // Also revoke approval
+        certificateApprovedByAdmin: false
       }
     });
-
-    console.log('   ✅ Registrations updated:', updated.count, 'records');
-    console.log('   ✅ certificateGenerated=false, certificateApprovedByAdmin=false');
-    console.log('🗑️ ==========================================');
 
     res.json({
       success: true,
       message: 'Certificate reset successfully. Student can now re-download with corrected name.'
     });
   } catch (error) {
-    console.error('Certificate revoke error:', error);
+    logger.error('Certificate revoke error:', error);
     res.status(500).json({ success: false, error: 'Failed to revoke certificate' });
   }
 });
 
 // 14. Delete event (admin)
 router.delete('/admin/events/:id', authenticate, requireAdmin, async (req, res) => {
-  console.log('🗑️ Event delete route HIT (should NOT be hit for certificate revoke)');
-  console.log('   ID:', req.params.id);
-  
   const { id } = req.params;
 
   try {
@@ -1295,7 +1254,7 @@ router.delete('/admin/events/:id', authenticate, requireAdmin, async (req, res) 
       message: 'Event deleted successfully'
     });
   } catch (error) {
-    console.error('Delete event error:', error);
+    logger.error('Delete event error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete event' 
@@ -1350,7 +1309,7 @@ router.put('/admin/events/:id', authenticate, requireAdmin, async (req, res) => 
       event
     });
   } catch (error) {
-    console.error('Update event error:', error);
+    logger.error('Update event error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update event' 
@@ -1396,10 +1355,15 @@ const authenticateEventGuest = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Event guest auth error:', error.message);
+    logger.error('Event guest auth error:', error.message);
     return res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 };
+
+// Timer sync - returns server time for client clock calibration
+router.get('/event-guest/timer', authenticateEventGuest, async (req, res) => {
+  res.json({ serverTime: new Date().toISOString() });
+});
 
 // 15. Create event quiz (admin)
 router.post('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async (req, res) => {
@@ -1407,19 +1371,10 @@ router.post('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async 
   const { title, description, startTime, endTime, duration, questions } = req.body;
 
   try {
-    console.log('📝 Received quiz creation request:');
-    console.log('  - eventId:', eventId);
-    console.log('  - title:', title);
-    console.log('  - duration:', duration, 'type:', typeof duration);
-    console.log('  - startTime:', startTime);
-    console.log('  - endTime:', endTime);
-    console.log('  - questions type:', Array.isArray(questions) ? `Array[${questions.length}]` : typeof questions);
-    console.log('  - createdBy:', req.user.id);
-
     // Validation
     const parsedDuration = parseInt(duration, 10);
     if (!title || !startTime || !endTime || isNaN(parsedDuration) || !Array.isArray(questions) || questions.length === 0) {
-      console.warn('❌ Validation failed:', { title: !!title, startTime: !!startTime, endTime: !!endTime, duration: parsedDuration, questions: Array.isArray(questions) });
+      logger.warn('Quiz creation validation failed:', { title: !!title, startTime: !!startTime, endTime: !!endTime, duration: parsedDuration });
       return res.status(400).json({ 
         success: false, 
         error: 'Title, start time, end time, duration, and questions are required',
@@ -1428,27 +1383,22 @@ router.post('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async 
     }
 
     // Check event exists
-    console.log('🔍 Checking if event exists:', eventId);
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) {
-      console.warn('❌ Event not found:', eventId);
+      logger.warn('Event not found:', eventId);
       return res.status(404).json({ success: false, error: 'Event not found' });
     }
-    console.log('✅ Event found:', event.title);
 
     // Validate questions structure
-    console.log('🔍 Validating questions structure...');
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       if (!q.question || !q.type) {
-        console.warn(`❌ Question ${i} invalid:`, q);
+        logger.warn(`Question ${i} invalid: missing question text or type`);
         return res.status(400).json({ success: false, error: `Question ${i}: missing question text or type` });
       }
     }
-    console.log('✅ Questions structure valid');
 
     // Create quiz
-    console.log('💾 Creating quiz in database with parsed duration:', parsedDuration);
     const quiz = await prisma.eventQuiz.create({
       data: {
         eventId,
@@ -1457,20 +1407,16 @@ router.post('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async 
         startTime: new Date(startTime),
         endTime: new Date(endTime),
         duration: parsedDuration,
-        questions: questions, // Assign as-is; Prisma handles JSON serialization
+        questions: questions,
         isActive: true,
         createdBy: req.user.id
       }
     });
 
-    console.log('✅ Quiz created successfully:', quiz.id);
+    logger.ok('Quiz created:', quiz.id);
     res.status(201).json({ success: true, message: 'Event quiz created', quiz });
   } catch (error) {
-    console.error('❌ Create event quiz error');
-    console.error('  - Message:', error.message);
-    console.error('  - Code:', error.code);
-    console.error('  - Meta:', error.meta);
-    console.error('  - Stack:', error.stack);
+    logger.error('Create event quiz error:', error.message);
     
     // Provide more specific error messages
     let errorMsg = 'Failed to create event quiz';
@@ -1491,7 +1437,7 @@ router.get('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async (
   const { eventId } = req.params;
 
   try {
-    console.log('📋 Fetching quizzes for event:', eventId);
+    logger.debug('Fetching quizzes for event:', eventId);
     const quizzes = await prisma.eventQuiz.findMany({
       where: { eventId },
       include: {
@@ -1500,7 +1446,7 @@ router.get('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async (
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log(`✅ Found ${quizzes.length} quizzes for event ${eventId}`);
+    logger.debug(`Found ${quizzes.length} quizzes for event ${eventId}`);
 
     const formatted = quizzes.map(q => ({
       ...q,
@@ -1511,8 +1457,8 @@ router.get('/admin/events/:eventId/quizzes', authenticate, requireAdmin, async (
 
     res.json({ success: true, quizzes: formatted });
   } catch (error) {
-    console.error('❌ Error fetching event quizzes:', error.message);
-    console.error('   Stack:', error.stack);
+    logger.error('❌ Error fetching event quizzes:', error.message);
+    logger.error('   Stack:', error.stack);
     res.status(500).json({ success: false, error: 'Failed to fetch event quizzes', details: error.message });
   }
 });
@@ -1538,7 +1484,7 @@ router.put('/admin/events/quizzes/:quizId', authenticate, requireAdmin, async (r
 
     res.json({ success: true, message: 'Event quiz updated', quiz });
   } catch (error) {
-    console.error('Update event quiz error:', error);
+    logger.error('Update event quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to update event quiz' });
   }
 });
@@ -1551,7 +1497,7 @@ router.delete('/admin/events/quizzes/:quizId', authenticate, requireAdmin, async
     await prisma.eventQuiz.delete({ where: { id: quizId } });
     res.json({ success: true, message: 'Event quiz deleted' });
   } catch (error) {
-    console.error('Delete event quiz error:', error);
+    logger.error('Delete event quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete event quiz' });
   }
 });
@@ -1573,7 +1519,7 @@ router.get('/admin/events/quizzes/:quizId/submissions', authenticate, requireAdm
 
     res.json({ success: true, submissions: attempts });
   } catch (error) {
-    console.error('Error fetching quiz submissions:', error);
+    logger.error('Error fetching quiz submissions:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch submissions' });
   }
 });
@@ -1630,7 +1576,7 @@ router.get('/event-guest/quizzes', authenticateEventGuest, async (req, res) => {
 
     res.json({ success: true, quizzes: formatted });
   } catch (error) {
-    console.error('Error fetching guest quizzes:', error);
+    logger.error('Error fetching guest quizzes:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch quizzes' });
   }
 });
@@ -1678,7 +1624,7 @@ router.get('/event-guest/quizzes/:quizId', authenticateEventGuest, async (req, r
       }
     });
   } catch (error) {
-    console.error('Error fetching quiz:', error);
+    logger.error('Error fetching quiz:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch quiz' });
   }
 });
@@ -1703,7 +1649,7 @@ router.get('/event-guest/quizzes/:quizId/attempt', authenticateEventGuest, async
       res.json({ success: true, data: null });
     }
   } catch (error) {
-    console.error('Error checking attempt:', error);
+    logger.error('Error checking attempt:', error);
     res.status(500).json({ success: false, error: 'Failed to check attempt' });
   }
 });
@@ -1777,7 +1723,7 @@ router.post('/event-guest/quizzes/:quizId/attempt', authenticateEventGuest, asyn
       data: attempt
     });
   } catch (error) {
-    console.error('Submit quiz error:', error);
+    logger.error('Submit quiz error:', error);
     if (error.code === 'P2002') {
       return res.status(400).json({ success: false, error: 'You have already attempted this quiz' });
     }
@@ -1827,7 +1773,7 @@ router.get('/event-guest/quizzes/:quizId/results', authenticateEventGuest, async
       }
     });
   } catch (error) {
-    console.error('Error fetching quiz results:', error);
+    logger.error('Error fetching quiz results:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch results' });
   }
 });
@@ -1879,7 +1825,7 @@ router.get('/event-guest/certificates', authenticateEventGuest, async (req, res)
 
     res.json({ success: true, certificates: filteredCertificates });
   } catch (error) {
-    console.error('Error fetching certificates:', error);
+    logger.error('Error fetching certificates:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch certificates' });
   }
 });
@@ -1903,7 +1849,7 @@ router.get('/event-guest/certificates/:certId', authenticateEventGuest, async (r
 
     res.json({ success: true, certificate });
   } catch (error) {
-    console.error('Error fetching certificate:', error);
+    logger.error('Error fetching certificate:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch certificate' });
   }
 });
@@ -1911,7 +1857,6 @@ router.get('/event-guest/certificates/:certId', authenticateEventGuest, async (r
 // 27. Get event stats for guest (quizzes attempted, certs earned)
 router.get('/event-guest/stats', authenticateEventGuest, async (req, res) => {
   try {
-    console.log('📊 Fetching stats for participant:', req.user.userId);
     const eventIds = req.user.events || [];
 
     const [quizAttempts, certificates] = await Promise.all([
@@ -1923,8 +1868,6 @@ router.get('/event-guest/stats', authenticateEventGuest, async (req, res) => {
       })
     ]);
 
-    console.log(`✅ Stats: ${quizAttempts} quizzes, ${certificates} certs`);
-
     res.json({
       success: true,
       stats: {
@@ -1934,8 +1877,8 @@ router.get('/event-guest/stats', authenticateEventGuest, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error fetching stats:', error.message);
-    console.error('   Stack:', error.stack);
+    logger.error('❌ Error fetching stats:', error.message);
+    logger.error('   Stack:', error.stack);
     res.status(500).json({ success: false, error: 'Failed to fetch stats', details: error.message });
   }
 });
@@ -1968,7 +1911,7 @@ router.post('/admin/events/:eventId/upload-media', authenticate, requireAdmin, u
       format: result.format
     });
   } catch (error) {
-    console.error('Error uploading media to Cloudinary:', error);
+    logger.error('Error uploading media to Cloudinary:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to upload file',
@@ -1983,15 +1926,7 @@ router.post('/admin/events/:eventId/media', authenticate, requireAdmin, async (r
     const { eventId } = req.params;
     const { title, description, fileUrl, fileType, fileName, fileSize } = req.body;
 
-    console.log('Received media save request:', {
-      eventId,
-      title,
-      fileUrl: fileUrl?.substring(0, 50) + '...',
-      fileType,
-      fileName,
-      fileSize,
-      userId: req.user?.id
-    });
+    logger.debug('Saving media:', { eventId, fileName, fileType, fileSize });
 
     if (!title || !fileUrl || !fileName) {
       return res.status(400).json({ success: false, error: 'Title, fileUrl, and fileName are required' });
@@ -2015,15 +1950,9 @@ router.post('/admin/events/:eventId/media', authenticate, requireAdmin, async (r
       }
     });
 
-    console.log('Media saved successfully:', media.id);
     res.status(201).json({ success: true, media });
   } catch (error) {
-    console.error('Error adding media:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      meta: error.meta
-    });
+    logger.error('Error adding media:', error.message);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to add media file',
@@ -2042,7 +1971,7 @@ router.get('/admin/events/:eventId/media', authenticate, requireAdmin, async (re
     });
     res.json({ success: true, media });
   } catch (error) {
-    console.error('Error fetching media:', error);
+    logger.error('Error fetching media:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch media files' });
   }
 });
@@ -2054,7 +1983,7 @@ router.delete('/admin/events/:eventId/media/:mediaId', authenticate, requireAdmi
     await prisma.eventMedia.delete({ where: { id: mediaId } });
     res.json({ success: true, message: 'Media file deleted' });
   } catch (error) {
-    console.error('Error deleting media:', error);
+    logger.error('Error deleting media:', error);
     res.status(500).json({ success: false, error: 'Failed to delete media file' });
   }
 });
@@ -2077,7 +2006,7 @@ router.get('/event-guest/events/:eventId/media', authenticateEventGuest, async (
 
     res.json({ success: true, media });
   } catch (error) {
-    console.error('Error fetching media for guest:', error);
+    logger.error('Error fetching media for guest:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch media files' });
   }
 });
@@ -2173,7 +2102,7 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
 
     res.json({ success: true, registrations: registrationsWithEligibility });
   } catch (error) {
-    console.error('Error fetching registrations:', error);
+    logger.error('Error fetching registrations:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch registrations' });
   }
 });
@@ -2183,14 +2112,10 @@ router.get('/event-guest/my-registrations', authenticateEventGuest, async (req, 
 router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { customName } = req.body; // Optional custom name for certificate (only on first download)
+    const { customName } = req.body;
     const participantId = req.user.userId;
 
-    console.log('📥 Certificate download request:', {
-      eventId,
-      participantId,
-      customName: customName || '(none - will use DB name or existing)'
-    });
+    logger.debug('Certificate download request:', { eventId, participantId, hasCustomName: !!customName });
 
     // Fetch registration
     const registration = await prisma.eventRegistration.findFirst({
@@ -2221,12 +2146,6 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
     let existingCert = await prisma.eventCertificate.findFirst({
       where: { eventId, participantId }
     });
-
-    console.log('🔍 Existing certificate:', existingCert ? {
-      id: existingCert.id,
-      certificateName: existingCert.certificateName,
-      certificateNumber: existingCert.certificateNumber
-    } : 'None - First time download');
 
     // Eligibility: quiz attended OR admin approved OR certificate already issued
     if (!quizAttended && !registration.certificateApprovedByAdmin && !existingCert) {
@@ -2261,19 +2180,14 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
       
       // Backfill certificateName for old certificates that have null
       if (!existingCert.certificateName) {
-        console.log('⚠️ Backfilling certificateName for old certificate...');
         await prisma.eventCertificate.update({
           where: { id: existingCert.id },
           data: { certificateName: certificateName }
         });
-        console.log('✅ Backfilled certificateName:', certificateName);
       }
-      
-      console.log('🔒 Using LOCKED name:', certificateName, '(customName ignored)');
     } else {
       // First time download - REQUIRE customName (don't silently use DB name)
       if (!customName?.trim()) {
-        console.log('❌ No customName provided and no existing certificate');
         return res.status(400).json({
           success: false,
           error: 'NAME_REQUIRED',
@@ -2336,7 +2250,7 @@ router.post('/event-guest/certificate/:eventId/download', authenticateEventGuest
 
     pdfDoc.pipe(res);
   } catch (error) {
-    console.error('Certificate download error:', error);
+    logger.error('Certificate download error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate certificate' });
   }
 });
@@ -2472,7 +2386,7 @@ router.get('/event-guest/certificate/:eventId/download', authenticateEventGuest,
 
     pdfDoc.pipe(res);
   } catch (error) {
-    console.error('Certificate download error:', error);
+    logger.error('Certificate download error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate certificate' });
   }
 });
@@ -2513,7 +2427,7 @@ router.put('/admin/events/:eventId/registrations/:registrationId/approve-certifi
       registration: updated
     });
   } catch (error) {
-    console.error('Certificate approval error:', error);
+    logger.error('Certificate approval error:', error);
     res.status(500).json({ success: false, error: 'Failed to update certificate approval' });
   }
 });
@@ -2544,7 +2458,7 @@ router.put('/admin/events/:eventId/certificates/bulk-approve', authenticate, req
       updatedCount: result.count
     });
   } catch (error) {
-    console.error('Bulk certificate approval error:', error);
+    logger.error('Bulk certificate approval error:', error);
     res.status(500).json({ success: false, error: 'Failed to bulk update certificate approvals' });
   }
 });
@@ -2610,7 +2524,7 @@ router.get('/admin/events/:eventId/registrations-with-eligibility', authenticate
 
     res.json({ success: true, registrations: registrationsWithEligibility });
   } catch (error) {
-    console.error('Error fetching registrations with eligibility:', error);
+    logger.error('Error fetching registrations with eligibility:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch registrations' });
   }
 });
@@ -2776,7 +2690,7 @@ router.post('/participant/events/:eventId/hackathon-registration', authenticate,
       registration
     });
   } catch (error) {
-    console.error('Error submitting hackathon registration:', error);
+    logger.error('Error submitting hackathon registration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to submit hackathon registration'
@@ -2813,7 +2727,7 @@ router.get('/participant/hackathon-registrations', authenticate, requireEventPar
       registrations
     });
   } catch (error) {
-    console.error('Error fetching hackathon registrations:', error);
+    logger.error('Error fetching hackathon registrations:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch hackathon registrations'
@@ -2853,7 +2767,7 @@ router.get('/participant/events/:eventId/hackathon-registration', authenticate, 
       registration: registration || null
     });
   } catch (error) {
-    console.error('Error fetching hackathon registration:', error);
+    logger.error('Error fetching hackathon registration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch hackathon registration'
@@ -2897,7 +2811,7 @@ router.delete('/participant/events/:eventId/hackathon-registration', authenticat
       message: 'Hackathon registration deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting hackathon registration:', error);
+    logger.error('Error deleting hackathon registration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete hackathon registration'
@@ -2971,7 +2885,7 @@ router.get('/admin/events/:eventId/hackathon-registrations', authenticate, requi
       }
     });
   } catch (error) {
-    console.error('Error fetching hackathon registrations:', error);
+    logger.error('Error fetching hackathon registrations:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch hackathon registrations'
@@ -3075,7 +2989,7 @@ router.put('/admin/events/:eventId/hackathon-registrations/:registrationId', aut
       registration: updatedRegistration
     });
   } catch (error) {
-    console.error('Error updating hackathon registration:', error);
+    logger.error('Error updating hackathon registration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update hackathon registration'
@@ -3186,7 +3100,7 @@ router.get('/admin/events/:eventId/hackathon-registrations/download-csv', authen
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send('\uFEFF' + csvContent); // Add BOM for proper UTF-8 encoding in Excel
   } catch (error) {
-    console.error('Error downloading hackathon registrations CSV:', error);
+    logger.error('Error downloading hackathon registrations CSV:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to download hackathon registrations CSV'

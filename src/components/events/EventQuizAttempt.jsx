@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { eventService } from '../../services/eventService';
+import { ServerTimeProvider, useServerTime } from '../events/ServerTimeProvider';
+import { getQuizRemainingSeconds, getQuizStatus, formatTime } from '../events/utils/eventTimeUtils';
 import toast from 'react-hot-toast';
 
-export default function EventQuizAttempt() {
+function QuizAttemptContent() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const { serverNow, getRemainingSeconds } = useServerTime();
+  const submittedRef = useRef(false);
 
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState({});
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [endTime, setEndTime] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -23,28 +26,26 @@ export default function EventQuizAttempt() {
     checkAttempt();
   }, [quizId]);
 
+  // Live countdown using server-adjusted time
   useEffect(() => {
-    if (timeRemaining <= 0) return;
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeRemaining]);
+    if (!quiz?.endTime) return;
 
-  const formatTime = (seconds) => {
-    if (seconds < 0) seconds = 0;
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+    const updateTimer = () => {
+      if (submittedRef.current) return;
+      const remaining = getRemainingSeconds(quiz);
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0 && !submittedRef.current) {
+        submittedRef.current = true;
+        toast('⏰ Time is up! Auto-submitting...');
+        setTimeout(() => handleSubmit(), 1000);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [quiz?.endTime, quiz?.duration]);
 
   const fetchQuiz = async () => {
     try {
@@ -56,22 +57,17 @@ export default function EventQuizAttempt() {
       }
 
       const quizData = response.data;
-      const now = new Date();
-      const start = new Date(quizData.startTime);
-      const end = new Date(quizData.endTime);
 
-      if (now < start || now > end) {
+      // Check if quiz is active using server time
+      const status = getQuizStatus(quizData, serverNow);
+      if (status !== 'active') {
         toast.error('Quiz is not active right now');
         navigate('/event-dashboard/quizzes');
         return;
       }
 
-      const windowRemainingSeconds = Math.floor((end - now) / 1000);
-      const adminDurationSeconds = (quizData.duration || 60) * 60;
-      const finalDuration = Math.min(windowRemainingSeconds, adminDurationSeconds);
-
-      setTimeRemaining(finalDuration);
-      setEndTime(end);
+      const remaining = getQuizRemainingSeconds(quizData, serverNow);
+      setTimeRemaining(remaining);
       setQuiz(quizData);
     } catch (error) {
       console.error('Error fetching quiz:', error);
@@ -99,7 +95,8 @@ export default function EventQuizAttempt() {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (submitting || !quiz) return;
+    if (submittedRef.current || !quiz) return;
+    submittedRef.current = true;
     setSubmitting(true);
 
     try {
@@ -123,7 +120,7 @@ export default function EventQuizAttempt() {
       setSubmitting(false);
       setShowConfirmSubmit(false);
     }
-  }, [submitting, quiz, answers, quizId, navigate]);
+  }, [quiz, answers, quizId, navigate]);
 
   if (loading) {
     return (
@@ -300,5 +297,13 @@ export default function EventQuizAttempt() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function EventQuizAttempt() {
+  return (
+    <ServerTimeProvider>
+      <QuizAttemptContent />
+    </ServerTimeProvider>
   );
 }

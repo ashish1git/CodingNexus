@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Award, CheckCircle, XCircle, Clock, Calendar, Home, RefreshCw, AlertCircle } from 'lucide-react';
 import { eventService } from '../../services/eventService';
+import { ServerTimeProvider, useServerTime } from '../events/ServerTimeProvider';
 import toast from 'react-hot-toast';
 
-export default function EventQuizResults() {
+function QuizResultsContent() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const { serverNow } = useServerTime();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -261,5 +263,13 @@ export default function EventQuizResults() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function EventQuizResults() {
+  return (
+    <ServerTimeProvider>
+      <QuizResultsContent />
+    </ServerTimeProvider>
   );
 }

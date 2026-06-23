@@ -1,5 +1,5 @@
 import React from 'react';
-import Card from '../../../shared/Card';
+import Card from '../../../../shared/Card';
 import { formatIST } from '../utils/resultsUtils';
 
 const LeaderboardRow = ({ entry, isCurrentUser }) => {

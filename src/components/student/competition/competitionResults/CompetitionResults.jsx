@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCompetitionResults } from './hooks/useCompetitionResults';
-import Loading from '../../shared/Loading';
+import Loading from '../../../shared/Loading';
 import ResultsHeader from './components/ResultsHeader';
 import ResultsTabs from './components/ResultsTabs';
 import SubmissionStatusCard from './components/SubmissionStatusCard';

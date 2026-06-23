@@ -13,6 +13,7 @@ import LandingPage from './components/layout/LandingPage';
 import AboutPage from './components/layout/AboutPage';
 import ContactPage from './components/layout/ContactPage';
 import TeamApplicationPage from './components/layout/TeamApplicationPage';
+import RecruitmentForm from './components/recruitment/RecruitmentForm';
 import MaintenancePage from './components/layout/MaintenancePage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
@@ -79,6 +80,8 @@ import AdminHackathonRegistrations from './components/admin/AdminHackathonRegist
 import TeamApplicationsManager from './components/admin/TeamApplicationsManager';
 import GuestManagementPage from './components/admin/GuestManagementPage';
 import AptitudeManager from './components/admin/AptitudeManager';
+const RecruitmentConfigManager = lazy(() => import('./components/admin/RecruitmentConfigManager'));
+const RecruitmentSubmissions = lazy(() => import('./components/admin/RecruitmentSubmissions'));
 
 function App() {
   // Check if maintenance mode is enabled
@@ -126,6 +129,7 @@ function App() {
               <Route path="/about" element={<AboutPage />} />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="/apply-team" element={<TeamApplicationPage />} />
+              <Route path="/recruit" element={<RecruitmentForm />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/admin-login" element={<AdminLogin />} />
@@ -466,6 +470,24 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <GuestManagementPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Recruitment Management */}
+              <Route
+                path="/admin/recruitment"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <RecruitmentConfigManager />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/recruitment/submissions"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <RecruitmentSubmissions />
                   </ProtectedRoute>
                 }
               />

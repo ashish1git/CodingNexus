@@ -4,6 +4,12 @@ import apiClient from './apiClient';
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 class EventService {
+  // ==================== SERVER TIME ====================
+
+  async getServerTime() {
+    return apiClient.get('/timer');
+  }
+
   // ==================== QUIZ ENDPOINTS (Guest) ====================
   
   async getQuizzes() {

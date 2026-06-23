@@ -1,5 +1,5 @@
 import React from 'react';
-import Card from '../../../shared/Card';
+import Card from '../../../../shared/Card';
 import { getStatusColor, getStatusIcon, getDifficultyStyle, formatIST } from '../utils/resultsUtils';
 
 const ProblemResultCard = ({ problem, index }) => {

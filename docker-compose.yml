@@ -6,10 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: codingnexus-app
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    network_mode: "host"
 
     env_file:
       - .env.docker

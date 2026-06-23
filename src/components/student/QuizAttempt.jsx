@@ -1,10 +1,25 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Clock, AlertCircle, CheckCircle, ChevronLeft, ChevronRight, ShieldAlert, Maximize2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { studentService } from "../../services/studentService";
 import useQuizProtection from "./quiz/hooks/useQuizProtection";
+
+// Server time offset — synced once then maintained locally
+let _serverTimeOffset = 0;
+
+const getServerNow = () => new Date(Date.now() + _serverTimeOffset);
+
+const syncServerTime = async () => {
+  try {
+    const data = await studentService.getServerTime();
+    const serverMs = new Date(data.serverTime).getTime();
+    _serverTimeOffset = serverMs - Date.now();
+  } catch {
+    // fall back to client clock silently
+  }
+};
 
 const QuizAttempt = () => {
   const { quizId } = useParams();
@@ -46,19 +61,33 @@ const QuizAttempt = () => {
     checkAttempt();
   }, [quizId, userDetails]);
 
+  // Server-synced countdown — replaces the old client-side setInterval
   useEffect(() => {
-    if (timeRemaining <= 0) return;
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeRemaining]);
+    if (!quiz?.endTime) return;
+
+    const updateTimer = () => {
+      if (submittingRef.current) return;
+      const end = new Date(quiz.endTime);
+      const remaining = Math.floor((end - getServerNow()) / 1000);
+      setTimeRemaining(Math.max(remaining, 0));
+      if (remaining <= 0 && !submittingRef.current) {
+        submittingRef.current = true;
+        handleSubmit();
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [quiz?.endTime, quiz?.duration]);
+
+  // Server time sync every 30s
+  useEffect(() => {
+    if (!quizId) return;
+    syncServerTime();
+    const interval = setInterval(syncServerTime, 30000);
+    return () => clearInterval(interval);
+  }, [quizId]);
 
   const formatTime = (seconds) => {
     if (seconds < 0) seconds = 0;
@@ -92,7 +121,7 @@ const QuizAttempt = () => {
       }
 
       const quizData = response.data;
-      const now = new Date();
+      const now = getServerNow();
       const start = new Date(quizData.startTime);
       const end = new Date(quizData.endTime);
 

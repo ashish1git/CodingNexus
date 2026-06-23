@@ -96,6 +96,7 @@ const AdminDashboard = () => {
     { icon: <Brain />, label: 'Aptitude', path: '/admin/aptitude' },
     { icon: <CalendarDays />, label: 'Events', path: '/admin/events' },
     { icon: <UserCheck />, label: 'Team Applications', path: '/admin/team-applications' },
+    { icon: <UserPlus />, label: 'Recruitment', path: '/admin/recruitment' },
     { icon: <FileText />, label: 'Certificates', path: '/admin/certificates' },
     { icon: <Mail />, label: 'Bulk Email', path: '/admin/bulk-email' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
