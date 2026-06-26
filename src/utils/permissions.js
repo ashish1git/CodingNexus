@@ -133,6 +133,21 @@ export const PERMISSIONS = {
     key: 'sendBulkEmails',
     label: 'Send Bulk Emails',
     description: 'Send bulk emails to students'
+  },
+  manageDsaNotes: {
+    key: 'manageDsaNotes',
+    label: 'Manage DSA Notes',
+    description: 'Review and approve DSA lecture notes'
+  },
+  manageDsaSchedule: {
+    key: 'manageDsaSchedule',
+    label: 'Manage DSA Schedule',
+    description: 'Create, edit, and schedule DSA lectures and timetables'
+  },
+  manageDsaTrainers: {
+    key: 'manageDsaTrainers',
+    label: 'Manage DSA Trainers',
+    description: 'Assign and manage DSA trainers'
   }
 };
 

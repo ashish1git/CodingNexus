@@ -95,7 +95,9 @@ export default function RecruitmentConfigManager() {
 
   const handleExpiryChange = async (role, value) => {
     try {
-      const expiresAt = value || null;
+      // Convert local datetime string to proper UTC ISO string so the server
+      // interprets it as the intended IST time instead of offsetting by +5:30.
+      const expiresAt = value ? new Date(value).toISOString() : null;
       const res = await recruitmentService.updateConfig(role, { expiresAt });
       if (res.success) {
         setConfigs((prev) => prev.map((c) => (c.role === role ? { ...c, ...res.config } : c)));

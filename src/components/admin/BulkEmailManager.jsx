@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { 
   Mail, Send, Users, Filter, Eye, X, 
   CheckCircle, AlertCircle, Loader, FileText, Upload, 
@@ -13,6 +13,8 @@ import toast from 'react-hot-toast';
 const BulkEmailManager = () => {
   const { userDetails } = useAuth();
   const canSendBulkEmails = hasPermission(userDetails, 'sendBulkEmails');
+  const [searchParams] = useSearchParams();
+  const autoFetched = useRef(false);
   
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -34,8 +36,29 @@ const BulkEmailManager = () => {
   const [useCustomHTML, setUseCustomHTML] = useState(false);
   const [htmlContent, setHtmlContent] = useState('');
 
+  // Recruitment filter state
+  const [recruitmentStatusFilter, setRecruitmentStatusFilter] = useState('shortlisted');
+  const [recruitmentRoleFilter, setRecruitmentRoleFilter] = useState('');
+  const [recruitmentStats, setRecruitmentStats] = useState(null);
+
   // Batch options
   const batchOptions = ['Basic', 'Python', 'Web', 'Advanced', 'Full Stack', 'Data Science'];
+
+  // Auto-fetch if navigated from recruitment shortlisting
+  useEffect(() => {
+    const source = searchParams.get('source');
+    const status = searchParams.get('status');
+    if (source === 'recruitment' && status && !autoFetched.current) {
+      autoFetched.current = true;
+      setFilterType('recruitment');
+      setRecruitmentStatusFilter(status);
+      // Use a small timeout to let React batch state updates before fetch
+      const timer = setTimeout(() => {
+        fetchRecipients();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Load events for filtering
   useEffect(() => {
@@ -96,6 +119,28 @@ const BulkEmailManager = () => {
     setLoading(true);
     setSearchQuery(''); // Reset search when fetching new recipients
     try {
+      // Handle Recruitment Submissions separately
+      if (filterType === 'recruitment') {
+        const data = await apiClient.post('/admin/email/recruitment-recipients', {
+          statusFilter: recruitmentStatusFilter,
+          roleFilter: recruitmentRoleFilter || undefined,
+          searchQuery: searchQuery
+        });
+
+        if (data.success) {
+          setRecipients(data.recipients);
+          setFilteredRecipients(data.recipients);
+          setSelectedRecipients(data.recipients.map(r => r.id));
+          setRecruitmentStats(data.stats || null);
+          setEventInfo({
+            title: `Recruitment Submissions${recruitmentStatusFilter !== 'all' ? ' (' + recruitmentStatusFilter + ')' : ''}`,
+            type: 'recruitment'
+          });
+          toast.success(`Found ${data.count} ${recruitmentStatusFilter !== 'all' ? recruitmentStatusFilter : ''} applicants`);
+        }
+        return;
+      }
+
       // Handle Team Applications separately
       if (filterType === 'teamApplication') {
         const data = await apiClient.post('/admin/email/team-applications', {
@@ -296,12 +341,14 @@ const BulkEmailManager = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
                   >
                     <option value="event">📅 By Event Registration (Recommended)</option>
+                    <option value="recruitment">🎯 Recruitment Submissions</option>
                     <option value="teamApplication">👥 Team Applications</option>
                     <option value="batch">🎓 By Batch</option>
                     <option value="all">👥 All Active Students</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     {filterType === 'event' && '✨ Perfect for event-related communications'}
+                    {filterType === 'recruitment' && '🎯 Send to shortlisted/pending/rejected applicants'}
                     {filterType === 'teamApplication' && '🎯 Send to all team applicants'}
                     {filterType === 'batch' && '📚 Target specific learning groups'}
                     {filterType === 'all' && '📢 System-wide announcements'}
@@ -443,10 +490,60 @@ const BulkEmailManager = () => {
                   </div>
                 )}
 
+                {/* Recruitment Submissions Filter */}
+                {filterType === 'recruitment' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Filter by Status
+                    </label>
+                    <div className="space-y-2 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                      {['all', 'shortlisted', 'pending', 'rejected'].map((status) => {
+                        const colors = {
+                          all: { active: 'bg-indigo-600 text-white', inactive: 'bg-white text-gray-700 hover:bg-indigo-100' },
+                          shortlisted: { active: 'bg-green-600 text-white', inactive: 'bg-white text-green-700 hover:bg-green-100' },
+                          pending: { active: 'bg-amber-500 text-white', inactive: 'bg-white text-amber-700 hover:bg-amber-100' },
+                          rejected: { active: 'bg-red-500 text-white', inactive: 'bg-white text-red-700 hover:bg-red-100' },
+                        };
+                        const c = colors[status] || colors.all;
+                        return (
+                          <label
+                            key={status}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                              recruitmentStatusFilter === status ? c.active : c.inactive
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="recruitmentStatus"
+                              value={status}
+                              checked={recruitmentStatusFilter === status}
+                              onChange={(e) => setRecruitmentStatusFilter(e.target.value)}
+                              className="sr-only"
+                            />
+                            <span className="font-medium text-sm capitalize">{status === 'all' ? 'All Applicants' : status}</span>
+                            {recruitmentStats && (
+                              <span className={`text-xs font-bold ml-auto ${
+                                recruitmentStatusFilter === status ? 'text-white/80' : 'text-gray-500'
+                              }`}>
+                                {recruitmentStats[status] ?? (status === 'all' ? recruitmentStats.total : '—')}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                      <div className="mt-2 pt-2 border-t border-indigo-300">
+                        <p className="text-xs text-indigo-700 font-medium">
+                          💡 Default: Shortlisted — mail to selected candidates
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Fetch Recipients Button */}
                 <button
                   onClick={fetchRecipients}
-                  disabled={loading || (filterType !== 'all' && filterType !== 'teamApplication' && !filterValue)}
+                  disabled={loading || (filterType !== 'all' && filterType !== 'teamApplication' && filterType !== 'recruitment' && !filterValue)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {loading ? (

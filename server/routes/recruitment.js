@@ -414,6 +414,144 @@ router.get(
 );
 
 /**
+ * PUT /api/recruitment/admin/submissions/:id/status
+ * Update a submission's status (pending / shortlisted / rejected).
+ * Sends a shortlist email automatically when status is 'shortlisted'.
+ */
+router.put(
+  '/admin/submissions/:id/status',
+  authenticate,
+  authorizeRole('admin', 'subadmin', 'superadmin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, sendEmail } = req.body;
+
+      if (!['pending', 'shortlisted', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid status. Must be pending, shortlisted, or rejected' });
+      }
+
+      const sub = await prisma.recruitmentSubmission.findUnique({ where: { id } });
+      if (!sub) {
+        return res.status(404).json({ success: false, error: 'Submission not found' });
+      }
+
+      const updated = await prisma.recruitmentSubmission.update({
+        where: { id },
+        data: { status, reviewedBy: req.user.id, reviewedAt: new Date() },
+      });
+
+      // Auto-send shortlist email
+      let emailSent = false;
+      if (status === 'shortlisted' && sendEmail !== false) {
+        try {
+          const roleLabel = ROLES[sub.role]?.label || sub.role;
+          await sendEmail({
+            to: sub.email,
+            subject: `🎉 Congratulations! Shortlisted for ${roleLabel} — Coding Nexus`,
+            html: generalNotification(
+              sub.fullName,
+              `🎉 You've Been Shortlisted for ${roleLabel}!`,
+              `<p>Congratulations! We are pleased to inform you that you have been <strong>shortlisted</strong> for the position of <strong>${roleLabel}</strong> at Coding Nexus.</p>
+               <div class="success-box">
+                 <strong>✅ What's Next?</strong>
+                 <p style="margin-top: 8px;">You will receive further details about the interview schedule shortly via email and WhatsApp. Keep an eye on your inbox!</p>
+               </div>
+               <p>If you have any questions in the meantime, feel free to reach out to us.</p>`,
+              'success'
+            ),
+            text: `Hello ${sub.fullName},\n\nCongratulations! You have been shortlisted for the ${roleLabel} position at Coding Nexus.\n\nYou will receive further details about the interview schedule shortly via email and WhatsApp.\n\nBest regards,\nCoding Nexus Team`
+          });
+          emailSent = true;
+        } catch (emailError) {
+          console.error('Failed to send shortlist email:', emailError);
+        }
+      }
+
+      return res.json({ success: true, submission: updated, emailSent });
+    } catch (error) {
+      console.error('Status update error:', error);
+      return res.status(500).json({ success: false, error: 'Failed to update status' });
+    }
+  }
+);
+
+/**
+ * POST /api/recruitment/admin/submissions/batch-status
+ * Batch update status for multiple submissions.
+ * Sends shortlist emails automatically when status is 'shortlisted'.
+ */
+router.post(
+  '/admin/submissions/batch-status',
+  authenticate,
+  authorizeRole('admin', 'subadmin', 'superadmin'),
+  async (req, res) => {
+    try {
+      const { ids, status, sendEmail } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'ids array is required' });
+      }
+      if (!['pending', 'shortlisted', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid status. Must be pending, shortlisted, or rejected' });
+      }
+
+      const result = await prisma.recruitmentSubmission.updateMany({
+        where: { id: { in: ids } },
+        data: { status, reviewedBy: req.user.id, reviewedAt: new Date() },
+      });
+
+      // Send shortlist emails to each candidate
+      let emailsSent = 0;
+      let emailErrors = 0;
+      if (status === 'shortlisted' && sendEmail !== false) {
+        const submissions = await prisma.recruitmentSubmission.findMany({
+          where: { id: { in: ids } }
+        });
+
+        for (const sub of submissions) {
+          try {
+            const roleLabel = ROLES[sub.role]?.label || sub.role;
+            await sendEmail({
+              to: sub.email,
+              subject: `🎉 Congratulations! Shortlisted for ${roleLabel} — Coding Nexus`,
+              html: generalNotification(
+                sub.fullName,
+                `🎉 You've Been Shortlisted for ${roleLabel}!`,
+                `<p>Congratulations! We are pleased to inform you that you have been <strong>shortlisted</strong> for the position of <strong>${roleLabel}</strong> at Coding Nexus.</p>
+                 <div class="success-box">
+                   <strong>✅ What's Next?</strong>
+                   <p style="margin-top: 8px;">You will receive further details about the interview schedule shortly via email and WhatsApp. Keep an eye on your inbox!</p>
+                 </div>
+                 <p>If you have any questions in the meantime, feel free to reach out to us.</p>`,
+                'success'
+              ),
+              text: `Hello ${sub.fullName},\n\nCongratulations! You have been shortlisted for the ${roleLabel} position at Coding Nexus.\n\nYou will receive further details about the interview schedule shortly via email and WhatsApp.\n\nBest regards,\nCoding Nexus Team`
+            });
+            emailsSent++;
+          } catch (emailError) {
+            console.error(`Failed to send shortlist email to ${sub.email}:`, emailError);
+            emailErrors++;
+          }
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      return res.json({
+        success: true,
+        count: result.count,
+        emailsSent: status === 'shortlisted' ? emailsSent : 0,
+        emailErrors: status === 'shortlisted' ? emailErrors : 0
+      });
+    } catch (error) {
+      console.error('Batch status update error:', error);
+      return res.status(500).json({ success: false, error: 'Failed to batch update status' });
+    }
+  }
+);
+
+/**
  * DELETE /api/recruitment/admin/submissions/:id
  * Delete a single submission.
  */

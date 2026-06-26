@@ -310,6 +310,75 @@ export const ROLES = {
       },
     ],
   },
+
+  'Management Team': {
+    label: 'Management Team',
+    icon: 'Briefcase',
+    description:
+      'Drive the planning, coordination, and execution of Coding Nexus initiatives — event management, outreach, team operations, and strategic growth.',
+    color: 'amber',
+    questions: [
+      {
+        id: 'managementSkills',
+        type: 'checkbox',
+        label: 'Which management areas are you strongest in?',
+        required: true,
+        options: [
+          'Event Planning & Coordination',
+          'Team Leadership',
+          'Outreach & Communication',
+          'Social Media Management',
+          'Sponsorship & Partnerships',
+          'Logistics & Operations',
+          'Content Strategy',
+          'Public Speaking',
+        ],
+      },
+      {
+        id: 'leadershipExp',
+        type: 'textarea',
+        label: 'Do you have any leadership or team coordination experience? Share details.',
+        required: true,
+        placeholder: 'Describe any club, event, or team leadership roles you have held...',
+      },
+      {
+        id: 'eventOrgExp',
+        type: 'textarea',
+        label: 'Have you organized or volunteered at any events before? Describe your role.',
+        required: false,
+        placeholder: 'Tell us about events you have helped organize...',
+      },
+      {
+        id: 'managementApproach',
+        type: 'select',
+        label: 'What interests you most in team management?',
+        required: true,
+        options: [
+          'Planning & Strategy',
+          'Team Coordination',
+          'Public Relations & Outreach',
+          'Event Execution',
+          'Sponsorship & Finance',
+          'Overall Club Operations',
+        ],
+      },
+      {
+        id: 'timeCommitment',
+        type: 'range',
+        label: 'How many hours per week can you dedicate to Coding Nexus activities? (1-20)',
+        required: true,
+        min: 1,
+        max: 20,
+      },
+      {
+        id: 'whyManagementTeam',
+        type: 'textarea',
+        label: 'Why do you want to join the Management Team at Coding Nexus?',
+        required: true,
+        placeholder: 'Share your motivation and vision...',
+      },
+    ],
+  },
 };
 
 /** Returns the question set for a given role key, or null if not found. */

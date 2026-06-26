@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, ChevronDown, ChevronUp, Download, Eye, EyeOff, Filter, Loader2,
-  Mail, Phone, RefreshCw, Search, Settings, Trash2, Users,
+  Mail, Phone, RefreshCw, Search, Settings, Trash2, Users, CheckCircle, XCircle, Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { recruitmentService } from '../../services/recruitmentService';
@@ -23,22 +23,34 @@ const BADGE_CLASSES = {
   cyan: 'bg-cyan-100 text-cyan-700',
 };
 
+const STATUS_BADGES = {
+  pending: { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, label: 'Pending' },
+  shortlisted: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle, label: 'Shortlisted' },
+  rejected: { bg: 'bg-red-100', text: 'text-red-700', icon: XCircle, label: 'Rejected' },
+};
+
 export default function RecruitmentSubmissions() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkStatusUpdating, setBulkStatusUpdating] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [shortlistOnlyMode, setShortlistOnlyMode] = useState(false);
 
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
       if (roleFilter) params.role = roleFilter;
+      if (statusFilter) params.status = statusFilter;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       const res = await recruitmentService.getSubmissions(params);
@@ -49,30 +61,42 @@ export default function RecruitmentSubmissions() {
     } finally {
       setLoading(false);
     }
-  }, [roleFilter, startDate, endDate]);
+  }, [roleFilter, statusFilter, startDate, endDate]);
 
   useEffect(() => {
     fetchSubmissions();
   }, [fetchSubmissions]);
 
-  // Unique roles from submissions + any filter
   const availableRoles = useMemo(() => {
     const roles = new Set(submissions.map((s) => s.role));
     return [...roles].sort();
   }, [submissions]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return submissions;
-    const q = search.toLowerCase();
-    return submissions.filter(
-      (s) =>
-        s.fullName?.toLowerCase().includes(q) ||
-        s.email?.toLowerCase().includes(q) ||
-        s.moodleId?.toLowerCase().includes(q) ||
-        s.whatsappNo?.toLowerCase().includes(q) ||
-        s.branch?.toLowerCase().includes(q)
-    );
+    let result = submissions;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.fullName?.toLowerCase().includes(q) ||
+          s.email?.toLowerCase().includes(q) ||
+          s.moodleId?.toLowerCase().includes(q) ||
+          s.whatsappNo?.toLowerCase().includes(q) ||
+          s.branch?.toLowerCase().includes(q)
+      );
+    }
+    return result;
   }, [submissions, search]);
+
+  const stats = useMemo(() => {
+    const all = submissions;
+    return {
+      total: all.length,
+      pending: all.filter((s) => s.status === 'pending').length,
+      shortlisted: all.filter((s) => s.status === 'shortlisted').length,
+      rejected: all.filter((s) => s.status === 'rejected').length,
+    };
+  }, [submissions]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -101,6 +125,7 @@ export default function RecruitmentSubmissions() {
       const res = await recruitmentService.deleteSubmission(id);
       if (res.success) {
         setSubmissions((prev) => prev.filter((s) => s.id !== id));
+        setSelectedIds((prev) => prev.filter((pid) => pid !== id));
         toast.success('Submission deleted');
       } else {
         toast.error(res.error || 'Failed to delete');
@@ -112,10 +137,143 @@ export default function RecruitmentSubmissions() {
     }
   };
 
+  const handleStatusUpdate = async (id, newStatus) => {
+    setStatusUpdatingId(id + '-' + newStatus);
+    try {
+      const res = await recruitmentService.updateStatus(id, newStatus);
+      if (res.success) {
+        setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: newStatus } : s)));
+        if (newStatus === 'shortlisted') {
+          toast.success(res.emailSent
+            ? `✅ Shortlisted — shortlist email sent!`
+            : `✅ Shortlisted (email not sent)`);
+        } else {
+          toast.success(`Marked as ${newStatus}`);
+        }
+      } else {
+        toast.error(res.error || 'Failed to update');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to update status');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const handleBatchStatus = async (newStatus) => {
+    if (selectedIds.length === 0) {
+      toast.error('Select at least one submission');
+      return;
+    }
+    const label = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+    if (!window.confirm(`${label} ${selectedIds.length} submission(s)?\n\n${newStatus === 'shortlisted' ? 'Shortlist emails will be sent automatically.' : ''}`)) return;
+
+    setBulkStatusUpdating(true);
+    try {
+      const res = await recruitmentService.batchUpdateStatus(selectedIds, newStatus);
+      if (res.success) {
+        setSubmissions((prev) =>
+          prev.map((s) => (selectedIds.includes(s.id) ? { ...s, status: newStatus } : s))
+        );
+        setSelectedIds([]);
+        if (newStatus === 'shortlisted' && res.emailsSent !== undefined) {
+          toast.success(`✅ ${label} ${res.count} — emails sent: ${res.emailsSent}${res.emailErrors > 0 ? `, failed: ${res.emailErrors}` : ''}`);
+        } else {
+          toast.success(`${label} ${res.count} submission(s)`);
+        }
+      } else {
+        toast.error(res.error || 'Failed to batch update');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to batch update');
+    } finally {
+      setBulkStatusUpdating(false);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map((s) => s.id));
+    }
+  };
+
   const renderRoleBadge = (role) => {
     const color = ROLE_COLORS[role] || 'gray';
     const cls = BADGE_CLASSES[color] || 'bg-gray-100 text-gray-700';
     return <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{role}</span>;
+  };
+
+  const renderStatusBadge = (status) => {
+    const s = status || 'pending';
+    const cfg = STATUS_BADGES[s] || STATUS_BADGES.pending;
+    const Icon = cfg.icon;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
+        <Icon className="w-3 h-3" /> {cfg.label}
+      </span>
+    );
+  };
+
+  const renderStatusActions = (sub) => {
+    const current = sub.status || 'pending';
+    return (
+      <div className="flex items-center gap-1.5">
+        {current !== 'shortlisted' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sub.id, 'shortlisted'); }}
+            disabled={statusUpdatingId === sub.id + '-shortlisted'}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-green-100 text-green-700 hover:bg-green-200 text-xs font-medium transition disabled:opacity-50"
+          >
+            {statusUpdatingId === sub.id + '-shortlisted' ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <CheckCircle className="w-3 h-3" />
+            )}
+            Shortlist
+          </button>
+        )}
+        {current !== 'pending' && current !== 'rejected' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sub.id, 'pending'); }}
+            disabled={statusUpdatingId === sub.id + '-pending'}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-medium transition disabled:opacity-50"
+          >
+            {statusUpdatingId === sub.id + '-pending' ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Clock className="w-3 h-3" />
+            )}
+            Pending
+          </button>
+        )}
+        {current !== 'rejected' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sub.id, 'rejected'); }}
+            disabled={statusUpdatingId === sub.id + '-rejected'}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-100 text-red-700 hover:bg-red-200 text-xs font-medium transition disabled:opacity-50"
+          >
+            {statusUpdatingId === sub.id + '-rejected' ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <XCircle className="w-3 h-3" />
+            )}
+            Reject
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // Navigate to bulk email with shortlisted filter
+  const goToBulkEmail = () => {
+    const url = `/admin/bulk-email?source=recruitment&status=shortlisted`;
+    window.open(url, '_blank');
   };
 
   return (
@@ -128,9 +286,17 @@ export default function RecruitmentSubmissions() {
                 <ArrowLeft className="w-4 h-4" /> Back to Dashboard
               </Link>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Recruitment Submissions</h1>
-              <p className="text-gray-600 mt-1">Review all applications received.</p>
+              <p className="text-gray-600 mt-1">Review, shortlist, and manage applications.</p>
             </div>
             <div className="flex items-center gap-3">
+              {stats.shortlisted > 0 && (
+                <button
+                  onClick={goToBulkEmail}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700 font-medium text-sm"
+                >
+                  <Mail className="w-4 h-4" /> Mail Shortlisted ({stats.shortlisted})
+                </button>
+              )}
               <button
                 onClick={() => window.location.href = '/admin/recruitment'}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium text-sm"
@@ -157,10 +323,41 @@ export default function RecruitmentSubmissions() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
+            <Users className="w-8 h-8 text-indigo-500" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <p className="text-xs text-gray-500">Total</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex items-center gap-3">
+            <Clock className="w-8 h-8 text-amber-500" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+              <p className="text-xs text-gray-500">Pending</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-green-200 shadow-sm p-4 flex items-center gap-3">
+            <CheckCircle className="w-8 h-8 text-green-500" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{stats.shortlisted}</p>
+              <p className="text-xs text-gray-500">Shortlisted</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4 flex items-center gap-3">
+            <XCircle className="w-8 h-8 text-red-500" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
+              <p className="text-xs text-gray-500">Rejected</p>
+            </div>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -171,8 +368,6 @@ export default function RecruitmentSubmissions() {
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-
-            {/* Role filter */}
             <div className="relative">
               <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <select
@@ -186,8 +381,19 @@ export default function RecruitmentSubmissions() {
                 ))}
               </select>
             </div>
-
-            {/* Start date */}
+            <div className="relative">
+              <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="shortlisted">Shortlisted</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
             <div className="relative">
               <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -198,8 +404,6 @@ export default function RecruitmentSubmissions() {
                 title="From date"
               />
             </div>
-
-            {/* End date */}
             <div className="relative">
               <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -212,7 +416,6 @@ export default function RecruitmentSubmissions() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100">
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Users className="w-4 h-4" />
@@ -225,6 +428,39 @@ export default function RecruitmentSubmissions() {
             )}
           </div>
         </div>
+
+        {/* Batch Actions Bar */}
+        {selectedIds.length > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 flex items-center justify-between">
+            <span className="text-sm font-medium text-indigo-800">
+              {selectedIds.length} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBatchStatus('shortlisted')}
+                disabled={bulkStatusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 text-xs font-medium transition disabled:opacity-50"
+              >
+                {bulkStatusUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                Shortlist All
+              </button>
+              <button
+                onClick={() => handleBatchStatus('rejected')}
+                disabled={bulkStatusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 text-xs font-medium transition disabled:opacity-50"
+              >
+                {bulkStatusUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                Reject All
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white text-xs font-medium transition"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Submissions List */}
         {loading ? (
@@ -248,25 +484,44 @@ export default function RecruitmentSubmissions() {
                 <div key={sub.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                   {/* Header */}
                   <div
-                    className="p-4 sm:p-5 cursor-pointer hover:bg-gray-50 transition-colors flex items-start justify-between gap-3"
+                    className="p-4 sm:p-5 cursor-pointer hover:bg-gray-50 transition-colors"
                     onClick={() => setExpandedId(isExpanded ? null : sub.id)}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <h3 className="text-base font-bold text-gray-900">{sub.fullName}</h3>
-                        {renderRoleBadge(sub.role)}
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox */}
+                      <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(sub.id)}
+                          onChange={() => toggleSelect(sub.id)}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                        <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" /> {sub.email}</span>
-                        <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {sub.whatsappNo}</span>
-                        <span className="inline-flex items-center gap-1">Moodle: {sub.moodleId}</span>
-                        <span>{sub.branch} • {sub.year}</span>
-                        <span>{new Date(sub.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <h3 className="text-base font-bold text-gray-900">{sub.fullName}</h3>
+                          {renderRoleBadge(sub.role)}
+                          {renderStatusBadge(sub.status)}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" /> {sub.email}</span>
+                          <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {sub.whatsappNo}</span>
+                          <span className="inline-flex items-center gap-1">Moodle: {sub.moodleId}</span>
+                          <span>{sub.branch} • {sub.year}</span>
+                          <span>{new Date(sub.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                       </div>
                     </div>
-                    <button className="text-gray-400 hover:text-gray-600 p-1">
-                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </button>
+
+                    {/* Quick status actions (always visible) */}
+                    <div className="ml-9 mt-2" onClick={(e) => e.stopPropagation()}>
+                      {renderStatusActions(sub)}
+                    </div>
                   </div>
 
                   {/* Expanded Details */}

@@ -2110,6 +2110,67 @@ router.post('/email/team-applications', authenticate, authorizeRole('admin', 'su
   }
 });
 
+// Get recruitment recipients for bulk email (with status filter)
+router.post('/email/recruitment-recipients', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { statusFilter, roleFilter, searchQuery } = req.body;
+
+    const where = {};
+    if (statusFilter && statusFilter !== 'all') {
+      where.status = statusFilter;
+    }
+    if (roleFilter) {
+      where.role = roleFilter;
+    }
+
+    const submissions = await prisma.recruitmentSubmission.findMany({
+      where,
+      orderBy: { submittedAt: 'desc' }
+    });
+
+    let recipients = submissions.map(sub => ({
+      id: sub.id,
+      email: sub.email,
+      name: sub.fullName,
+      role: sub.role,
+      status: sub.status,
+      branch: sub.branch,
+      year: sub.year
+    }));
+
+    // Apply search filter
+    if (searchQuery && searchQuery.trim()) {
+      const search = searchQuery.toLowerCase().trim();
+      recipients = recipients.filter(r => 
+        r.email.toLowerCase().includes(search) ||
+        r.name.toLowerCase().includes(search)
+      );
+    }
+
+    // Get stats by status
+    const stats = {
+      total: submissions.length,
+      pending: submissions.filter(s => s.status === 'pending').length,
+      shortlisted: submissions.filter(s => s.status === 'shortlisted').length,
+      rejected: submissions.filter(s => s.status === 'rejected').length
+    };
+
+    res.json({
+      success: true,
+      recipients,
+      count: recipients.length,
+      stats
+    });
+
+  } catch (error) {
+    console.error('Error fetching recruitment recipients:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch recruitment recipients'
+    });
+  }
+});
+
 // Send bulk email - requires authentication
 router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
   try {
@@ -2128,8 +2189,20 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
     let recipients = [];
     
     if (recipientIds && recipientIds.length > 0) {
-      // Check if we're sending to event participants, team applications, or regular students
-      if (recipientType === 'eventParticipant' || filterType === 'event') {
+      // Check if we're sending to event participants, team applications, recruitment submissions, or regular students
+      if (recipientType === 'recruitment' || filterType === 'recruitment') {
+        // Send to recruitment submissions
+        const submissions = await prisma.recruitmentSubmission.findMany({
+          where: {
+            id: { in: recipientIds }
+          }
+        });
+
+        recipients = submissions.map(sub => ({
+          email: sub.email,
+          name: sub.fullName
+        }));
+      } else if (recipientType === 'eventParticipant' || filterType === 'event') {
         // Send to event participants
         const participants = await prisma.eventParticipant.findMany({
           where: {
@@ -2222,6 +2295,21 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
           id: app.id,
           email: app.email,
           name: app.fullName
+        }));
+      } else if (filterType === 'recruitment') {
+        // Get recruitment submissions
+        const submissions = await prisma.recruitmentSubmission.findMany({
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        });
+
+        recipients = submissions.map(sub => ({
+          id: sub.id,
+          email: sub.email,
+          name: sub.fullName
         }));
       } else {
         // Get all active students

@@ -73,4 +73,14 @@ export const recruitmentService = {
   async deleteSubmission(id) {
     return apiClient.delete(`/recruitment/admin/submissions/${id}`);
   },
+
+  /** PUT /recruitment/admin/submissions/:id/status — Update status */
+  async updateStatus(id, status) {
+    return apiClient.put(`/recruitment/admin/submissions/${id}/status`, { status });
+  },
+
+  /** POST /recruitment/admin/submissions/batch-status — Batch update status */
+  async batchUpdateStatus(ids, status) {
+    return apiClient.post('/recruitment/admin/submissions/batch-status', { ids, status });
+  },
 };

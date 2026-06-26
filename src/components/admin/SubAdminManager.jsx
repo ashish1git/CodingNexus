@@ -39,7 +39,10 @@ const SubAdminManager = () => {
     editEvents: true,
     deleteEvents: true,
     manageCertificates: true,
-    sendBulkEmails: true
+    sendBulkEmails: true,
+    manageDsaNotes: false,
+    manageDsaSchedule: false,
+    manageDsaTrainers: false
   };
 
   const [formData, setFormData] = useState({

@@ -60,6 +60,7 @@ import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 import CertificateManager from './components/admin/CertificateManager';
 import BulkEmailManager from './components/admin/BulkEmailManager';
+import DsaManagement from './components/admin/dsa/DsaManagement';
 
 // Shared/Other components
 import ClubMembers from './components/shared/ClubMembers';
@@ -470,6 +471,16 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <GuestManagementPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* DSA Notes Management */}
+              <Route
+                path="/admin/dsa"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <DsaManagement />
                   </ProtectedRoute>
                 }
               />

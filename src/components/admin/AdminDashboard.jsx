@@ -89,6 +89,7 @@ const AdminDashboard = () => {
   const menuItems = [
     { icon: <Users />, label: 'Students', path: '/admin/students' },
     { icon: <BookOpen />, label: 'Notes', path: '/admin/notes' },
+    { icon: <BookOpen />, label: 'DSA Management', path: '/admin/dsa' },
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
@@ -332,6 +333,13 @@ const AdminDashboard = () => {
                 >
                   <UserCheck className="w-8 h-8 text-cyan-600" />
                   <span className="text-sm font-medium text-gray-700">Team Applications</span>
+                </Link>
+                <Link
+                  to="/admin/dsa"
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition"
+                >
+                  <BookOpen className="w-8 h-8 text-indigo-600" />
+                  <span className="text-sm font-medium text-gray-700">DSA Management</span>
                 </Link>
                 {/* NEW: Guest Management */}
                 <Link

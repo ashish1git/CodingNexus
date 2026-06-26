@@ -36,7 +36,7 @@ export function generateStarterCode(problem, lang) {
     const params = parameters.map(p => `${getType(p.type, 'java')} ${p.name}`).join(', ');
     return `class Solution {
     public ${getType(returnType, 'java')} ${functionName}(${params}) {
-        // Write your solution here
+        // Write your solution from here here
         
     }
 }`;

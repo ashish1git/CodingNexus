@@ -408,7 +408,7 @@ export default function RecruitmentForm() {
                   <option value="">— Select a role —</option>
                   {openRoles.map((r) => (
                     <option key={r.role} value={r.role}>
-                      {r.label}{r.expiresAt ? ` (Closes ${new Date(r.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})` : ''}
+                      {r.label}{r.expiresAt ? ` (Closes ${new Date(r.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })})` : ''}
                     </option>
                   ))}
                 </select>
