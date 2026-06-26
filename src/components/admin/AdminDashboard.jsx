@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, Bell, Calendar, Award, HelpCircle,
-  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost, Brain
+  LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost, Brain, User
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
@@ -101,6 +101,7 @@ const AdminDashboard = () => {
     { icon: <FileText />, label: 'Certificates', path: '/admin/certificates' },
     { icon: <Mail />, label: 'Bulk Email', path: '/admin/bulk-email' },
     { icon: <HelpCircle />, label: 'Support Tickets', path: '/admin/tickets' },
+    { icon: <User />, label: 'Profile', path: '/admin/profile' },
     ...(userDetails?.role === 'superadmin' ? [{ icon: <UserPlus />, label: 'Sub-Admins', path: '/admin/sub-admins' }] : [])
   ];
 

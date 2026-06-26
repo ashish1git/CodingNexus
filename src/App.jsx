@@ -60,6 +60,7 @@ import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 import CertificateManager from './components/admin/CertificateManager';
 import BulkEmailManager from './components/admin/BulkEmailManager';
+import AdminProfile from './components/admin/AdminProfile';
 import DsaManagement from './components/admin/dsa/DsaManagement';
 
 // Shared/Other components
@@ -301,6 +302,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/profile" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <AdminProfile />
                   </ProtectedRoute>
                 } 
               />
