@@ -209,6 +209,7 @@ model SupportTicket {
   message      String
   status       String    @default("open")
   priority     String    @default("normal")
+  type         String    @default("student")
   response     String?
   replyEnabled Boolean   @default(false)
   respondedBy  String?
@@ -219,6 +220,7 @@ model SupportTicket {
 
   @@index([userId])
   @@index([status])
+  @@index([type])
   @@index([createdAt])
 }
 

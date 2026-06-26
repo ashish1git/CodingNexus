@@ -526,6 +526,61 @@ export const adminService = {
       console.error('Error fetching admin profile:', error);
       return null;
     }
+  },
+
+  // ============ ADMIN SUPPORT TICKETS ============
+
+  async getAdminSupportTickets() {
+    try {
+      const response = await apiClient.get('/admin/support-tickets');
+      return response;
+    } catch (error) {
+      console.error('Get admin support tickets error:', error);
+      toast.error(error.message || 'Failed to fetch tickets');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async createAdminSupportTicket(subject, message, priority = 'normal') {
+    try {
+      const response = await apiClient.post('/admin/support-tickets', { subject, message, priority });
+      if (response.success) {
+        toast.success('Support ticket created successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Create admin support ticket error:', error);
+      toast.error(error.message || 'Failed to create ticket');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async replyToAdminSupportTicket(ticketId, reply) {
+    try {
+      const response = await apiClient.put(`/admin/support-tickets/${ticketId}`, { reply });
+      if (response.success) {
+        toast.success('Reply sent successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Reply to admin support ticket error:', error);
+      toast.error(error.message || 'Failed to send reply');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async updateAdminSupportTicketStatus(ticketId, status) {
+    try {
+      const response = await apiClient.put(`/admin/support-tickets/${ticketId}`, { status });
+      if (response.success) {
+        toast.success('Ticket status updated');
+      }
+      return response;
+    } catch (error) {
+      console.error('Update admin support ticket error:', error);
+      toast.error(error.message || 'Failed to update ticket');
+      return { success: false, error: error.message };
+    }
   }
 };
 

@@ -61,6 +61,7 @@ import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
 import CertificateManager from './components/admin/CertificateManager';
 import BulkEmailManager from './components/admin/BulkEmailManager';
 import AdminProfile from './components/admin/AdminProfile';
+import AdminTicketSupport from './components/admin/AdminTicketSupport';
 import DsaManagement from './components/admin/dsa/DsaManagement';
 
 // Shared/Other components
@@ -310,6 +311,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <AdminProfile />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/support-tickets" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <AdminTicketSupport />
                   </ProtectedRoute>
                 } 
               />

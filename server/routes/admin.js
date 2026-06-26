@@ -1533,6 +1533,7 @@ router.delete('/quizzes/:id', async (req, res) => {
 router.get('/tickets', async (req, res) => {
   try {
     const tickets = await prisma.supportTicket.findMany({
+      where: { type: 'student' },
       include: {
         user: {
           include: {
@@ -2543,6 +2544,149 @@ router.get('/email/events', authenticate, authorizeRole('admin', 'subadmin', 'su
       success: false, 
       error: 'Failed to fetch events' 
     });
+  }
+});
+
+// ============ ADMIN SUPPORT TICKETS ============
+
+// Get all admin-type support tickets (visible to all admins)
+router.get('/support-tickets', authenticate, async (req, res) => {
+  try {
+    const tickets = await prisma.supportTicket.findMany({
+      where: { type: 'admin' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            adminProfile: { select: { name: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formatted = tickets.map(ticket => ({
+      ...ticket,
+      senderName: ticket.user.adminProfile?.name || ticket.user.email,
+      senderRole: ticket.user.role,
+      responses: ticket.response ? JSON.parse(ticket.response) : []
+    }));
+
+    res.json({ success: true, tickets: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create a new admin support ticket
+router.post('/support-tickets', authenticate, async (req, res) => {
+  try {
+    const { subject, message, priority } = req.body;
+
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ success: false, error: 'Subject is required' });
+    }
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        userId: req.user.id,
+        subject: subject.trim(),
+        message: message.trim(),
+        priority: priority || 'normal',
+        type: 'admin'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            adminProfile: { select: { name: true } }
+          }
+        }
+      }
+    });
+
+    const formatted = {
+      ...ticket,
+      senderName: ticket.user.adminProfile?.name || ticket.user.email,
+      senderRole: ticket.user.role,
+      responses: []
+    };
+
+    res.json({ success: true, ticket: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update admin support ticket (reply, change status)
+router.put('/support-tickets/:id', authenticate, async (req, res) => {
+  try {
+    const { status, reply } = req.body;
+
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!ticket || ticket.type !== 'admin') {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    const updateData = {};
+
+    if (status) {
+      updateData.status = status;
+    }
+
+    if (reply && reply.trim()) {
+      let responses = [];
+      if (ticket.response) {
+        try { responses = JSON.parse(ticket.response); } catch (e) { responses = []; }
+      }
+
+      responses.push({
+        from: 'admin',
+        name: req.user.adminProfile?.name || 'Admin',
+        timestamp: new Date().toISOString(),
+        message: reply.trim()
+      });
+
+      updateData.response = JSON.stringify(responses);
+      updateData.respondedBy = req.user.id;
+      updateData.respondedAt = new Date();
+    }
+
+    const updatedTicket = await prisma.supportTicket.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            adminProfile: { select: { name: true } }
+          }
+        }
+      }
+    });
+
+    const formatted = {
+      ...updatedTicket,
+      senderName: updatedTicket.user.adminProfile?.name || updatedTicket.user.email,
+      senderRole: updatedTicket.user.role,
+      responses: updatedTicket.response ? JSON.parse(updatedTicket.response) : []
+    };
+
+    res.json({ success: true, ticket: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

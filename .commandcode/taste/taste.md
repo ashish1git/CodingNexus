@@ -30,7 +30,7 @@
 - For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80
 - When backend changes involve DB schema modifications or new API routes, proactively run the migration and rebuild/restart the server (Docker/PM2) — don't declare the task done until the deployed server picks up the changes. Confidence: 0.80
 - Frontend-only changes require `npm run build` to deploy; backend changes require Docker container rebuild and `docker compose up -d` to restart. Don't mix up the deployment paths. Confidence: 0.70
-- When changes span both frontend AND backend (new routes, new pages, new API endpoints), run BOTH the frontend build (`npm run build`) AND the Docker rebuild (`docker compose up -d --build`) — the system won't work in production unless both deployment paths are completed. Confidence: 0.70
+- When changes span both frontend AND backend (new routes, new pages, new API endpoints), run BOTH the frontend build (`npm run build`) AND the Docker rebuild (`docker compose up -d --build`) — the system won't work in production unless both deployment paths are completed. Confidence: 0.75
 
 # debugging
 - When debugging "Cannot access 'X' before initialization" TDZ errors in a Vite/Rollup production build, build with `--minify false` to reveal actual variable names instead of minified single-letter names (S,N,etc.) - this immediately identifies whether the error is in your code or a dependency. Confidence: 0.85
@@ -40,3 +40,6 @@
 
 # prisma
 - After adding DB fields via raw SQL (not Prisma migrations), run `npx prisma generate` and rebuild the Docker image — otherwise the Prisma client won't know about the new fields and queries will throw 500 errors. Confidence: 0.75
+
+# architecture
+- When adding similar functionality for a different user role (e.g., subadmin tickets), extend the existing model (e.g., SupportTicket) with a type/discriminator field rather than creating a parallel model — reuse over duplication. Confidence: 0.70
