@@ -569,6 +569,20 @@ export const adminService = {
     }
   },
 
+  async deleteAdminSupportTicket(ticketId) {
+    try {
+      const response = await apiClient.delete(`/admin/support-tickets/${ticketId}`);
+      if (response.success) {
+        toast.success('Support ticket deleted successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Delete admin support ticket error:', error);
+      toast.error(error.message || 'Failed to delete ticket');
+      return { success: false, error: error.message };
+    }
+  },
+
   async updateAdminSupportTicketStatus(ticketId, status) {
     try {
       const response = await apiClient.put(`/admin/support-tickets/${ticketId}`, { status });
@@ -579,6 +593,58 @@ export const adminService = {
     } catch (error) {
       console.error('Update admin support ticket error:', error);
       toast.error(error.message || 'Failed to update ticket');
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ============ SERVER MONITORING ============
+
+  async getSystemStatus() {
+    try {
+      const response = await apiClient.get('/admin/monitoring/status');
+      return response;
+    } catch (error) {
+      console.error('Get system status error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getJudge0Status() {
+    try {
+      const response = await apiClient.get('/admin/monitoring/judge0');
+      return response;
+    } catch (error) {
+      console.error('Get Judge0 status error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async restartJudge0Workers() {
+    try {
+      const response = await apiClient.post('/admin/monitoring/judge0/restart-workers');
+      return response;
+    } catch (error) {
+      console.error('Restart Judge0 workers error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async restartJudge0Server() {
+    try {
+      const response = await apiClient.post('/admin/monitoring/judge0/restart-server');
+      return response;
+    } catch (error) {
+      console.error('Restart Judge0 server error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getDockerContainers() {
+    try {
+      const response = await apiClient.get('/admin/monitoring/docker/containers');
+      return response;
+    } catch (error) {
+      console.error('Get Docker containers error:', error);
       return { success: false, error: error.message };
     }
   }

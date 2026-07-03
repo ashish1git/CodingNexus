@@ -13,7 +13,7 @@ const DsaLectureManager = () => {
   const [filter, setFilter] = useState('all');
   const [form, setForm] = useState({
     trainerId: '', topic: '', description: '', batch: '',
-    lectureDate: '', startTime: '', endTime: ''
+    lectureDate: '', startTime: '', endTime: '', notesRequired: true
   });
 
   useEffect(() => {
@@ -31,7 +31,7 @@ const DsaLectureManager = () => {
     setLoading(false);
   };
 
-  const resetForm = () => setForm({ trainerId: '', topic: '', description: '', batch: '', lectureDate: '', startTime: '', endTime: '' });
+  const resetForm = () => setForm({ trainerId: '', topic: '', description: '', batch: '', lectureDate: '', startTime: '', endTime: '', notesRequired: true });
 
   const openCreate = () => {
     setEditing(null);
@@ -48,7 +48,8 @@ const DsaLectureManager = () => {
       batch: lecture.batch || '',
       lectureDate: lecture.lectureDate?.split('T')[0] || '',
       startTime: lecture.startTime || '',
-      endTime: lecture.endTime || ''
+      endTime: lecture.endTime || '',
+      notesRequired: lecture.notesRequired !== undefined ? lecture.notesRequired : true
     });
     setShowForm(true);
   };
@@ -269,6 +270,16 @@ const DsaLectureManager = () => {
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                   />
                 </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.notesRequired === false} onChange={e => setForm({ ...form, notesRequired: !e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                  <div>
+                    <span className="text-xs font-medium text-gray-700">Mark as Optional (no notes required)</span>
+                    <p className="text-[10px] text-gray-500">Check this if notes upload is NOT mandatory for this lecture</p>
+                  </div>
+                </label>
               </div>
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button

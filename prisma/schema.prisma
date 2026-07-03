@@ -1019,9 +1019,11 @@ model DsaLecture {
   lectureDate DateTime
   startTime   String?     // HH:mm format
   endTime     String?     // HH:mm format
-  status      String      @default("scheduled") // scheduled, completed, cancelled
-  notifySent  Boolean     @default(false)
-  createdBy   String
+  status        String      @default("scheduled") // scheduled, completed, cancelled
+  notifySent    Boolean     @default(false)
+  notesRequired Boolean     @default(true)
+  reminderSent  String?     // comma-separated list of reminder intervals already sent e.g. "14hr,2hr"
+  createdBy     String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

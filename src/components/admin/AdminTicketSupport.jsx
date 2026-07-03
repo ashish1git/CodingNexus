@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import {
   MessageCircle, Plus, Clock, CheckCircle, AlertCircle,
-  Send, RefreshCw, X, ArrowLeft, Loader
+  Send, RefreshCw, X, ArrowLeft, Loader, Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -62,6 +62,23 @@ const AdminTicketSupport = () => {
       await fetchTickets();
     }
     setSubmitting(false);
+  };
+
+  const canDelete = userDetails?.role === 'superadmin';
+
+  const handleDeleteTicket = async (ticketId, e) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to permanently delete this ticket? This action cannot be undone.')) return;
+    const res = await adminService.deleteAdminSupportTicket(ticketId);
+    if (res.success) {
+      setTickets(prev => prev.filter(t => t.id !== ticketId));
+      if (selectedTicket?.id === ticketId) {
+        setShowViewModal(false);
+        setSelectedTicket(null);
+      }
+    }
+    setLoading(true);
+    await fetchTickets();
   };
 
   const canReply = userDetails?.role === 'superadmin' || userDetails?.role === 'admin';
@@ -265,7 +282,16 @@ const AdminTicketSupport = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    {canDelete && (
+                      <button
+                        onClick={(e) => handleDeleteTicket(ticket.id, e)}
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete ticket"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {getStatusIcon(ticket.status)}
                   </div>
                 </div>

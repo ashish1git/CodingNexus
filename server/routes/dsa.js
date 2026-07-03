@@ -221,6 +221,40 @@ router.post('/trainers', async (req, res) => {
       });
     }
 
+    // Send welcome email notification
+    try {
+      const trainerEmail = trainer.admin.user.email;
+      const trainerName = trainer.admin.name;
+      const roleLabel = dsaRole === 'OPERATIONS' ? 'DSA Operations' : 'DSA Trainer';
+      const roleDescription = dsaRole === 'OPERATIONS'
+        ? 'scheduling lectures, reviewing notes, and managing daily DSA workflow'
+        : 'conducting lectures and uploading notes';
+
+      await sendEmail({
+        to: trainerEmail,
+        subject: `🎉 Congratulations! You are now assigned as ${roleLabel}`,
+        html: `
+          <div style="font-family: system-ui; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4f46e5;">Welcome to the DSA Team!</h2>
+            <p>Hi <strong>${trainerName}</strong>,</p>
+            <p>Congratulations! You have been assigned the role of <strong>${roleLabel}</strong> at Coding Nexus.</p>
+            <div style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0;"><strong>Your Role:</strong> ${roleLabel}</p>
+              <p style="margin: 8px 0 0 0;">As a ${roleLabel}, you will be responsible for <strong>${roleDescription}</strong>.</p>
+            </div>
+            <p>Please log in to the Coding Nexus portal and check the <strong>DSA Management</strong> tab for more details about your schedule, lecture assignments, and notes workflow.</p>
+            <a href="https://codingnexus.apsit.edu.in/admin/dashboard" style="display: inline-block; background: #4f46e5; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 12px;">Go to DSA Management</a>
+            <p style="margin-top: 24px; color: #666; font-size: 14px;">
+              Best regards,<br/>Coding Nexus Admin
+            </p>
+          </div>
+        `,
+        text: `Welcome to the DSA Team!\n\nHi ${trainerName},\n\nCongratulations! You have been assigned the role of ${roleLabel} at Coding Nexus.\n\nAs a ${roleLabel}, you will be responsible for ${roleDescription}.\n\nPlease log in to the Coding Nexus portal and check the DSA Management tab for more details.\n\nBest regards,\nCoding Nexus Admin`
+      });
+    } catch (emailErr) {
+      console.error('Failed to send assignment email:', emailErr.message);
+    }
+
     res.json({
       success: true,
       trainer: {
@@ -260,7 +294,14 @@ router.put('/trainers/:id/toggle', async (req, res) => {
     if (!canManageTrainers(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to manage trainers.' });
     }
-    const trainer = await prisma.dsaTrainer.findUnique({ where: { id: req.params.id } });
+    const trainer = await prisma.dsaTrainer.findUnique({
+      where: { id: req.params.id },
+      include: {
+        admin: {
+          include: { user: { select: { email: true } } }
+        }
+      }
+    });
     if (!trainer) {
       return res.status(404).json({ success: false, error: 'Trainer not found' });
     }
@@ -268,6 +309,38 @@ router.put('/trainers/:id/toggle', async (req, res) => {
       where: { id: req.params.id },
       data: { isActive: !trainer.isActive }
     });
+
+    // Send email notification on activation
+    if (!trainer.isActive && updated.isActive) {
+      try {
+        const trainerEmail = trainer.admin.user.email;
+        const trainerName = trainer.admin.name;
+        const roleLabel = trainer.role === 'OPERATIONS' ? 'DSA Operations' : 'DSA Trainer';
+
+        await sendEmail({
+          to: trainerEmail,
+          subject: `✅ Your ${roleLabel} account has been activated`,
+          html: `
+            <div style="font-family: system-ui; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #16a34a;">Account Activated!</h2>
+              <p>Hi <strong>${trainerName}</strong>,</p>
+              <p>Your <strong>${roleLabel}</strong> account at Coding Nexus has been <strong style="color: #16a34a;">activated</strong>.</p>
+              <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0;">You now have full access to the DSA Management portal. Please log in and check the <strong>DSA Management</strong> tab to view your schedule and get started.</p>
+              </div>
+              <a href="https://codingnexus.apsit.edu.in/admin/dashboard" style="display: inline-block; background: #16a34a; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 12px;">Go to DSA Management</a>
+              <p style="margin-top: 24px; color: #666; font-size: 14px;">
+                Best regards,<br/>Coding Nexus Admin
+              </p>
+            </div>
+          `,
+          text: `Account Activated!\n\nHi ${trainerName},\n\nYour ${roleLabel} account at Coding Nexus has been activated. You now have full access to the DSA Management portal.\n\nPlease log in and check the DSA Management tab to view your schedule and get started.\n\nBest regards,\nCoding Nexus Admin`
+        });
+      } catch (emailErr) {
+        console.error('Failed to send activation email:', emailErr.message);
+      }
+    }
+
     res.json({ success: true, trainer: updated });
   } catch (error) {
     console.error('Toggle trainer error:', error);
@@ -336,6 +409,7 @@ router.get('/lectures', async (req, res) => {
       endTime: l.endTime,
       status: l.status,
       notifySent: l.notifySent,
+      notesRequired: l.notesRequired,
       trainerName: l.trainer.admin.name,
       noteCount: l.notes.length,
       approvedNote: l.notes.find(n => n.status === 'approved'),
@@ -358,7 +432,7 @@ router.post('/lectures', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to schedule lectures.' });
     }
-    const { trainerIds, trainerId, topic, description, batch, lectureDate, startTime, endTime } = req.body;
+    const { trainerIds, trainerId, topic, description, batch, lectureDate, startTime, endTime, notesRequired } = req.body;
 
     if (!topic || !lectureDate) {
       return res.status(400).json({ success: false, error: 'Topic and date are required' });
@@ -390,6 +464,7 @@ router.post('/lectures', async (req, res) => {
           lectureDate: new Date(lectureDate),
           startTime: startTime || null,
           endTime: endTime || null,
+          notesRequired: notesRequired !== undefined ? notesRequired : true,
           createdBy: req.user.id
         },
         include: {
@@ -423,7 +498,7 @@ router.put('/lectures/:id', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to edit lectures.' });
     }
-    const { topic, description, batch, lectureDate, startTime, endTime, status } = req.body;
+    const { topic, description, batch, lectureDate, startTime, endTime, status, notesRequired } = req.body;
     const data = {};
     if (topic !== undefined) data.topic = topic;
     if (description !== undefined) data.description = description;
@@ -432,6 +507,7 @@ router.put('/lectures/:id', async (req, res) => {
     if (startTime !== undefined) data.startTime = startTime;
     if (endTime !== undefined) data.endTime = endTime;
     if (status !== undefined) data.status = status;
+    if (notesRequired !== undefined) data.notesRequired = notesRequired;
 
     const lecture = await prisma.dsaLecture.update({
       where: { id: req.params.id },
@@ -514,7 +590,7 @@ router.post('/lectures/recurring', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to create recurring schedules.' });
     }
-    const { trainerIds, trainerId, topic, description, batch, startTime, endTime, daysOfWeek, startDate, endDate, count } = req.body;
+    const { trainerIds, trainerId, topic, description, batch, startTime, endTime, daysOfWeek, startDate, endDate, count, notesRequired } = req.body;
 
     if (!topic || !startDate || !daysOfWeek || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
       return res.status(400).json({ success: false, error: 'Topic, start date, and at least one day of week are required' });
@@ -561,6 +637,7 @@ router.post('/lectures/recurring', async (req, res) => {
               lectureDate: new Date(current),
               startTime: startTime || null,
               endTime: endTime || null,
+              notesRequired: notesRequired !== undefined ? notesRequired : true,
               createdBy: req.user.id
             },
             include: {
@@ -765,9 +842,92 @@ router.put('/notes/:id/review', async (req, res) => {
       }
     });
 
+    // Send email notification to the trainer
+    try {
+      const noteWithTrainer = await prisma.dsaNote.findUnique({
+        where: { id: note.id },
+        include: {
+          trainer: {
+            include: {
+              admin: {
+                include: { user: { select: { email: true } } }
+              }
+            }
+          },
+          lecture: { select: { topic: true } }
+        }
+      });
+
+      if (noteWithTrainer?.trainer?.admin?.user?.email) {
+        const trainerEmail = noteWithTrainer.trainer.admin.user.email;
+        const trainerName = noteWithTrainer.trainer.admin.name;
+        const lectureTopic = noteWithTrainer.lecture?.topic || 'Unknown';
+        const reviewerName = req.user.adminProfile?.name || 'Admin';
+
+        const statusLabel = status === 'approved' ? 'Approved ✅' : 'Rejected ❌';
+        const statusColor = status === 'approved' ? '#10b981' : '#dc2626';
+
+        await sendEmail({
+          to: trainerEmail,
+          subject: `Notes ${status}: "${note.title}" for lecture "${lectureTopic}"`,
+          html: `
+            <div style="font-family: system-ui; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: ${statusColor};">Notes ${status === 'approved' ? 'Approved' : 'Rejected'}</h2>
+              <p>Hi <strong>${trainerName}</strong>,</p>
+              <p>Your notes for lecture <strong>"${lectureTopic}"</strong> have been <strong style="color: ${statusColor};">${status}</strong> by <strong>${reviewerName}</strong>.</p>
+              <div style="background: ${status === 'approved' ? '#ecfdf5' : '#fee2e2'}; border-left: 4px solid ${statusColor}; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0;"><strong>Note:</strong> ${note.title}</p>
+                ${remarks ? `<p style="margin: 8px 0 0 0;"><strong>Remarks:</strong> ${remarks}</p>` : ''}
+              </div>
+              <p style="margin-top: 24px; color: #666; font-size: 14px;">
+                Best regards,<br/>Coding Nexus Admin
+              </p>
+            </div>
+          `,
+          text: `Hi ${trainerName},\n\nYour notes for lecture "${lectureTopic}" have been ${status} by ${reviewerName}.\n\nNote: ${note.title}${remarks ? `\nRemarks: ${remarks}` : ''}\n\nBest regards,\nCoding Nexus Admin`
+        });
+      }
+    } catch (emailErr) {
+      console.error('Failed to send review notification email:', emailErr.message);
+    }
+
     res.json({ success: true, note });
   } catch (error) {
     console.error('Review note error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete a note (owner trainer or superadmin only)
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    const note = await prisma.dsaNote.findUnique({
+      where: { id: req.params.id },
+      include: {
+        trainer: { select: { adminId: true } }
+      }
+    });
+
+    if (!note) {
+      return res.status(404).json({ success: false, error: 'Note not found' });
+    }
+
+    // Allow if user is superadmin/admin, or if they own the note
+    const isSuperAdmin = req.user.role === 'superadmin' || req.user.role === 'admin';
+    const admin = await prisma.admin.findUnique({ where: { userId: req.user.id } });
+    const isOwner = admin && note.trainer.adminId === admin.id;
+
+    if (!isSuperAdmin && !isOwner) {
+      return res.status(403).json({ success: false, error: 'You can only delete your own notes' });
+    }
+
+    await prisma.dsaNote.delete({
+      where: { id: req.params.id }
+    });
+
+    res.json({ success: true, message: 'Note deleted successfully' });
+  } catch (error) {
+    console.error('Delete note error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -818,6 +978,18 @@ router.get('/trainer-dashboard', async (req, res) => {
     let pending = 0, approved = 0, rejected = 0, missing = 0;
 
     trainer.lectures.forEach(lecture => {
+      if (!lecture.notesRequired) {
+        // Lectures where notes are optional don't count as "missing"
+        if (lecture.notes.length > 0) {
+          const approvedNote = lecture.notes.find(n => n.status === 'approved');
+          const pendingNote = lecture.notes.find(n => n.status === 'pending');
+          const rejectedNote = lecture.notes.find(n => n.status === 'rejected');
+          if (approvedNote) approved++;
+          else if (pendingNote) pending++;
+          else if (rejectedNote) rejected++;
+        }
+        return;
+      }
       if (lecture.notes.length === 0) {
         missing++;
       } else {
@@ -839,7 +1011,13 @@ router.get('/trainer-dashboard', async (req, res) => {
         isActive: trainer.isActive,
         stats: { totalLectures, pending, approved, rejected, missing },
         upcomingLectures: upcomingLectures.map(l => ({
-          ...l,
+          id: l.id,
+          topic: l.topic,
+          lectureDate: l.lectureDate,
+          startTime: l.startTime,
+          endTime: l.endTime,
+          batch: l.batch,
+          notesRequired: l.notesRequired,
           noteCount: l.notes.length,
           hasNotes: l.notes.length > 0,
           noteStatus: l.notes.length === 0 ? 'missing' :
@@ -866,12 +1044,13 @@ router.post('/notify-missing', async (req, res) => {
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 2);
 
-    // Find upcoming lectures with missing notes in the next 2 days
+    // Find upcoming lectures with missing notes in the next 2 days (only where notesRequired)
     const lectures = await prisma.dsaLecture.findMany({
       where: {
         lectureDate: { gte: now, lte: tomorrow },
         status: 'scheduled',
         notifySent: false,
+        notesRequired: true,
         notes: { none: {} }
       },
       include: {

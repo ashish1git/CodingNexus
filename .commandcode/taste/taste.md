@@ -28,6 +28,7 @@
 
 # workflow
 - For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80
+- For feature implementation requests, skip planning/discussion and implement directly and quickly; explain what was done after implementation, not before. Confidence: 0.65
 - When backend changes involve DB schema modifications or new API routes, proactively run the migration and rebuild/restart the server (Docker/PM2) — don't declare the task done until the deployed server picks up the changes. Confidence: 0.80
 - Frontend-only changes require `npm run build` to deploy; backend changes require Docker container rebuild and `docker compose up -d` to restart. Don't mix up the deployment paths. Confidence: 0.70
 - When changes span both frontend AND backend (new routes, new pages, new API endpoints), run BOTH the frontend build (`npm run build`) AND the Docker rebuild (`docker compose up -d --build`) — the system won't work in production unless both deployment paths are completed. Confidence: 0.75
@@ -43,3 +44,9 @@
 
 # architecture
 - When adding similar functionality for a different user role (e.g., subadmin tickets), extend the existing model (e.g., SupportTicket) with a type/discriminator field rather than creating a parallel model — reuse over duplication. Confidence: 0.70
+
+# email
+- Use `codingnexus.apsit.edu.in` as the admin portal URL in email links (not `codingnexus.live`). Confidence: 0.65
+
+# scoring
+- For code submission grading: award partial marks for correct but unoptimized solutions rather than failing them outright; students should know their solution passed but was not optimally efficient. Confidence: 0.80

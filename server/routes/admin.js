@@ -2549,11 +2549,27 @@ router.get('/email/events', authenticate, authorizeRole('admin', 'subadmin', 'su
 
 // ============ ADMIN SUPPORT TICKETS ============
 
-// Get all admin-type support tickets (visible to all admins)
+// Get admin support tickets (superadmin/admin see all; subadmins see only their own unless permitted)
 router.get('/support-tickets', authenticate, async (req, res) => {
   try {
+    // Check if user has permission to see all tickets
+    const canSeeAll = req.user.role === 'superadmin' || req.user.role === 'admin' ||
+      (req.user.role === 'subadmin' && (() => {
+        try {
+          const perms = typeof req.user.adminProfile?.permissions === 'string'
+            ? JSON.parse(req.user.adminProfile.permissions)
+            : req.user.adminProfile?.permissions || {};
+          return perms.viewTickets === true || perms.respondTickets === true;
+        } catch { return false; }
+      })());
+
+    const where = { type: 'admin' };
+    if (!canSeeAll) {
+      where.userId = req.user.id;
+    }
+
     const tickets = await prisma.supportTicket.findMany({
-      where: { type: 'admin' },
+      where,
       include: {
         user: {
           select: {
@@ -2625,6 +2641,27 @@ router.post('/support-tickets', authenticate, async (req, res) => {
   }
 });
 
+// Delete an admin support ticket
+router.delete('/support-tickets/:id', authenticate, async (req, res) => {
+  try {
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!ticket || ticket.type !== 'admin') {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    await prisma.supportTicket.delete({
+      where: { id: req.params.id }
+    });
+
+    res.json({ success: true, message: 'Ticket deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Update admin support ticket (reply, change status)
 router.put('/support-tickets/:id', authenticate, async (req, res) => {
   try {
@@ -2676,6 +2713,39 @@ router.put('/support-tickets/:id', authenticate, async (req, res) => {
         }
       }
     });
+
+    // Send email notification when a reply is added
+    if (reply && reply.trim()) {
+      try {
+        const recipientName = updatedTicket.user.adminProfile?.name || updatedTicket.user.email;
+        const recipientEmail = updatedTicket.user.email;
+
+        if (recipientEmail) {
+          await sendEmail({
+            to: recipientEmail,
+            subject: `Reply to your support ticket: "${updatedTicket.subject}"`,
+            html: `
+              <div style="font-family: system-ui; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #667eea;">New Reply on Your Support Ticket</h2>
+                <p>Hi <strong>${recipientName}</strong>,</p>
+                <p>Your support ticket <strong>"${updatedTicket.subject}"</strong> has received a reply.</p>
+                <div style="background: #f0f4ff; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                  <p style="margin: 0;"><strong>Reply:</strong></p>
+                  <p style="margin: 8px 0 0 0;">${reply.trim()}</p>
+                </div>
+                <p style="color: #666; font-size: 14px;">You can view the full conversation in the Subadmin Support section.</p>
+                <p style="margin-top: 24px; color: #666; font-size: 14px;">
+                  Best regards,<br/>Coding Nexus Admin
+                </p>
+              </div>
+            `,
+            text: `Hi ${recipientName},\n\nYour support ticket "${updatedTicket.subject}" has received a reply.\n\nReply: ${reply.trim()}\n\nYou can view the full conversation in the Subadmin Support section.\n\nBest regards,\nCoding Nexus Admin`
+          });
+        }
+      } catch (emailErr) {
+        console.error('Failed to send ticket reply notification email:', emailErr.message);
+      }
+    }
 
     const formatted = {
       ...updatedTicket,

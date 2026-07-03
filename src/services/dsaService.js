@@ -212,6 +212,18 @@ export const dsaService = {
     }
   },
 
+  async deleteNote(id) {
+    try {
+      const response = await apiClient.delete(`/admin/dsa/notes/${id}`);
+      if (response.success) toast.success('Note deleted successfully');
+      return response;
+    } catch (error) {
+      console.error('Delete note error:', error);
+      toast.error(error.message || 'Failed to delete note');
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ TRAINER DASHBOARD ============
 
   async getTrainerDashboard(trainerId) {

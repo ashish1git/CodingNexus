@@ -73,12 +73,13 @@ const DsaTimetable = ({ trainerView = false }) => {
     }
   }, [trainerView, trainers, userDetails]);
 
-  const emptyForm = { trainerIds: [], topic: '', description: '', batch: '', lectureDate: '', startTime: '', endTime: '' };
+  const emptyForm = { trainerIds: [], topic: '', description: '', batch: '', lectureDate: '', startTime: '', endTime: '', notesRequired: true };
   const [form, setForm] = useState({ ...emptyForm });
   const [recurringForm, setRecurringForm] = useState({
     trainerIds: [], topic: '', description: '', batch: '',
     startTime: '', endTime: '', startDate: '', endDate: '', count: 12,
-    daysOfWeek: { monday: true, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false }
+    daysOfWeek: { monday: true, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
+    notesRequired: true
   });
 
   useEffect(() => { fetchData(); }, []);
@@ -144,7 +145,8 @@ const DsaTimetable = ({ trainerView = false }) => {
         batch: editingLecture.batch || '',
         lectureDate: toDateInput(getLectureDate(editingLecture)),
         startTime: editingLecture.startTime || '',
-        endTime: editingLecture.endTime || ''
+        endTime: editingLecture.endTime || '',
+        notesRequired: editingLecture.notesRequired !== undefined ? editingLecture.notesRequired : true
       });
     }
   }, [editingLecture]);
@@ -218,7 +220,8 @@ const DsaTimetable = ({ trainerView = false }) => {
       description: recurringForm.description, batch: recurringForm.batch,
       startTime: recurringForm.startTime, endTime: recurringForm.endTime,
       startDate: recurringForm.startDate, endDate: recurringForm.endDate || undefined,
-      count: parseInt(recurringForm.count) || 12, daysOfWeek: selectedDays
+      count: parseInt(recurringForm.count) || 12, daysOfWeek: selectedDays,
+      notesRequired: recurringForm.notesRequired !== undefined ? recurringForm.notesRequired : true
     });
     if (res.success) { setShowRecurringModal(false); fetchData(); }
   };
@@ -543,6 +546,16 @@ const LectureFormModal = ({ editing, form, setForm, trainers, onClose, onSubmit 
               className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
           </div>
         </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.notesRequired === false} onChange={e => setForm({ ...form, notesRequired: !e.target.checked })}
+              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+            <div>
+              <span className="text-xs font-medium text-gray-700">Mark as Optional (no notes required)</span>
+              <p className="text-[10px] text-gray-500">Check this if notes upload is NOT mandatory for this lecture</p>
+            </div>
+          </label>
+        </div>
         <div className="flex gap-3 pt-4 border-t border-gray-100">
           <button type="button" onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium text-sm">Cancel</button>
@@ -646,6 +659,16 @@ const RecurringFormModal = ({ form, setForm, trainers, toggleDay, onClose, onSub
               <input type="time" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
             </div>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.notesRequired === false} onChange={e => setForm({ ...form, notesRequired: !e.target.checked })}
+                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+              <div>
+                <span className="text-xs font-medium text-gray-700">Mark as Optional (no notes required)</span>
+                <p className="text-[10px] text-gray-500">Check this if notes upload is NOT mandatory for these lectures</p>
+              </div>
+            </label>
           </div>
           <div className="flex gap-3 pt-4 border-t border-gray-100">
             <button type="button" onClick={onClose}

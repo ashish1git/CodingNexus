@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Loader2, BookOpen, Calendar, Clock, CheckCircle, AlertCircle, XCircle, Bell, RefreshCw
+  Loader2, BookOpen, Calendar, Clock, CheckCircle, AlertCircle, XCircle, Bell, RefreshCw, FileText, Trash2
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import dsaService from '../../../services/dsaService';
@@ -10,11 +10,15 @@ const DsaTrainerDashboard = () => {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sendingNotify, setSendingNotify] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [deletingNote, setDeletingNote] = useState(null);
 
   const isSuperAdmin = userDetails?.role === 'superadmin' || userDetails?.role === 'admin';
 
   useEffect(() => {
     fetchDashboard();
+    fetchNotes();
   }, []);
 
   const fetchDashboard = async () => {
@@ -22,6 +26,24 @@ const DsaTrainerDashboard = () => {
     const res = await dsaService.getTrainerDashboard();
     if (res.success) setDashboard(res.dashboard);
     setLoading(false);
+  };
+
+  const fetchNotes = async () => {
+    setNotesLoading(true);
+    const res = await dsaService.getNotes();
+    if (res.success) setNotes(res.notes || []);
+    setNotesLoading(false);
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    if (!confirm('Delete this note permanently? This cannot be undone.')) return;
+    setDeletingNote(noteId);
+    const res = await dsaService.deleteNote(noteId);
+    if (res.success) {
+      setNotes(prev => prev.filter(n => n.id !== noteId));
+      fetchDashboard();
+    }
+    setDeletingNote(null);
   };
 
   const handleNotify = async () => {
@@ -73,7 +95,7 @@ const DsaTrainerDashboard = () => {
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-600" />
-            My Dashboard
+            My Dashboard (Upload Your Notes 1 day before Your lecture between 10pm -10:30pm & it will be verified before 11:10pm )
           </h2>
           <p className="text-sm text-gray-500">Welcome, {dashboard.trainerName}</p>
         </div>
@@ -135,6 +157,62 @@ const DsaTrainerDashboard = () => {
                   </div>
                 </div>
                 {getNoteStatusBadge(lecture.noteStatus)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* My Uploaded Notes */}
+      <div className="mb-6">
+        <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-indigo-600" />
+          My Uploaded Notes
+        </h3>
+        {notesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
+            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No notes uploaded yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {notes.map(note => (
+              <div key={note.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    note.status === 'approved' ? 'bg-green-100' : note.status === 'rejected' ? 'bg-red-100' : 'bg-amber-100'
+                  }`}>
+                    <FileText className={`w-4 h-4 ${
+                      note.status === 'approved' ? 'text-green-600' : note.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+                    }`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{note.title}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5 flex-wrap">
+                      <span className="truncate">{note.lectureTopic}</span>
+                      <span>•</span>
+                      <span>{new Date(note.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                      <span>•</span>
+                      <span className={`font-medium ${
+                        note.status === 'approved' ? 'text-green-600' : note.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+                      }`}>
+                        {note.status === 'approved' ? 'Approved' : note.status === 'rejected' ? 'Rejected' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDeleteNote(note.id)}
+                  disabled={deletingNote === note.id}
+                  className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
+                  title="Cancel/Delete this note"
+                >
+                  {deletingNote === note.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
               </div>
             ))}
           </div>

@@ -330,7 +330,8 @@ export default function RecruitmentForm() {
           <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">No Open Positions</h2>
           <p className="text-gray-500 mb-6">
-            We're not currently accepting applications. Check back later for recruitment updates.
+            Forms are Closed....
+            
           </p>
           <button
             onClick={() => navigate('/')}

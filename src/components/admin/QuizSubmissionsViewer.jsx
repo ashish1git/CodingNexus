@@ -7,7 +7,7 @@ import {
 import { adminService } from "../../services/adminService";
 import { useAuth } from "../../context/AuthContext";
 
-const QuizSubmissionsViewer = () => {
+  const QuizSubmissionsViewer = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { userDetails } = useAuth();

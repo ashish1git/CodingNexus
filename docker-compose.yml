@@ -7,9 +7,13 @@ services:
     container_name: codingnexus-app
     restart: unless-stopped
     network_mode: "host"
+    user: root
 
     env_file:
       - .env.docker
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
     environment:
       - NODE_ENV=${NODE_ENV:-production}

@@ -83,6 +83,7 @@ import AdminHackathonRegistrations from './components/admin/AdminHackathonRegist
 import TeamApplicationsManager from './components/admin/TeamApplicationsManager';
 import GuestManagementPage from './components/admin/GuestManagementPage';
 import AptitudeManager from './components/admin/AptitudeManager';
+import MonitoringDashboard from './components/admin/MonitoringDashboard';
 const RecruitmentConfigManager = lazy(() => import('./components/admin/RecruitmentConfigManager'));
 const RecruitmentSubmissions = lazy(() => import('./components/admin/RecruitmentSubmissions'));
 
@@ -517,6 +518,16 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <RecruitmentSubmissions />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Server Monitoring */}
+              <Route
+                path="/admin/monitoring"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <MonitoringDashboard />
                   </ProtectedRoute>
                 }
               />
