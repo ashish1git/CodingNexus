@@ -1,10 +1,20 @@
 import React from 'react';
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, Terminal, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, Terminal, AlertCircle, Zap } from 'lucide-react';
+
+function getOptimizationStyle(multiplier) {
+  if (multiplier <= 0.70) return { bg: 'bg-red-500/10 border-red-500/30', text: 'text-red-400', icon: 'text-red-400' };
+  if (multiplier <= 0.85) return { bg: 'bg-orange-500/10 border-orange-500/30', text: 'text-orange-400', icon: 'text-orange-400' };
+  return { bg: 'bg-yellow-500/10 border-yellow-500/30', text: 'text-yellow-400', icon: 'text-yellow-400' };
+}
 
 /**
- * Expandable test results panel showing per-case pass/fail, I/O, errors.
+ * Expandable test results panel showing per-case pass/fail, I/O, errors,
+ * and optimization feedback when solution is correct but inefficient.
  */
 export default function TestResults({ testResults, showTestCases, onToggle }) {
+  const { efficiencyMultiplier, optimizationFeedback } = testResults;
+  const showOptimization = efficiencyMultiplier != null && efficiencyMultiplier < 1.0 && optimizationFeedback;
+
   return (
     <div className="border-t border-[#3e3e3e] bg-[#262626] shadow-lg">
       <button
@@ -35,6 +45,20 @@ export default function TestResults({ testResults, showTestCases, onToggle }) {
       {showTestCases && (
         <div className="max-h-80 overflow-y-auto border-t border-[#3e3e3e]">
           <div className="p-4 space-y-3">
+            {showOptimization && (() => {
+              const style = getOptimizationStyle(efficiencyMultiplier);
+              return (
+                <div className={`p-4 rounded-lg border-2 flex items-start gap-3 ${style.bg}`}>
+                  <Zap className={`w-5 h-5 mt-0.5 flex-shrink-0 ${style.icon}`} />
+                  <div>
+                    <p className={`text-sm font-semibold ${style.text}`}>
+                      Performance Notice — {Math.round((1 - efficiencyMultiplier) * 100)}% deduction
+                    </p>
+                    <p className="text-sm text-gray-300 mt-1">{optimizationFeedback}</p>
+                  </div>
+                </div>
+              );
+            })()}
             {testResults.cases?.map((testCase) => (
               <div
                 key={testCase.id}

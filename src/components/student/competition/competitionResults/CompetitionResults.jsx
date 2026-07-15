@@ -1,5 +1,7 @@
 import React from 'react';
+import { Trophy } from 'lucide-react';
 import { useCompetitionResults } from './hooks/useCompetitionResults';
+import Card from '../../../shared/Card';
 import Loading from '../../../shared/Loading';
 import ResultsHeader from './components/ResultsHeader';
 import ResultsTabs from './components/ResultsTabs';
@@ -8,8 +10,6 @@ import ProblemResultCard from './components/ProblemResultCard';
 import LeaderboardTable from './components/LeaderboardTable';
 import NoSubmissionCard from './components/NoSubmissionCard';
 import CompetitionNotFound from './components/CompetitionNotFound';
-
-const ENABLE_LEADERBOARD = true;
 
 const CompetitionResults = () => {
   const {
@@ -24,6 +24,8 @@ const CompetitionResults = () => {
     return <CompetitionNotFound onBack={() => navigate('/student/competitions')} />;
   }
 
+  const enableLeaderboard = competition.showLeaderboard !== false;
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -37,7 +39,7 @@ const CompetitionResults = () => {
         <ResultsTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          enableLeaderboard={ENABLE_LEADERBOARD}
+          enableLeaderboard={true}
         />
 
         {activeTab === 'my-results' && (
@@ -65,11 +67,21 @@ const CompetitionResults = () => {
           </div>
         )}
 
-        {ENABLE_LEADERBOARD && activeTab === 'leaderboard' && (
-          <LeaderboardTable
-            leaderboard={leaderboard}
-            currentUserId={mySubmission?.userId}
-          />
+        {activeTab === 'leaderboard' && (
+          enableLeaderboard ? (
+            <LeaderboardTable
+              leaderboard={leaderboard}
+              currentUserId={mySubmission?.userId}
+            />
+          ) : (
+            <Card className="p-8">
+              <div className="text-center py-8">
+                <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Leaderboard will be displayed soon</h3>
+                <p className="text-gray-500">The leaderboard will be available once the admin enables it. Stay tuned!</p>
+              </div>
+            </Card>
+          )
         )}
       </div>
     </div>

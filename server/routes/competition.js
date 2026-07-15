@@ -7,6 +7,28 @@ import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 
 const router = express.Router();
 
+// ─── Server-side starter code generator (mirrors frontend) ──────────
+const generateStarterCode = (problem) => {
+  const { functionName = 'solution', returnType = 'int', parameters = [] } = problem;
+  const typeMapping = {
+    java: { 'int': 'int', 'int[]': 'int[]', 'int[][]': 'int[][]', 'string': 'String', 'string[]': 'String[]', 'boolean': 'boolean', 'double': 'double', 'float': 'float', 'long': 'long', 'List<Integer>': 'List<Integer>', 'List<String>': 'List<String>', 'List<List<Integer>>': 'List<List<Integer>>' },
+    cpp: { 'int': 'int', 'int[]': 'vector<int>', 'int[][]': 'vector<vector<int>>', 'string': 'string', 'string[]': 'vector<string>', 'boolean': 'bool', 'double': 'double', 'float': 'float', 'long': 'long long', 'List<Integer>': 'vector<int>', 'List<String>': 'vector<string>', 'List<List<Integer>>': 'vector<vector<int>>' },
+    python: { 'int': 'int', 'int[]': 'List[int]', 'int[][]': 'List[List[int]]', 'string': 'str', 'string[]': 'List[str]', 'boolean': 'bool', 'double': 'float', 'float': 'float', 'long': 'int', 'List<Integer>': 'List[int]', 'List<String>': 'List[str]', 'List<List<Integer>>': 'List[List[int]]' }
+  };
+  const getType = (lang, t) => typeMapping[lang]?.[t] || t;
+
+  const javaParams = parameters.map(p => `${getType('java', p.type)} ${p.name}`).join(', ');
+  const java = `class Solution {\n    public ${getType('java', returnType)} ${functionName}(${javaParams}) {\n        // Write your solution here\n        \n    }\n}`;
+
+  const cppParams = parameters.map(p => `${getType('cpp', p.type)}& ${p.name}`).join(', ');
+  const cpp = `class Solution {\npublic:\n    ${getType('cpp', returnType)} ${functionName}(${cppParams}) {\n        // Write your solution here\n        \n    }\n};`;
+
+  const pythonParams = parameters.map(p => `${p.name}: ${getType('python', p.type)}`).join(', ');
+  const python = `class Solution:\n    def ${functionName}(self, ${pythonParams}) -> ${getType('python', returnType)}:\n        # Write your solution here\n        pass`;
+
+  return { java, cpp, python };
+};
+
 // Judge0 Configuration
 const JUDGE0_URL = process.env.JUDGE0_URL || 'http://202.179.85.68:2358';
 
@@ -177,15 +199,23 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
+    const competition = await prisma.competition.findUnique({
+      where: { id },
+      select: { showLeaderboard: true, title: true }
+    });
+
+    if (!competition) {
+      return res.status(404).json({ error: 'Competition not found' });
+    }
+
+    if (!competition.showLeaderboard) {
+      return res.json({ leaderboard: [], disabled: true, message: 'Leaderboard is currently hidden' });
+    }
+
     const submissions = await prisma.competitionSubmission.findMany({
       where: {
         competitionId: id,
-        status: 'completed',
-        user: {
-          email: {
-            notIn: ['23106064@student.mu.ac.in', '23106031@student.mu.ac.in', '23106025@student.mu.ac.in']
-          }
-        }
+        status: 'completed'
       },
       include: {
         user: {
@@ -196,7 +226,8 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
             studentProfile: {
               select: {
                 name: true,
-                batch: true
+                batch: true,
+                division: true
               }
             }
           }
@@ -211,24 +242,42 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
       },
       orderBy: [
         { totalScore: 'desc' },
-        { totalTime: 'asc' },
-        { submittedAt: 'asc' }
+        { submittedAt: 'asc' },
+        { totalTime: 'asc' }
       ]
     });
 
-    const leaderboard = submissions.map((sub, index) => ({
-      rank: index + 1,
-      userId: sub.userId,
-      name: sub.user.studentProfile?.name || sub.user.email,
-      moodleId: sub.user.moodleId || sub.user.email.split('@')[0], // Fallback to email prefix if moodleId is null
-      batch: sub.user.studentProfile?.batch,
-      totalScore: sub.totalScore,
-      // Count problems that are either accepted OR evaluated (have score > 0)
-      problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted' || p.score > 0).length,
-      totalProblems: sub.problemSubmissions.length,
-      executionTime: sub.totalTime,
-      submittedAt: sub.submittedAt
-    }));
+    // Compute proper ranks with tie-breaking:
+    // Same totalScore AND same submittedAt time → shared rank (e.g., 1, 2, 2, 4)
+    const leaderboard = [];
+    let currentRank = 0;
+    let previousEntry = null;
+
+    for (const sub of submissions) {
+      const entry = {
+        userId: sub.userId,
+        name: sub.user.studentProfile?.name || sub.user.email,
+        moodleId: sub.user.moodleId || sub.user.email.split('@')[0],
+        batch: sub.user.studentProfile?.batch,
+        division: sub.user.studentProfile?.division || '',
+        totalScore: sub.totalScore,
+        problemsSolved: sub.problemSubmissions.filter(p => p.status === 'accepted' || p.score > 0).length,
+        totalProblems: sub.problemSubmissions.length,
+        executionTime: sub.totalTime,
+        submittedAt: sub.submittedAt
+      };
+
+      // Two entries share the same rank only if BOTH score and submission time match
+      if (previousEntry === null ||
+          previousEntry.totalScore !== entry.totalScore ||
+          previousEntry.submittedAt?.getTime() !== entry.submittedAt?.getTime()) {
+        currentRank = leaderboard.length + 1;
+      }
+
+      entry.rank = currentRank;
+      leaderboard.push(entry);
+      previousEntry = entry;
+    }
 
     console.log('🔍 Leaderboard data sample:', leaderboard[0]);
     console.log('📊 Total entries:', leaderboard.length);
@@ -295,6 +344,7 @@ router.get('/:id/submissions', authenticate, authorizeRole('admin', 'subadmin', 
       submittedAt: sub.submittedAt,
       violationLog: sub.violationLog,
       problemSubmissions: sub.problemSubmissions.map(ps => ({
+        id: ps.id,
         problemId: ps.problemId,
         problemTitle: ps.problem.title,
         difficulty: ps.problem.difficulty,
@@ -435,8 +485,15 @@ router.get('/:id', authenticate, async (req, res) => {
       draftMap[d.problemId] = { code: d.code, language: d.language };
     });
 
+    // Regenerate starterCode from current function signature (always fresh)
+    const problemsWithFreshCode = competition.problems.map(p => ({
+      ...p,
+      starterCode: p.functionName || p.parameters ? generateStarterCode(p) : p.starterCode
+    }));
+
     res.json({
       ...competition,
+      problems: problemsWithFreshCode,
       status,
       isRegistered: competition.registrations.length > 0,
       hasSubmitted: activeSubmissions.length > 0,
@@ -780,6 +837,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
               expectedOutput: expected,
               actualOutput: stdout,
               passed,
+              hidden: testCase.hidden || false,
               time: result.time,
               memory: result.memory,
               status: result.status?.description || 'Unknown',
@@ -806,7 +864,7 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
 
         // Calculate score
         const scorePercentage = testCases.length > 0 ? (totalPassed / testCases.length) : 0;
-        const finalScore = Math.round(scorePercentage * submission.maxScore);
+        let finalScore = Math.round(scorePercentage * submission.maxScore);
 
         // Determine final status
         let finalStatus = 'wrong-answer';
@@ -820,6 +878,29 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
           finalStatus = 'compile-error';
         }
 
+        // Performance optimization scoring — deduct marks for slow but correct solutions
+        let efficiencyMultiplier = 1.0;
+        let optimizationFeedback = null;
+        if (totalPassed === testCases.length && testCases.length > 0) {
+          const avgTimePerCase = totalTime / testCases.length;
+          const timeLimitMs = problem.timeLimit || 3000;
+
+          if (avgTimePerCase > timeLimitMs * 0.50) {
+            efficiencyMultiplier = 0.70;
+            optimizationFeedback = 'Solution is significantly inefficient. Consider optimizing to meet expected complexity.';
+          } else if (avgTimePerCase > timeLimitMs * 0.20) {
+            efficiencyMultiplier = 0.85;
+            optimizationFeedback = 'Solution works but is inefficient. Try to reduce time complexity.';
+          } else if (avgTimePerCase > timeLimitMs * 0.05) {
+            efficiencyMultiplier = 0.95;
+            optimizationFeedback = 'Solution accepted but could be further optimized for better performance.';
+          }
+
+          if (efficiencyMultiplier < 1.0) {
+            finalScore = Math.round(finalScore * efficiencyMultiplier);
+          }
+        }
+
         // Update problem submission with results
         await prisma.problemSubmission.update({
           where: { id: submission.id },
@@ -830,7 +911,9 @@ async function executeJudge0Submissions(submissionId, problemSubmissions, proble
             executionTime: Math.round(totalTime),
             memoryUsed: totalMemory,
             testResults: testResults,
-            judgedAt: new Date()
+            judgedAt: new Date(),
+            efficiencyMultiplier,
+            optimizationFeedback
           }
         });
 
@@ -946,7 +1029,7 @@ router.post('/', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'),
 router.put('/:id', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), checkPermission('manageCompetitions'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, isActive } = req.body;
+    const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, isActive, showLeaderboard, problems } = req.body;
 
     const competition = await prisma.competition.update({
       where: { id },
@@ -962,11 +1045,84 @@ router.put('/:id', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'
         prizePool,
         maxParticipants,
         isActive,
+        showLeaderboard: showLeaderboard !== undefined ? showLeaderboard : undefined,
         updatedAt: new Date()
       }
     });
 
-    res.json({ message: 'Competition updated successfully', competition });
+    // Handle problems update if provided
+    if (problems && Array.isArray(problems)) {
+      const existingProblems = await prisma.problem.findMany({
+        where: { competitionId: id },
+        select: { id: true }
+      });
+      const existingIds = new Set(existingProblems.map(p => p.id));
+      const incomingIds = new Set(problems.filter(p => p.id).map(p => p.id));
+
+      // Delete problems not in the incoming list
+      const idsToDelete = [...existingIds].filter(eid => !incomingIds.has(eid));
+      if (idsToDelete.length > 0) {
+        await prisma.problem.deleteMany({
+          where: { id: { in: idsToDelete } }
+        });
+      }
+
+      // Update or create problems
+      for (let i = 0; i < problems.length; i++) {
+        const p = problems[i];
+        // Regenerate starterCode from current signature (overrides whatever the client sends)
+        const freshStarterCode = generateStarterCode({
+          functionName: p.functionName || 'solution',
+          parameters: p.parameters || [{ name: 'nums', type: 'int[]' }],
+          returnType: p.returnType || 'int'
+        });
+        const problemData = {
+          title: p.title,
+          description: p.description,
+          difficulty: p.difficulty || 'medium',
+          points: p.points || 100,
+          orderIndex: i,
+          constraints: p.constraints || [],
+          examples: p.examples || [],
+          testCases: p.testCases || [],
+          timeLimit: p.timeLimit || 3000,
+          memoryLimit: p.memoryLimit || 256,
+          expectedComplexity: p.expectedComplexity || '',
+          expectedSpace: p.expectedSpace || '',
+          functionName: p.functionName || 'solution',
+          parameters: p.parameters || [{ name: 'nums', type: 'int[]' }],
+          returnType: p.returnType || 'int',
+          starterCode: freshStarterCode
+        };
+
+        if (p.id && existingIds.has(p.id)) {
+          await prisma.problem.update({
+            where: { id: p.id },
+            data: problemData
+          });
+        } else {
+          await prisma.problem.create({
+            data: {
+              id: randomUUID(),
+              competitionId: id,
+              ...problemData
+            }
+          });
+        }
+      }
+    }
+
+    const updatedCompetition = await prisma.competition.findUnique({
+      where: { id },
+      include: {
+        problems: {
+          orderBy: { orderIndex: 'asc' },
+          select: { id: true, title: true, difficulty: true, points: true, orderIndex: true }
+        }
+      }
+    });
+
+    res.json({ message: 'Competition updated successfully', competition: updatedCompetition });
   } catch (error) {
     console.error('Error updating competition:', error);
     res.status(500).json({ error: 'Failed to update competition' });
@@ -1079,8 +1235,8 @@ router.post('/:competitionId/problems/:problemId/submissions/:submissionId/evalu
     }
 
     const marksNum = parseFloat(marks);
-    if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-      return res.status(400).json({ error: 'Marks must be between 0 and 100' });
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > 1000) {
+      return res.status(400).json({ error: 'Marks must be between 0 and 1000' });
     }
 
     // Use transaction to combine multiple operations efficiently
@@ -1179,16 +1335,17 @@ async function updateCompetitionScoreAsync(competitionSubmissionId) {
       select: {
         id: true,
         problemSubmissions: {
-          select: { score: true }
+          select: { score: true, executionTime: true }
         }
       }
     });
 
     if (competitionSubmission) {
       const totalScore = competitionSubmission.problemSubmissions.reduce((sum, sub) => sum + sub.score, 0);
+      const totalTime = competitionSubmission.problemSubmissions.reduce((sum, sub) => sum + sub.executionTime, 0);
       await prisma.competitionSubmission.update({
         where: { id: competitionSubmission.id },
-        data: { totalScore }
+        data: { totalScore, totalTime }
       });
     }
   } catch (error) {

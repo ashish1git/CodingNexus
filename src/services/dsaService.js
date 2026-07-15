@@ -237,7 +237,21 @@ export const dsaService = {
     }
   },
 
-  // ============ NOTIFICATIONS ============
+  // ============ WEEKLY REPORT ============
+
+  async getWeeklyReport(startDate, endDate) {
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const query = params.toString();
+      const response = await apiClient.get(`/admin/dsa/weekly-report?${query}`);
+      return response;
+    } catch (error) {
+      console.error('Get weekly report error:', error);
+      return { success: false, error: error.message };
+    }
+  },
 
   async notifyMissingNotes() {
     try {

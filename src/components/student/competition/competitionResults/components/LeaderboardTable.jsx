@@ -15,6 +15,12 @@ const LeaderboardRow = ({ entry, isCurrentUser }) => {
     return 'text-gray-900';
   };
 
+  const formatTime = (ms) => {
+    if (ms == null) return 'N/A';
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(2)}s`;
+  };
+
   return (
     <tr className={isCurrentUser ? 'bg-blue-50' : ''}>
       <td className="px-4 py-3 whitespace-nowrap">
@@ -24,13 +30,21 @@ const LeaderboardRow = ({ entry, isCurrentUser }) => {
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <div className="text-sm font-medium text-gray-900">{entry.name}</div>
-        {entry.batch && <div className="text-xs text-gray-500">{entry.batch}</div>}
+        {(entry.batch || entry.division) && (
+          <div className="text-xs text-gray-500">
+            {entry.batch}
+            {entry.division && <span className="ml-1">• {entry.division}</span>}
+          </div>
+        )}
       </td>
       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
         {entry.moodleId || 'N/A'}
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <span className="text-lg font-bold text-gray-900">{entry.totalScore}</span>
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+        {formatTime(entry.executionTime)}
       </td>
       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
         {formatIST(entry.submittedAt)}
@@ -55,6 +69,7 @@ const LeaderboardTable = ({ leaderboard, currentUserId }) => {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Name</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Moodle ID</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Score</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Execution Time</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Submitted At</th>
             </tr>
           </thead>

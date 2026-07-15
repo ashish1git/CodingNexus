@@ -528,7 +528,7 @@ export const subadminWelcome = (name, email, password, permissionsList) => {
   const content = `
     <p class="greeting">Hello ${name},</p>
 
-    <p>You have been added as a <strong>Sub-Admin</strong> for Coding Nexus. 🎉</p>
+    <p>You have been added as a <strong>Sub-Admin</strong> for Coding Nexus portal. 🎉</p>
 
     <div class="success-box">
       <strong>✓ Account Created Successfully</strong>
@@ -564,7 +564,7 @@ export const subadminWelcome = (name, email, password, permissionsList) => {
 
     <div class="warning-box">
       <strong>🔒 Security Notice:</strong>
-      <p>Please change your password after your first login. Never share your credentials with anyone.</p>
+      <p>Please change your password after your first login By going to Profile section of your Dashboard. Never share your credentials with anyone.</p>
     </div>
 
     <div class="section">

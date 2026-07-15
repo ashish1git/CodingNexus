@@ -490,6 +490,8 @@ const TicketManagement = () => {
                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                       <span className="font-medium">{ticket.studentName}</span>
                       <span>Roll: {ticket.studentRollNo}</span>
+                      <span>Batch: {ticket.studentBatch || 'N/A'}</span>
+                      <span>Div: {ticket.studentDivision || 'N/A'}</span>
                       <span>Created: {ticket.createdAt?.toLocaleDateString()}</span>
                       {ticket.responses && ticket.responses.length > 0 && (
                         <span className="flex items-center gap-1 text-indigo-600">
@@ -543,7 +545,15 @@ const TicketManagement = () => {
                   </div>
                   <p className="text-sm text-gray-600">
                     From: <span className="font-medium">{selectedTicket.studentName}</span> ({selectedTicket.studentRollNo})
+                    {selectedTicket.studentBatch && <span className="ml-2 text-gray-500">| Batch: {selectedTicket.studentBatch}</span>}
+                    {selectedTicket.studentDivision && <span className="ml-1 text-gray-500">| Div: {selectedTicket.studentDivision}</span>}
                   </p>
+                  {/* Student Quick Info */}
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-gray-600">
+                    <span>🎓 Batch: {selectedTicket.studentBatch || 'N/A'}</span>
+                    <span>📚 Div: {selectedTicket.studentDivision || 'N/A'}</span>
+                    <span>📞 Phone: {selectedTicket.studentPhone || 'N/A'}</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}

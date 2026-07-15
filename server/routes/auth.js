@@ -320,6 +320,7 @@ router.get('/me', authenticate, async (req, res) => {
       // Add profile data directly at root level for easy access
       ...(user.studentProfile && {
         batch: user.studentProfile.batch,
+        division: user.studentProfile.division,
         name: formatDisplayName(user.studentProfile.name),
         phone: user.studentProfile.phone,
         rollNo: user.studentProfile.rollNo,

@@ -10,6 +10,9 @@
 *.md
 !README.md
 !docs/**
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
 
 # Dependencies
 node_modules

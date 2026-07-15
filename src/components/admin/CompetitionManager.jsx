@@ -5,6 +5,7 @@ import {
   Calendar, Clock, Users, Target, Award, Search,
   Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X, Undo2
 } from 'lucide-react';
+import LeaderboardTable from '../student/competition/competitionResults/components/LeaderboardTable';
 import { useAuth } from '../../context/AuthContext';
 import competitionService from '../../services/competitionService';
 import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
@@ -26,7 +27,8 @@ const CompetitionManager = () => {
     duration: 180,
     prize: '',
     category: '',
-    type: 'rated'
+    type: 'rated',
+    showLeaderboard: true
   });
   const [problems, setProblems] = useState([]);
   const [currentProblem, setCurrentProblem] = useState({
@@ -154,6 +156,10 @@ public:
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
   const [submissions, setSubmissions] = useState([]);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [submissionsSearch, setSubmissionsSearch] = useState('');
+  const [expandedSubmissions, setExpandedSubmissions] = useState(new Set());
 
   useEffect(() => {
     fetchCompetitions();
@@ -358,6 +364,23 @@ public:
     }
   };
 
+  const handleViewLeaderboard = async (id) => {
+    try {
+      const comp = await competitionService.getCompetition(id);
+      setViewCompetition(comp);
+      const lb = await competitionService.getLeaderboard(id);
+      if (lb.disabled) {
+        toast.error(lb.message || 'Leaderboard is hidden');
+        return;
+      }
+      setLeaderboardData(Array.isArray(lb) ? lb : (lb.leaderboard || []));
+      setShowLeaderboardModal(true);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      toast.error('Failed to load leaderboard');
+    }
+  };
+
   const handleIncompleteSubmission = async (submissionId) => {
     if (!window.confirm('Mark this submission as incomplete? The student will be able to resubmit.')) return;
     try {
@@ -384,7 +407,8 @@ public:
         duration: data.duration,
         prize: data.prizePool || data.prize || '',
         category: data.category,
-        type: data.type || 'rated'
+        type: data.type || 'rated',
+        showLeaderboard: data.showLeaderboard !== false
       });
       setProblems(data.problems || []);
       setShowEditModal(true);
@@ -401,14 +425,35 @@ public:
     }
 
     try {
+      // Sanitize problems — strip UI-only fields and rebuild starterCode from current signature
+      const sanitizedProblems = problems.map((p, index) => {
+        const starterCode = generateStarterCode(p);
+        return {
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          difficulty: p.difficulty || 'medium',
+          points: p.points || 100,
+          orderIndex: index,
+          constraints: (p.constraints || []).filter(c => c && String(c).trim()),
+          examples: (p.examples || []).filter(ex => ex.input || ex.output),
+          testCases: (p.testCases || []).filter(tc => tc.input || tc.output),
+          timeLimit: p.timeLimit || 3000,
+          memoryLimit: p.memoryLimit || 256,
+          functionName: p.functionName || 'solution',
+          parameters: (p.parameters || []).filter(pp => pp.name && pp.type),
+          returnType: p.returnType || 'int',
+          starterCode,
+          expectedComplexity: p.expectedComplexity || '',
+          expectedSpace: p.expectedSpace || ''
+        };
+      });
+
       const competitionData = {
         ...formData,
         startTime: convertISTtoUTC(formData.startTime),
         endTime: convertISTtoUTC(formData.endTime),
-        problems: problems.map((p, index) => ({
-          ...p,
-          orderIndex: index
-        }))
+        problems: sanitizedProblems
       };
 
       await competitionService.updateCompetition(editCompetition.id, competitionData);
@@ -526,9 +571,10 @@ public:
         output: String(ex.output || ''),
         explanation: String(ex.explanation || '')
       })) : [],
-      testCases: Array.isArray(p.testCases) ? p.testCases.filter(tc => tc.input !== undefined || tc.output !== undefined).map(tc => ({
+      // Auto-detect test case output field name (supports both "output" and "expectedOutput")
+      testCases: Array.isArray(p.testCases) ? p.testCases.filter(tc => tc.input !== undefined || tc.output !== undefined || tc.expectedOutput !== undefined).map(tc => ({
         input: String(tc.input || ''),
-        output: String(tc.output || ''),
+        output: String(tc.output || tc.expectedOutput || ''),
         hidden: Boolean(tc.hidden)
       })) : [{ input: '1,2,3\n1', output: '0', hidden: false }],
       expectedComplexity: String(p.expectedComplexity || ''),
@@ -1113,6 +1159,13 @@ public:
                         </button>
                         )}
                         <button
+                          onClick={() => handleViewLeaderboard(competition.id)}
+                          className="text-yellow-600 hover:text-yellow-900"
+                          title="View Leaderboard"
+                        >
+                          <Medal className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleEditCompetition(competition.id)}
                           className="text-blue-600 hover:text-blue-900"
                           title="Edit"
@@ -1274,6 +1327,18 @@ public:
                         <option value="practice">Practice</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <input
+                      type="checkbox"
+                      id="showLeaderboard"
+                      checked={formData.showLeaderboard}
+                      onChange={(e) => setFormData({ ...formData, showLeaderboard: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded"
+                    />
+                    <label htmlFor="showLeaderboard" className="text-sm text-gray-700">
+                      Show leaderboard during/after competition
+                    </label>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Prize</label>
@@ -2236,25 +2301,313 @@ public:
                     <option value="unrated">Unrated</option>
                   </select>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editShowLeaderboard"
+                    checked={formData.showLeaderboard}
+                    onChange={(e) => setFormData({ ...formData, showLeaderboard: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                  <label htmlFor="editShowLeaderboard" className="text-sm text-gray-700">
+                    Show leaderboard during/after competition
+                  </label>
+                </div>
               </div>
 
-              {/* Problems Preview */}
-              {problems.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Problems ({problems.length})</h3>
-                  <div className="space-y-2">
-                    {problems.map((problem, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <span className="font-medium text-gray-900">{problem.title}</span>
-                          <span className="ml-3 text-sm text-gray-600 capitalize">({problem.difficulty})</span>
-                        </div>
-                        <span className="text-sm text-gray-600">{problem.points} points</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Editable Problems Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Problems ({problems.length})</h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProblems([...problems, {
+                        title: '',
+                        description: '',
+                        difficulty: 'medium',
+                        points: 100,
+                        constraints: [''],
+                        examples: [{ input: '', output: '', explanation: '' }],
+                        testCases: [{ input: '', output: '', hidden: false }],
+                        functionName: 'solution',
+                        returnType: 'int',
+                        parameters: [{ name: 'nums', type: 'int[]' }],
+                        expectedComplexity: '',
+                        expectedSpace: ''
+                      }]);
+                    }}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    + Add Problem
+                  </button>
                 </div>
-              )}
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+                  {problems.map((problem, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between p-3 bg-gray-50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-400">{index + 1}.</span>
+                          {problem.title ? (
+                            <span className="font-medium text-gray-900">{problem.title} <span className="text-xs text-gray-500 ml-1">({problem.difficulty}, {problem.points} pts)</span></span>
+                          ) : (
+                            <span className="font-medium text-gray-400 italic">New Problem</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newProblems = [...problems];
+                              newProblems[index] = {...newProblems[index], _editing: !newProblems[index]._editing};
+                              setProblems(newProblems);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            {problem._editing ? 'Done' : 'Edit'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Delete "${problem.title || 'New Problem'}"? This action cannot be undone.`)) return;
+                              if (problems.length <= 1) { toast.error('Need at least one problem'); return; }
+                              setProblems(problems.filter((_, i) => i !== index));
+                            }}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      {problem._editing && (
+                        <div className="p-4 bg-white space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+                              <input
+                                value={problem.title}
+                                onChange={(e) => {
+                                  const np = [...problems];
+                                  np[index] = {...np[index], title: e.target.value};
+                                  setProblems(np);
+                                }}
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Difficulty</label>
+                                <select
+                                  value={problem.difficulty}
+                                  onChange={(e) => { const np = [...problems]; np[index] = {...np[index], difficulty: e.target.value}; setProblems(np); }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                >
+                                  <option value="easy">Easy</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="hard">Hard</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Points</label>
+                                <input
+                                  type="number"
+                                  value={problem.points}
+                                  onChange={(e) => { const np = [...problems]; np[index] = {...np[index], points: parseInt(e.target.value) || 0}; setProblems(np); }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                            <textarea
+                              value={problem.description}
+                              onChange={(e) => { const np = [...problems]; np[index] = {...np[index], description: e.target.value}; setProblems(np); }}
+                              rows={3}
+                              className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                          {/* Constraints */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Constraints</label>
+                            {(problem.constraints || ['']).map((c, ci) => (
+                              <div key={ci} className="flex gap-2 mb-1">
+                                <input
+                                  value={c}
+                                  onChange={(e) => {
+                                    const np = [...problems];
+                                    const cons = [...(np[index].constraints || [''])];
+                                    cons[ci] = e.target.value;
+                                    np[index] = {...np[index], constraints: cons};
+                                    setProblems(np);
+                                  }}
+                                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                  placeholder="e.g., 1 <= n <= 10^5"
+                                />
+                                <button type="button" onClick={() => {
+                                  const np = [...problems];
+                                  const cons = [...np[index].constraints];
+                                  cons.splice(ci, 1);
+                                  np[index] = {...np[index], constraints: cons.length > 0 ? cons : ['']};
+                                  setProblems(np);
+                                }} className="text-red-500 text-xs">×</button>
+                              </div>
+                            ))}
+                            <button type="button" onClick={() => {
+                              const np = [...problems];
+                              np[index] = {...np[index], constraints: [...(np[index].constraints || []), '']};
+                              setProblems(np);
+                            }} className="text-xs text-indigo-600">+ Add Constraint</button>
+                          </div>
+                          {/* Test Cases */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Test Cases (input / expected output)</label>
+                            {(problem.testCases || [{input:'',output:'',hidden:false}]).map((tc, tci) => (
+                              <div key={tci} className="grid grid-cols-2 gap-2 mb-2 p-2 bg-gray-50 rounded">
+                                <div>
+                                  <span className="text-xs text-gray-500">Input</span>
+                                  <textarea
+                                    value={tc.input}
+                                    onChange={(e) => {
+                                      const np = [...problems];
+                                      const tcs = [...np[index].testCases];
+                                      tcs[tci] = {...tcs[tci], input: e.target.value};
+                                      np[index] = {...np[index], testCases: tcs};
+                                      setProblems(np);
+                                    }}
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-gray-500">Output</span>
+                                    <button type="button" onClick={() => {
+                                      const np = [...problems];
+                                      const tcs = [...np[index].testCases];
+                                      tcs.splice(tci, 1);
+                                      np[index] = {...np[index], testCases: tcs.length > 0 ? tcs : [{input:'',output:'',hidden:false}]};
+                                      setProblems(np);
+                                    }} className="text-red-500 text-xs">×</button>
+                                  </div>
+                                  <textarea
+                                    value={tc.output}
+                                    onChange={(e) => {
+                                      const np = [...problems];
+                                      const tcs = [...np[index].testCases];
+                                      tcs[tci] = {...tcs[tci], output: e.target.value};
+                                      np[index] = {...np[index], testCases: tcs};
+                                      setProblems(np);
+                                    }}
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            <button type="button" onClick={() => {
+                              const np = [...problems];
+                              np[index] = {...np[index], testCases: [...np[index].testCases, {input:'',output:'',hidden:false}]};
+                              setProblems(np);
+                            }} className="text-xs text-indigo-600">+ Add Test Case</button>
+                          </div>
+                          {/* ⭐ Function Signature — now editable in Edit mode */}
+                          <div className="border-t border-gray-100 pt-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Function Signature</label>
+                            <div className="grid grid-cols-3 gap-2 mb-2">
+                              <div>
+                                <span className="text-[10px] text-gray-400">Function Name</span>
+                                <input
+                                  value={problem.functionName || 'solution'}
+                                  onChange={(e) => { const np = [...problems]; np[index] = {...np[index], functionName: e.target.value}; setProblems(np); }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-gray-400">Return Type</span>
+                                <select
+                                  value={problem.returnType || 'int'}
+                                  onChange={(e) => { const np = [...problems]; np[index] = {...np[index], returnType: e.target.value}; setProblems(np); }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                >
+                                  {parameterTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-gray-400">Parameters</span>
+                              {(problem.parameters && problem.parameters.length > 0 ? problem.parameters : [{name:'',type:'int'}]).map((param, pi) => (
+                                <div key={pi} className="flex gap-2 mb-1">
+                                  <input
+                                    value={param.name}
+                                    onChange={(e) => {
+                                      const np = [...problems];
+                                      const params = [...(np[index].parameters || [{name:'',type:'int'}])];
+                                      params[pi] = {...params[pi], name: e.target.value};
+                                      np[index] = {...np[index], parameters: params};
+                                      setProblems(np);
+                                    }}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    placeholder="param name"
+                                  />
+                                  <select
+                                    value={param.type}
+                                    onChange={(e) => {
+                                      const np = [...problems];
+                                      const params = [...(np[index].parameters || [{name:'',type:'int'}])];
+                                      params[pi] = {...params[pi], type: e.target.value};
+                                      np[index] = {...np[index], parameters: params};
+                                      setProblems(np);
+                                    }}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                  >
+                                    {parameterTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                  <button type="button" onClick={() => {
+                                    const np = [...problems];
+                                    if (np[index].parameters.length <= 1) return;
+                                    const params = [...np[index].parameters];
+                                    params.splice(pi, 1);
+                                    np[index] = {...np[index], parameters: params};
+                                    setProblems(np);
+                                  }} className="text-red-500 text-xs">×</button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                const np = [...problems];
+                                np[index] = {...np[index], parameters: [...(np[index].parameters || [{name:'',type:'int'}]), {name:'',type:'int'}]};
+                                setProblems(np);
+                              }} className="text-xs text-indigo-600">+ Add Parameter</button>
+                            </div>
+                          </div>
+                          {/* Complexity constraints */}
+                          <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2">
+                            <div>
+                              <span className="text-[10px] text-gray-400">Time Complexity</span>
+                              <input
+                                value={problem.expectedComplexity || ''}
+                                onChange={(e) => { const np = [...problems]; np[index] = {...np[index], expectedComplexity: e.target.value}; setProblems(np); }}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="e.g. O(n)"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-gray-400">Space Complexity</span>
+                              <input
+                                value={problem.expectedSpace || ''}
+                                onChange={(e) => { const np = [...problems]; np[index] = {...np[index], expectedSpace: e.target.value}; setProblems(np); }}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="e.g. O(1)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
@@ -2283,21 +2636,31 @@ public:
       {/* Submissions Modal */}
       {showSubmissionsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-6xl w-full p-6 my-8 max-h-[95vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-xl max-w-7xl w-full p-6 my-4 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white pb-3 border-b z-10">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800">Submissions - {viewCompetition?.title}</h2>
                 <p className="text-sm text-gray-600 mt-1">{submissions.length} total submissions</p>
               </div>
-              <button
-                onClick={() => {
-                  setShowSubmissionsModal(false);
-                  setSelectedSubmission(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setExpandedSubmissions(new Set(submissions.map(s => s.submissionId)))} className="text-xs text-indigo-600 hover:text-indigo-800">Expand All</button>
+                <button onClick={() => setExpandedSubmissions(new Set())} className="text-xs text-gray-600 hover:text-gray-800">Collapse All</button>
+                <button onClick={() => { setShowSubmissionsModal(false); setSelectedSubmission(null); setExpandedSubmissions(new Set()); }} className="text-gray-500 hover:text-gray-700 text-xl">✕</button>
+              </div>
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div className="mb-4 flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, roll number, status..."
+                  value={submissionsSearch}
+                  onChange={(e) => setSubmissionsSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
             </div>
 
             {submissions.length === 0 ? (
@@ -2306,303 +2669,284 @@ public:
                 <p className="text-gray-600">No submissions yet</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {submissions.map((submission) => (
-                  <div key={submission.submissionId} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{submission.userName}</p>
-                          <p className="text-sm text-gray-600">Roll: {submission.rollNo} | Batch: {submission.batch}</p>
+              <div className="space-y-2">
+                {submissions.filter(s => {
+                  if (!submissionsSearch) return true;
+                  const t = submissionsSearch.toLowerCase();
+                  return (s.userName || '').toLowerCase().includes(t) ||
+                    (s.rollNo || '').toLowerCase().includes(t) ||
+                    (s.status || '').toLowerCase() === t;
+                }).map((submission, si) => {
+                  const isExpanded = expandedSubmissions.has(submission.submissionId);
+                  const violationCount = submission.violationLog && Array.isArray(submission.violationLog)
+                    ? submission.violationLog.filter(v => v.type === 'violation').length : 0;
+                  const totalEvents = submission.violationLog && Array.isArray(submission.violationLog)
+                    ? submission.violationLog.length : 0;
+                  const hasIssues = violationCount > 0;
+
+                  return (
+                  <div key={submission.submissionId} className={`border rounded-lg overflow-hidden ${hasIssues ? 'border-red-300' : 'border-gray-200'}`}>
+                    {/* Header Row */}
+                    <div
+                      className={`px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition ${isExpanded ? 'bg-indigo-50' : 'bg-white'}`}
+                      onClick={() => {
+                        const next = new Set(expandedSubmissions);
+                        isExpanded ? next.delete(submission.submissionId) : next.add(submission.submissionId);
+                        setExpandedSubmissions(next);
+                      }}
+                    >
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <span className="text-xs font-bold text-gray-400 w-6">{si + 1}</span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{submission.userName}</p>
+                          <p className="text-xs text-gray-500">Roll: {submission.rollNo || 'N/A'} | Batch: {submission.batch || 'N/A'}</p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          submission.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          submission.status === 'judging' ? 'bg-blue-100 text-blue-800' :
-                          submission.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          submission.status === 'incomplete' ? 'bg-gray-100 text-gray-500 line-through' :
-                          'bg-red-100 text-red-800'
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                          submission.status === 'completed' ? 'bg-green-50 text-green-800 border-green-200' :
+                          submission.status === 'judging' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                          submission.status === 'pending' ? 'bg-yellow-50 text-yellow-800 border-yellow-200' :
+                          submission.status === 'incomplete' ? 'bg-gray-50 text-gray-500 border-gray-200 line-through' :
+                          'bg-red-50 text-red-800 border-red-200'
                         }`}>
                           {submission.status}
                         </span>
-                        {/* Violation indicator */}
-                        {submission.violationLog && Array.isArray(submission.violationLog) && submission.violationLog.length > 0 && (
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 flex items-center gap-1">
+                        {hasIssues && (
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 flex items-center gap-1">
                             <ShieldAlert className="w-3 h-3" />
-                            {submission.violationLog.filter(v => v.type === 'violation').length} violations
+                            {violationCount} violations
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <p className="text-xs text-gray-600">Score</p>
+                      <div className="flex items-center gap-6 ml-4">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Score</p>
                           <p className="text-lg font-bold text-gray-900">{submission.totalScore || 0}</p>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-600">Time</p>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {submission.totalTime ? `${(submission.totalTime / 1000).toFixed(2)}s` : 'N/A'}
-                          </p>
+                        <div className="text-right hidden sm:block">
+                          <p className="text-xs text-gray-500">Time</p>
+                          <p className="text-sm font-semibold text-gray-700">{submission.totalTime ? `${(submission.totalTime / 1000).toFixed(2)}s` : 'N/A'}</p>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-600">Submitted</p>
-                          <p className="text-xs text-gray-900">
+                        <div className="text-right hidden md:block">
+                          <p className="text-xs text-gray-500">Submitted</p>
+                          <p className="text-xs text-gray-600 whitespace-nowrap">
                             {new Date(submission.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}
                           </p>
                         </div>
-                        <button
-                          onClick={() => setSelectedSubmission(
-                            selectedSubmission?.submissionId === submission.submissionId ? null : submission
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          {canManageSubmissions && (
+                            <button onClick={() => handleIncompleteSubmission(submission.submissionId)}
+                              className="px-2.5 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 flex items-center gap-1"
+                              title="Incomplete - allow student to resubmit">
+                              <Undo2 className="w-3 h-3" /> Incomplete
+                            </button>
                           )}
-                          className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
-                        >
-                          {selectedSubmission?.submissionId === submission.submissionId ? 'Hide' : 'View Code'}
-                        </button>
-                        {canManageSubmissions && (
-                        <button
-                          onClick={() => handleIncompleteSubmission(submission.submissionId)}
-                          className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center gap-1"
-                          title="Incomplete - allow student to resubmit"
-                        >
-                          <Undo2 className="w-3 h-3" />
-                          Incomplete
-                        </button>
-                        )}
+                        </div>
+                        <span className="text-gray-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
                       </div>
                     </div>
 
-                    {/* Problem-wise submissions */}
-                    {selectedSubmission?.submissionId === submission.submissionId && (
-                      <div className="p-4 bg-white space-y-4">
-                        {submission.problemSubmissions.map((ps, idx) => (
-                          <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                    {/* Expanded Content */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-200 bg-gray-50">
+                        {/* Problem Tabs */}
+                        <div className="flex border-b border-gray-200 bg-white px-4 overflow-x-auto">
+                          {submission.problemSubmissions.map((ps, pidx) => (
+                            <button
+                              key={ps.problemId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const problemKey = `${submission.submissionId}-problem-${ps.problemId}`;
+                                const next = new Set(expandedSubmissions);
+                                next.has(problemKey) ? next.delete(problemKey) : next.add(problemKey);
+                                setExpandedSubmissions(next);
+                              }}
+                              className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+                                expandedSubmissions.has(`${submission.submissionId}-problem-${ps.problemId}`)
+                                  ? 'border-indigo-600 text-indigo-600'
+                                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              <span className="mr-2">{pidx + 1}.</span>
+                              {ps.problemTitle}
+                              <span className={`ml-2 inline-block w-2 h-2 rounded-full ${
+                                ps.status === 'accepted' ? 'bg-green-500' :
+                                ps.status === 'wrong-answer' ? 'bg-red-500' :
+                                ps.status === 'judging' ? 'bg-blue-500' : 'bg-gray-400'
+                              }`} />
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Problem Details */}
+                        {submission.problemSubmissions.map((ps, pidx) => {
+                          const problemKey = `${submission.submissionId}-problem-${ps.problemId}`;
+                          if (!expandedSubmissions.has(problemKey)) return null;
+
+                          return (
+                          <div key={ps.problemId} className="p-4 bg-white border-b border-gray-200 last:border-b-0">
                             <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <h4 className="font-medium text-gray-900">{ps.problemTitle}</h4>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    ps.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
-                                    ps.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
-                                    {ps.difficulty}
-                                  </span>
-                                  <span className="text-xs text-gray-600">{ps.language}</span>
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    ps.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                                    ps.status === 'wrong-answer' ? 'bg-red-100 text-red-800' :
-                                    ps.status === 'judging' ? 'bg-blue-100 text-blue-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {ps.status}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-xs text-gray-600">Score</p>
-                                <p className="text-lg font-bold text-gray-900">{ps.score}/{ps.maxScore}</p>
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {ps.testsPassed}/{ps.totalTests} tests passed
-                                </p>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  ps.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                                  ps.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-red-100 text-red-800'
+                                }`}>{ps.difficulty}</span>
+                                <span className="text-xs text-gray-600 font-mono">{ps.language}</span>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  ps.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                                  ps.status === 'wrong-answer' ? 'bg-red-100 text-red-800' :
+                                  ps.status === 'judging' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>{ps.status}</span>
+                                <span className="text-xs text-gray-500">
+                                  {ps.testsPassed}/{ps.totalTests} tests
+                                  {ps.testResults && Array.isArray(ps.testResults) && (() => {
+                                    const visible = ps.testResults.filter(t => !t.hidden);
+                                    const hidden = ps.testResults.filter(t => t.hidden);
+                                    const visPassed = visible.filter(t => t.passed).length;
+                                    const hidPassed = hidden.filter(t => t.passed).length;
+                                    if (visible.length > 0 || hidden.length > 0) {
+                                      return ` (Visible: ${visPassed}/${visible.length}` + (hidden.length > 0 ? `, Hidden: ${hidPassed}/${hidden.length})` : ')');
+                                    }
+                                    return null;
+                                  })()}
+                                  {' | '}{ps.score}/{ps.maxScore} pts
+                                </span>
                               </div>
                             </div>
 
-                            {/* Code Display */}
-                            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                              <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">
-                                {ps.code}
-                              </pre>
+                            {/* Code Block */}
+                            <div className="relative">
+                              <div className="bg-gray-900 rounded-lg overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
+                                  <span className="text-xs text-gray-400 font-mono">{ps.language}</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(ps.code); toast.success('Copied!'); }}
+                                    className="text-xs text-gray-400 hover:text-white transition"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                                <pre className="p-4 text-sm text-gray-100 font-mono whitespace-pre-wrap max-h-80 overflow-y-auto">{ps.code}</pre>
+                              </div>
                             </div>
 
                             {ps.errorMessage && (
-                              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded">
-                                <p className="text-sm text-red-800 font-medium">Error:</p>
-                                <pre className="text-xs text-red-700 mt-1 whitespace-pre-wrap">{ps.errorMessage}</pre>
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                                <span className="font-medium">Error: </span>{ps.errorMessage}
                               </div>
                             )}
 
-                            {/* Test Case Results */}
-                            {ps.testResults && Array.isArray(ps.testResults) && ps.testResults.length > 0 && (
-                              <div className="mt-4">
-                                <h5 className="text-sm font-medium text-gray-900 mb-2">Test Case Results:</h5>
-                                <div className="space-y-2">
-                                  {ps.testResults.map((test, testIdx) => (
-                                    <div key={testIdx} className={`p-3 rounded-lg border ${
+                            {/* Test Results */}
+                            {ps.testResults && Array.isArray(ps.testResults) && ps.testResults.length > 0 && (() => {
+                              const visibleTests = ps.testResults.filter(t => !t.hidden);
+                              const hiddenTests = ps.testResults.filter(t => t.hidden);
+                              const hidPassed = hiddenTests.filter(t => t.passed).length;
+                              return (
+                              <div className="mt-3">
+                                <h5 className="text-sm font-medium text-gray-700 mb-2">
+                                  Test Cases ({ps.testsPassed}/{ps.totalTests} passed
+                                  {hiddenTests.length > 0 && ` — Visible: ${visibleTests.filter(t=>t.passed).length}/${visibleTests.length}, Hidden: ${hidPassed}/${hiddenTests.length}`})
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {ps.testResults.map((test, ti) => (
+                                    <div key={ti} className={`p-2.5 rounded border text-xs ${
                                       test.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
                                     }`}>
-                                      <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-xs font-medium px-2 py-1 rounded ${
-                                              test.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                            }`}>
-                                              Test Case {testIdx + 1}
-                                            </span>
-                                            <span className={`text-xs font-medium ${
-                                              test.passed ? 'text-green-700' : 'text-red-700'
-                                            }`}>
-                                              {test.passed ? '✓ Passed' : '✗ Failed'}
-                                            </span>
-                                          </div>
-                                          {!test.passed && (
-                                            <div className="mt-2 space-y-1">
-                                              {test.expectedOutput !== undefined && (
-                                                <div className="text-xs">
-                                                  <span className="font-medium text-gray-700">Expected:</span>
-                                                  <pre className="mt-1 p-2 bg-white rounded text-gray-900 overflow-x-auto">{String(test.expectedOutput)}</pre>
-                                                </div>
-                                              )}
-                                              {test.actualOutput !== undefined && (
-                                                <div className="text-xs">
-                                                  <span className="font-medium text-gray-700">Got:</span>
-                                                  <pre className="mt-1 p-2 bg-white rounded text-gray-900 overflow-x-auto">{String(test.actualOutput)}</pre>
-                                                </div>
-                                              )}
-                                              {test.error && (
-                                                <div className="text-xs">
-                                                  <span className="font-medium text-red-700">Error:</span>
-                                                  <pre className="mt-1 p-2 bg-white rounded text-red-700 overflow-x-auto">{test.error}</pre>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="text-right ml-4">
-                                          {test.executionTime && (
-                                            <p className="text-xs text-gray-600">
-                                              {test.executionTime}ms
-                                            </p>
-                                          )}
-                                          {test.memoryUsed && (
-                                            <p className="text-xs text-gray-600">
-                                              {(test.memoryUsed / 1024).toFixed(2)} KB
-                                            </p>
-                                          )}
-                                        </div>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className={`font-medium ${test.passed ? 'text-green-700' : 'text-red-700'}`}>
+                                          {test.passed ? '✓' : '✗'} Test {ti + 1}
+                                          {test.hidden && <span className="ml-1 text-gray-400">(hidden)</span>}
+                                        </span>
+                                        <span className="text-gray-500">{test.time ? `${test.time}s` : ''}</span>
                                       </div>
+                                      {!test.passed && !test.hidden && (
+                                        <>
+                                          {test.expectedOutput !== undefined && (
+                                            <div className="mt-1"><span className="font-medium">Expected:</span> <span className="font-mono break-all">{String(test.expectedOutput).substring(0, 100)}</span></div>
+                                          )}
+                                          {test.actualOutput !== undefined && (
+                                            <div className="mt-0.5"><span className="font-medium">Got:</span> <span className="font-mono break-all">{String(test.actualOutput).substring(0, 100)}</span></div>
+                                          )}
+                                        </>
+                                      )}
+                                      {!test.passed && test.hidden && (
+                                        <div className="mt-1 text-gray-400 italic">Hidden test case — details not shown</div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              );
+                            })()}
+
+                            {/* Violation Log (shown only on first problem tab) */}
+                            {pidx === 0 && submission.violationLog && Array.isArray(submission.violationLog) && totalEvents > 0 && (
+                              <div className="mt-4 border border-red-200 rounded-lg p-3 bg-red-50">
+                                <h4 className="text-sm font-medium text-red-800 mb-2 flex items-center gap-2">
+                                  <ShieldAlert className="w-4 h-4" />
+                                  Activity Log ({totalEvents} events, {violationCount} violations)
+                                </h4>
+                                <div className="space-y-1 max-h-60 overflow-y-auto">
+                                  {submission.violationLog.filter(e => e.type === 'violation' || e.type === 'fullscreen_exit').map((entry, vi) => (
+                                    <div key={vi} className="flex items-start gap-2 text-xs">
+                                      <span className="text-red-600 font-mono whitespace-nowrap">
+                                        {new Date(entry.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', timeStyle: 'medium' })}
+                                      </span>
+                                      <span className="text-red-700">🚨 {entry.reason}</span>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             )}
+
+                            {pidx === 0 && (!submission.violationLog || !Array.isArray(submission.violationLog) || totalEvents === 0) && (
+                              <div className="mt-4 border border-green-200 rounded-lg p-2 bg-green-50 text-xs text-green-700">
+                                ✅ No suspicious activity detected
+                              </div>
+                            )}
                           </div>
-                        ))}
-
-                        {/* Violation Log Section */}
-                        {submission.violationLog && Array.isArray(submission.violationLog) && submission.violationLog.length > 0 && (
-                          <div className="border border-red-200 rounded-lg p-4 bg-red-50">
-                            <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
-                              <ShieldAlert className="w-4 h-4" />
-                              Student Activity Log ({submission.violationLog.length} events)
-                            </h4>
-                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                              {submission.violationLog.map((entry, vi) => {
-                                const isViolation = entry.type === 'violation';
-                                const isFullscreenExit = entry.type === 'fullscreen_exit';
-                                const isFullscreenEnter = entry.type === 'fullscreen_enter';
-                                const isSession = entry.type === 'session_start';
-                                const isClipboard = entry.type === 'clipboard_block';
-                                const isError = entry.type === 'fullscreen_error';
-
-                                return (
-                                <div key={vi} className={`p-2 rounded border ${
-                                  isViolation || isFullscreenExit ? 'bg-red-100 border-red-300' :
-                                  isClipboard ? 'bg-yellow-50 border-yellow-200' :
-                                  isError ? 'bg-orange-50 border-orange-200' :
-                                  'bg-green-50 border-green-200'
-                                }`}>
-                                  <div className="flex items-start gap-3">
-                                    <span className={`text-xs font-mono whitespace-nowrap mt-0.5 ${
-                                      isViolation || isFullscreenExit ? 'text-red-700' :
-                                      isClipboard ? 'text-yellow-700' :
-                                      isError ? 'text-orange-600' :
-                                      'text-green-700'
-                                    }`}>
-                                      {new Date(entry.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'medium' })}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                      <span className={`text-sm ${
-                                        isViolation || isFullscreenExit ? 'text-red-800 font-medium' :
-                                        isError ? 'text-orange-700' :
-                                        'text-gray-700'
-                                      }`}>
-                                        {isViolation || isFullscreenExit ? '🚨 ' :
-                                         isClipboard ? '⚠️ ' :
-                                         isError ? '⚠️ ' :
-                                         isSession ? '🔒 ' :
-                                         isFullscreenEnter ? '✅ ' : ''}
-                                        {entry.reason}
-                                      </span>
-
-                                      {/* Fullscreen status badge */}
-                                      <span className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                        entry.isFullscreen
-                                          ? 'bg-green-200 text-green-800'
-                                          : 'bg-red-200 text-red-800'
-                                      }`}>
-                                        {entry.isFullscreen ? '🟢 FS' : '🔴 FS'}
-                                      </span>
-
-                                      {/* Screen size for mismatch detection */}
-                                      {entry.screenSize && (
-                                        <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200 text-gray-700 font-mono">
-                                          {entry.screenSize}
-                                        </span>
-                                      )}
-
-                                      {/* Device info on session_start */}
-                                      {isSession && entry.deviceInfo && (
-                                        <div className="mt-2 p-2 bg-white rounded border border-green-200 text-xs text-gray-600 grid grid-cols-2 gap-1">
-                                          <div><span className="font-medium">Platform:</span> {entry.deviceInfo.platform || 'N/A'}</div>
-                                          <div><span className="font-medium">Screen:</span> {entry.deviceInfo.screenSize || 'N/A'}</div>
-                                          <div><span className="font-medium">Window:</span> {entry.deviceInfo.windowSize || 'N/A'}</div>
-                                          <div><span className="font-medium">Language:</span> {entry.deviceInfo.language || 'N/A'}</div>
-                                          <div className="col-span-2"><span className="font-medium">Timezone:</span> {entry.deviceInfo.timezone || 'N/A'}</div>
-                                          <div className="col-span-2"><span className="font-medium">User Agent:</span> <span className="break-all">{entry.deviceInfo.userAgent || 'N/A'}</span></div>
-                                        </div>
-                                      )}
-
-                                      {/* User Agent on non-session entries for context */}
-                                      {!isSession && entry.userAgent && (
-                                        <div className="text-[10px] text-gray-400 mt-0.5 truncate" title={entry.userAgent}>
-                                          UA: {entry.userAgent}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* No violations */}
-                        {(!submission.violationLog || !Array.isArray(submission.violationLog) || submission.violationLog.length === 0) && (
-                          <div className="border border-green-200 rounded-lg p-3 bg-green-50">
-                            <p className="text-sm text-green-700 flex items-center gap-2">
-                              <ShieldAlert className="w-4 h-4" />
-                              No suspicious activity detected during the competition.
-                            </p>
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <button
-                onClick={() => {
-                  setShowSubmissionsModal(false);
-                  setSelectedSubmission(null);
-                }}
+            <div className="flex justify-end gap-3 mt-4 pt-3 border-t">
+              <button onClick={() => { setShowSubmissionsModal(false); setSelectedSubmission(null); setExpandedSubmissions(new Set()); }}
                 className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+              >Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard Modal */}
+      {showLeaderboardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-4xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Leaderboard - {viewCompetition?.title}</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {leaderboardData.length} participants
+                  {viewCompetition?.showLeaderboard === false && (
+                    <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded">Hidden from students</span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLeaderboardModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-xl"
               >
-                Close
+                ✕
               </button>
             </div>
+            <LeaderboardTable leaderboard={leaderboardData} currentUserId={null} />
           </div>
         </div>
       )}

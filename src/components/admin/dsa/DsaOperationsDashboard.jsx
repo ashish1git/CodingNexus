@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Loader2, Calendar, Clock, BookOpen, FileText, AlertCircle, CheckCircle,
-  XCircle, Bell, Users, ArrowRight, HelpCircle, BarChart3
+  XCircle, Bell, Users, ArrowRight, HelpCircle, BarChart3, Download
 } from 'lucide-react';
 import dsaService from '../../../services/dsaService';
 import adminService from '../../../services/adminService';
@@ -13,6 +13,7 @@ const DsaOperationsDashboard = () => {
   const [notes, setNotes] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingReport, setDownloadingReport] = useState(false);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -54,6 +55,22 @@ const DsaOperationsDashboard = () => {
 
   const handleNavigate = (tab) => {
     window.dispatchEvent(new CustomEvent('dsa-navigate', { detail: { tab } }));
+  };
+
+  const handleDownloadReport = async () => {
+    setDownloadingReport(true);
+    const res = await dsaService.getWeeklyReport();
+    if (res.success && res.report) {
+      const jsonStr = JSON.stringify(res.report, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dsa-weekly-report-${res.report.weekStart}-${res.report.weekEnd}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setDownloadingReport(false);
   };
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -250,6 +267,16 @@ const DsaOperationsDashboard = () => {
               <ArrowRight className="w-4 h-4 ml-auto shrink-0 opacity-50" />
             </button>
           ))}
+        </div>
+        <div className="mt-4">
+          <button
+            onClick={handleDownloadReport}
+            disabled={downloadingReport}
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-sm font-medium disabled:opacity-50`}
+          >
+            {downloadingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Download Weekly Report (JSON)
+          </button>
         </div>
       </div>
     </div>

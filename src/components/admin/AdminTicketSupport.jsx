@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import {
   MessageCircle, Plus, Clock, CheckCircle, AlertCircle,
-  Send, RefreshCw, X, ArrowLeft, Loader, Trash2
+  Send, RefreshCw, X, ArrowLeft, Loader, Trash2, User, Hash, Layers, Award
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -387,6 +387,27 @@ const AdminTicketSupport = () => {
                       {selectedTicket.priority.toUpperCase()}
                     </span>
                   </div>
+                  {/* Student Info Section */}
+                  {selectedTicket.user?.studentProfile && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <User className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="font-medium text-gray-800">{selectedTicket.user.studentProfile.name || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Hash className="w-3.5 h-3.5 text-purple-500" />
+                        <span>Roll: {selectedTicket.user.studentProfile.rollNo || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Award className="w-3.5 h-3.5 text-green-500" />
+                        <span>Batch: {selectedTicket.user.studentProfile.batch || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Layers className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Div: {selectedTicket.user.studentProfile.division || 'N/A'}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => { setShowViewModal(false); setSelectedTicket(null); }} className="text-gray-400 hover:text-gray-600 transition">
                   <X className="w-6 h-6" />

@@ -26,6 +26,7 @@ const StudentManagement = () => {
     moodleId: '',
     mobile: '',
     batch: 'Basic',
+    division: '',
     password: ''
   });
 
@@ -95,6 +96,7 @@ const StudentManagement = () => {
      moodleId: formData.moodleId,
      phone: formData.mobile,
      batch: formData.batch,
+     division: formData.division,
      email: email,
      password: formData.password
    });
@@ -144,7 +146,8 @@ const StudentManagement = () => {
       const updateData = {
         name: formData.name,
         phone: formData.mobile,
-        batch: formData.batch
+        batch: formData.batch,
+        division: formData.division
       };
       
       console.log('📤 Sending update for student:', selectedStudent.id);
@@ -172,6 +175,7 @@ const StudentManagement = () => {
                     ...s,
                     name: response.student.name,
                     batch: response.student.batch,
+                    division: response.student.division,
                     phone: response.student.phone,
                     mobile: response.student.phone
                   }
@@ -237,6 +241,7 @@ const StudentManagement = () => {
       moodleId: student.moodleId || '',
       mobile: student.phone || student.mobile || '',
       batch: batchValue,
+      division: student.division || '',
       password: ''
     });
     setShowEditModal(true);
@@ -249,6 +254,7 @@ const StudentManagement = () => {
       moodleId: '',
       mobile: '',
       batch: 'Basic',
+      division: '',
       password: ''
     });
   };
@@ -407,6 +413,9 @@ const StudentManagement = () => {
                     Batch
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Division
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -454,6 +463,11 @@ const StudentManagement = () => {
                           : 'bg-purple-100 text-purple-800'
                       }`}>
                         {student.batch}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-900">
+                        {student.division || <span className="text-gray-400 italic">—</span>}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -625,6 +639,25 @@ const StudentManagement = () => {
                 <option value="Basic">Basic Batch</option>
                 <option value="Advanced">Advanced Batch</option>
               </select>
+              <select
+                value={formData.division}
+                onChange={(e) => setFormData({ ...formData, division: e.target.value })}
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              >
+                <option value="">-- Division (optional) --</option>
+                <option value="FE-A">FE-A</option>
+                <option value="FE-B">FE-B</option>
+                <option value="FE-C">FE-C</option>
+                <option value="SE-A">SE-A</option>
+                <option value="SE-B">SE-B</option>
+                <option value="SE-C">SE-C</option>
+                <option value="TE-A">TE-A</option>
+                <option value="TE-B">TE-B</option>
+                <option value="TE-C">TE-C</option>
+                <option value="BE-A">BE-A</option>
+                <option value="BE-B">BE-B</option>
+                <option value="BE-C">BE-C</option>
+              </select>
               <input
                 type="password"
                 placeholder="Password (min 6 characters)"
@@ -706,6 +739,25 @@ const StudentManagement = () => {
               >
                 <option value="Basic">Basic Batch</option>
                 <option value="Advanced">Advanced Batch</option>
+              </select>
+              <select
+                value={formData.division}
+                onChange={(e) => setFormData({ ...formData, division: e.target.value })}
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              >
+                <option value="">-- Division (optional) --</option>
+                <option value="FE-A">FE-A</option>
+                <option value="FE-B">FE-B</option>
+                <option value="FE-C">FE-C</option>
+                <option value="SE-A">SE-A</option>
+                <option value="SE-B">SE-B</option>
+                <option value="SE-C">SE-C</option>
+                <option value="TE-A">TE-A</option>
+                <option value="TE-B">TE-B</option>
+                <option value="TE-C">TE-C</option>
+                <option value="BE-A">BE-A</option>
+                <option value="BE-B">BE-B</option>
+                <option value="BE-C">BE-C</option>
               </select>
               <div className="flex flex-col sm:flex-row gap-2 pt-2">
                 <button

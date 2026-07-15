@@ -128,6 +128,7 @@ export const authService = {
           ...response.user,
           // Ensure batch/name are at root level (backward compatibility)
           batch: response.user.batch || response.user.studentProfile?.batch || response.user.profile?.batch,
+          division: response.user.division || response.user.studentProfile?.division || response.user.profile?.division || '',
           name: response.user.name || response.user.studentProfile?.name || response.user.adminProfile?.name || response.user.profile?.name,
           phone: response.user.phone || response.user.studentProfile?.phone || response.user.profile?.phone,
           rollNo: response.user.rollNo || response.user.studentProfile?.rollNo || response.user.profile?.rollNo

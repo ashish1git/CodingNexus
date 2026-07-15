@@ -3,32 +3,33 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Install dependencies first (cached unless package files change)
 COPY package*.json ./
-
-# Copy prisma schema first
 COPY prisma ./prisma
-
-# Install dependencies
-RUN npm ci && npm cache clean --force
+RUN npm ci --ignore-scripts && npm cache clean --force
 
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Copy application code
-COPY . .
+# Copy app source (server + src)
+COPY server ./server
+COPY src ./src
+COPY public ./public
+COPY index.html vite.config.js prisma.config.ts ./
 
 # Build frontend
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
-# Build Docusaurus docs and ensure dist/docs exists
-WORKDIR /app/docs
+# ── Docs build ── (separate WORKDIR for independent caching)
+WORKDIR /tmp/docs-build
+COPY docs/package*.json ./
 RUN npm ci && npm cache clean --force
+COPY docs/ ./
 RUN npm run build || true
 RUN mkdir -p /app/dist/docs && \
-    if [ -d "/app/docs/build" ]; then cp -r /app/docs/build/. /app/dist/docs/; \
+    if [ -d "/tmp/docs-build/build" ]; then cp -r /tmp/docs-build/build/. /app/dist/docs/; \
     else echo "<html><body><h1>Docs build not available</h1></body></html>" > /app/dist/docs/index.html; fi
 
 WORKDIR /app
@@ -46,7 +47,7 @@ RUN apk update --no-cache || true && \
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copy files from builder
+# Copy only production essentials from builder
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server

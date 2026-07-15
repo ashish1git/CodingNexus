@@ -341,7 +341,9 @@ export default function useCodeEditor(
             passed: data.passed,
             total: data.total,
             cases: data.testResults || [],
-            accepted: data.passed === data.total
+            accepted: data.passed === data.total,
+            efficiencyMultiplier: data.efficiencyMultiplier ?? 1.0,
+            optimizationFeedback: data.optimizationFeedback ?? null
           });
           setSubmitting(false);
           isPolling = false;

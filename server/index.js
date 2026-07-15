@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import logger from './utils/logger.js';
 import authRoutes from './routes/auth.js';
@@ -42,7 +43,7 @@ const REMINDER_CHECK_MS = 60 * 1000; // Check every 1 minute
 
 async function sendLectureReminders() {
   try {
-    const { sendEmail } = await import('../services/email/brevo.service.js');
+    const { sendEmail } = await import('./services/email/brevo.service.js');
     const now = new Date();
 
     const upcomingLectures = await prisma.dsaLecture.findMany({
@@ -77,12 +78,12 @@ async function sendLectureReminders() {
 
       const sentReminders = lecture.reminderSent ? lecture.reminderSent.split(',') : [];
 
+      let changed = false;
       for (const interval of LECTURE_REMINDER_INTERVALS) {
         if (sentReminders.includes(interval.label)) continue;
 
-        // Check if we're within a 2-minute window of this reminder interval
-        const windowMs = 2 * 60 * 1000;
-        if (Math.abs(diffMs - interval.ms) <= windowMs) {
+        // Fire all unsent reminders whose threshold has been crossed
+        if (diffMs <= interval.ms) {
           const dateStr = lecture.lectureDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
           const timeStr = lecture.startTime || 'scheduled time';
           const notesMsg = lecture.notesRequired
@@ -90,6 +91,8 @@ async function sendLectureReminders() {
             : 'Notes are not required for this lecture.';
 
           try {
+            const descHtml = lecture.description ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:10px;"><p style="margin:0;font-size:12px;color:#475569;white-space:pre-wrap;font-family:monospace;">${lecture.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p></div>` : '';
+            const descText = lecture.description ? `\nDescription:\n${lecture.description}` : '';
             await sendEmail({
               to: trainerEmail,
               subject: `⏰ Reminder: "${lecture.topic}" in ${interval.label.replace('hr',' hours').replace('min',' minutes')}`,
@@ -102,24 +105,28 @@ async function sendLectureReminders() {
                   <p style="margin:8px 0 0 0;"><strong>Date:</strong> ${dateStr}</p>
                   <p style="margin:8px 0 0 0;"><strong>Time:</strong> ${timeStr}</p>
                   ${lecture.batch ? `<p style="margin:8px 0 0 0;"><strong>Batch:</strong> ${lecture.batch}</p>` : ''}
+                  ${lecture.division ? `<p style="margin:8px 0 0 0;"><strong>Division:</strong> ${lecture.division}</p>` : ''}
                 </div>
-                <p>${notesMsg}</p>
+                ${descHtml}
+                <p style="margin-top:16px;">${notesMsg}</p>
                 <a href="https://codingnexus.apsit.edu.in/admin/dashboard" style="display:inline-block;background:#4f46e5;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:12px;">Go to DSA Management</a>
                 <p style="margin-top:24px;color:#666;font-size:14px;">Best regards,<br/>Coding Nexus Admin</p>
               </div>`,
-              text: `Lecture Reminder\n\nHi ${trainerName},\n\nYou have a DSA lecture on ${dateStr} at ${timeStr}.\nTopic: ${lecture.topic}${lecture.batch ? `\nBatch: ${lecture.batch}` : ''}\n\n${notesMsg}\n\nBest regards,\nCoding Nexus Admin`
+              text: `Lecture Reminder\n\nHi ${trainerName},\n\nYou have a DSA lecture on ${dateStr} at ${timeStr}.\nTopic: ${lecture.topic}${lecture.batch ? `\nBatch: ${lecture.batch}` : ''}${lecture.division ? `\nDivision: ${lecture.division}` : ''}${descText}\n\n${notesMsg}\n\nBest regards,\nCoding Nexus Admin`
             });
 
-            const newReminders = [...sentReminders, interval.label].join(',');
-            await prisma.dsaLecture.update({
-              where: { id: lecture.id },
-              data: { reminderSent: newReminders }
-            });
+            sentReminders.push(interval.label);
+            changed = true;
           } catch (emailErr) {
             console.error(`Failed to send ${interval.label} reminder for lecture ${lecture.id}:`, emailErr.message);
           }
-          break;
         }
+      }
+      if (changed) {
+        await prisma.dsaLecture.update({
+          where: { id: lecture.id },
+          data: { reminderSent: sentReminders.join(',') }
+        });
       }
     }
   } catch (err) {
@@ -241,15 +248,27 @@ if (process.env.MAINTENANCE_MODE !== 'true') {
   });
 }
 
-// Serve frontend static files
-app.use(express.static(distPath));
-
-// SPA fallback — serve index.html for all non-API routes
-app.get('/*path', (req, res, next) => {
+// Helper: serve index.html with API URL meta tag injected
+const serveIndexWithApiUrl = (req, res) => {
   const indexPath = path.join(distPath, 'index.html');
-  res.sendFile(indexPath, (err) => {
-    if (err) next();
-  });
+  let html = fs.readFileSync(indexPath, 'utf-8');
+  const apiUrl = process.env.VITE_API_URL || (req.protocol + '://' + req.get('host') + '/api');
+  const metaTag = `<meta name="api-url" content="${apiUrl}">`;
+  html = html.replace('<head>', `<head>\n    ${metaTag}`);
+  res.send(html);
+};
+
+// Serve frontend static files (but NOT index.html directly — we inject meta tag)
+app.use(express.static(distPath, { index: false }));
+
+// Serve root with injected API URL
+app.get('/', (req, res) => {
+  try { serveIndexWithApiUrl(req, res); } catch (err) { res.status(500).send('Server error'); }
+});
+
+// SPA fallback — serve index.html for all non-API routes, inject API URL meta
+app.get('/*path', (req, res) => {
+  try { serveIndexWithApiUrl(req, res); } catch (err) { res.status(500).send('Server error'); }
 });
 
 // Error handling middleware

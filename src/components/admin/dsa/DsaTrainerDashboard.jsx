@@ -85,6 +85,7 @@ const DsaTrainerDashboard = () => {
       case 'approved': return <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" /> Approved</span>;
       case 'pending': return <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"><AlertCircle className="w-3 h-3" /> Pending</span>;
       case 'rejected': return <span className="flex items-center gap-1 text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" /> Rejected</span>;
+      case 'optional': return <span className="flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">Optional</span>;
       default: return <span className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Missing</span>;
     }
   };

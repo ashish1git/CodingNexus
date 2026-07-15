@@ -45,7 +45,7 @@ export default function CodeEditorPanel({
             className="px-4 py-2 bg-linear-to-r from-green-600 to-green-500 text-white text-sm rounded-lg hover:from-green-700 hover:to-green-600 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg shadow-green-500/20 hover:shadow-green-500/40"
           >
             <Play className="w-4 h-4" />
-            Run Code
+            Run
           </button>
           <button
             onClick={handleSaveSolution}

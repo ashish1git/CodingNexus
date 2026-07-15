@@ -212,8 +212,21 @@ const SubmissionEvaluator = () => {
       // Find student's submissions
       const studentData = data.find(s => s.userId === studentId);
       if (studentData && studentData.problemSubmissions) {
-        setSubmissions(studentData.problemSubmissions);
-        setFilteredSubmissions(studentData.problemSubmissions);
+        // Enrich each problem submission with the user info from the parent
+        const enrichedSubmissions = studentData.problemSubmissions.map(ps => ({
+          ...ps,
+          userId: studentData.userId,
+          user: {
+            email: studentData.userName || 'N/A',
+            moodleId: '',
+            studentProfile: {
+              name: studentData.userName || 'N/A',
+              rollNo: studentData.rollNo || 'N/A'
+            }
+          }
+        }));
+        setSubmissions(enrichedSubmissions);
+        setFilteredSubmissions(enrichedSubmissions);
         setCurrentIndex(0);
       }
     } catch (error) {
@@ -276,8 +289,16 @@ const SubmissionEvaluator = () => {
     }
 
     const marksNum = parseFloat(marks);
-    if (isNaN(marksNum) || marksNum < 0 || marksNum > 10) {
-      toast.error('Marks must be between 0 and 10');
+    const maxAllowed = current.problem?.points || current.maxScore || 100;
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > maxAllowed) {
+      toast.error(`Marks must be between 0 and ${maxAllowed}`);
+      return;
+    }
+
+    // Use problemId from the current submission (works for both by-question and by-student views)
+    const problemId = current.problemId || selectedProblemId;
+    if (!problemId) {
+      toast.error('Problem not found — please select a problem first');
       return;
     }
 
@@ -285,22 +306,28 @@ const SubmissionEvaluator = () => {
       // Save to database
       setSavingEvaluation(true);
       const responseData = await apiClient.post(
-        `/competitions/${competitionId}/problems/${selectedProblemId}/submissions/${current.id}/evaluate`,
+        `/competitions/${competitionId}/problems/${problemId}/submissions/${current.id}/evaluate`,
         {
           marks: marksNum,
           comments: comments
         }
       );
 
-      const key = `${current.userId}_${current.problemId}`;
+      // Get student info from submission user object (by-question) or from students list (by-student)
+      const studentName = current.user?.studentProfile?.name ||
+        students.find(s => s.userId === current.userId)?.userName || 'N/A';
+      const rollNo = current.user?.studentProfile?.rollNo ||
+        students.find(s => s.userId === current.userId)?.rollNo || 'N/A';
+
+      const key = `${current.userId}_${problemId}`;
       const newEvaluation = {
         marks: marksNum,
         comments: comments,
         timestamp: new Date().toISOString(),
-        studentName: current.user?.studentProfile?.name || 'N/A',
-        rollNo: current.user?.studentProfile?.rollNo || 'N/A',
-        email: current.user?.email,
-        problemTitle: problems.find(p => p.id === selectedProblemId)?.title
+        studentName: studentName,
+        rollNo: rollNo,
+        email: current.user?.email || '',
+        problemTitle: problems.find(p => p.id === problemId)?.title || current.problem?.title || ''
       };
 
       setEvaluations(prev => ({
@@ -394,7 +421,7 @@ const SubmissionEvaluator = () => {
   if (loading) return <Loading />;
 
   const currentSubmission = filteredSubmissions[currentIndex];
-  const currentProblem = problems.find(p => p.id === selectedProblemId);
+  const currentProblem = problems.find(p => p.id === (selectedProblemId || currentSubmission?.problemId));
   
   // Count evaluations: both saved in session and already evaluated in DB (avoid double counting)
   const evaluatedCount = Object.keys(evaluations).filter(key => 
@@ -814,13 +841,13 @@ const SubmissionEvaluator = () => {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Student Name</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission?.user?.studentProfile?.name || currentSubmission?.user?.email || 'N/A'}
+                        {currentSubmission?.user?.studentProfile?.name || currentSubmission?.userName || students.find(s => s.userId === currentSubmission?.userId)?.userName || currentSubmission?.user?.email || 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Roll Number</div>
                       <div className="font-medium text-gray-900">
-                        {currentSubmission?.user?.studentProfile?.rollNo || currentSubmission?.user?.moodleId || 'N/A'}
+                        {currentSubmission?.user?.studentProfile?.rollNo || currentSubmission?.rollNo || students.find(s => s.userId === currentSubmission?.userId)?.rollNo || currentSubmission?.user?.moodleId || 'N/A'}
                       </div>
                     </div>
                     <div>

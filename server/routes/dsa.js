@@ -404,6 +404,7 @@ router.get('/lectures', async (req, res) => {
       topic: l.topic,
       description: l.description,
       batch: l.batch,
+      division: l.division,
       lectureDate: l.lectureDate,
       startTime: l.startTime,
       endTime: l.endTime,
@@ -432,7 +433,7 @@ router.post('/lectures', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to schedule lectures.' });
     }
-    const { trainerIds, trainerId, topic, description, batch, lectureDate, startTime, endTime, notesRequired } = req.body;
+    const { trainerIds, trainerId, topic, description, batch, division, lectureDate, startTime, endTime, notesRequired } = req.body;
 
     if (!topic || !lectureDate) {
       return res.status(400).json({ success: false, error: 'Topic and date are required' });
@@ -454,6 +455,7 @@ router.post('/lectures', async (req, res) => {
 
     // Create a lecture for each selected trainer
     const created = [];
+    const trainerInfos = []; // collect trainer info for combined email
     for (const tid of ids) {
       const lecture = await prisma.dsaLecture.create({
         data: {
@@ -461,6 +463,7 @@ router.post('/lectures', async (req, res) => {
           topic,
           description: description || null,
           batch: batch || null,
+          division: division || null,
           lectureDate: new Date(lectureDate),
           startTime: startTime || null,
           endTime: endTime || null,
@@ -469,9 +472,13 @@ router.post('/lectures', async (req, res) => {
         },
         include: {
           trainer: {
-            include: { admin: { select: { name: true } } }
+            include: { admin: { include: { user: { select: { email: true } } } } }
           }
         }
+      });
+      trainerInfos.push({
+        name: lecture.trainer.admin.name,
+        email: lecture.trainer.admin.user.email
       });
       created.push({
         id: lecture.id,
@@ -483,6 +490,84 @@ router.post('/lectures', async (req, res) => {
         status: lecture.status,
         trainerName: lecture.trainer.admin.name
       });
+    }
+
+    // Send ONE combined email to ALL trainers when multiple are scheduled together
+    if (trainerInfos.length >= 1) {
+      try {
+        const dateStr = new Date(lectureDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        const timeStr = startTime || 'TBD';
+        const notesMsg = notesRequired !== false
+          ? 'Please ensure your lecture notes are uploaded and reviewed before the lecture.'
+          : 'Notes are not required for this lecture.';
+
+        if (trainerInfos.length === 1) {
+          // Single trainer - send to them directly
+          const t = trainerInfos[0];
+          if (t.email) {
+            const descHtml = description ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:12px;"><p style="margin:0;font-size:12px;color:#475569;white-space:pre-wrap;font-family:monospace;">${description.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p></div>` : '';
+            const descText = description ? `\nDescription:\n${description}` : '';
+            await sendEmail({
+              to: t.email,
+              subject: `📅 New Lecture Scheduled: "${topic}" on ${dateStr}`,
+              html: `<div style="font-family:system-ui;max-width:600px;margin:0 auto;">
+                <h2 style="color:#4f46e5;">New Lecture Scheduled</h2>
+                <p>Hi <strong>${t.name}</strong>,</p>
+                <p>A new DSA lecture has been scheduled for you:</p>
+                <div style="background:#eef2ff;border-left:4px solid #4f46e5;padding:15px;margin:20px 0;border-radius:4px;">
+                  <p style="margin:0;"><strong>Topic:</strong> ${topic}</p>
+                  <p style="margin:8px 0 0 0;"><strong>Date:</strong> ${dateStr}</p>
+                  <p style="margin:8px 0 0 0;"><strong>Time:</strong> ${timeStr}</p>
+                  ${batch ? `<p style="margin:8px 0 0 0;"><strong>Batch:</strong> ${batch}</p>` : ''}
+                  ${division ? `<p style="margin:8px 0 0 0;"><strong>Division:</strong> ${division}</p>` : ''}
+                </div>
+                ${descHtml}
+                <p style="margin-top:16px;">${notesMsg}</p>
+                <a href="https://codingnexus.apsit.edu.in/admin/dashboard" style="display:inline-block;background:#4f46e5;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:12px;">Go to DSA Management</a>
+                <p style="margin-top:24px;color:#666;font-size:14px;">Best regards,<br/>Coding Nexus Admin</p>
+              </div>`,
+              text: `New Lecture Scheduled\n\nHi ${t.name},\n\nA new DSA lecture has been scheduled for you:\n\nTopic: ${topic}\nDate: ${dateStr}\nTime: ${timeStr}${batch ? `\nBatch: ${batch}` : ''}${division ? `\nDivision: ${division}` : ''}${descText}\n\n${notesMsg}\n\nBest regards,\nCoding Nexus Admin`
+            });
+          }
+        } else {
+          // Multiple trainers - send ONE email with combined names
+          const trainerNames = trainerInfos.map(t => t.name).join(' & ');
+          const allEmails = trainerInfos.map(t => t.email).filter(Boolean);
+          const toEmail = allEmails[0];
+          const ccEmails = allEmails.slice(1);
+
+          if (toEmail) {
+            const descHtml = description ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:12px;"><p style="margin:0;font-size:12px;color:#475569;white-space:pre-wrap;font-family:monospace;">${description.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p></div>` : '';
+            const descText = description ? `\nDescription:\n${description}` : '';
+            const ccParam = ccEmails.length > 0 ? { cc: ccEmails } : {};
+            await sendEmail({
+              to: toEmail,
+              subject: `📅 New Co-Teaching Lecture Scheduled: "${topic}" on ${dateStr}`,
+              ...ccParam,
+              html: `<div style="font-family:system-ui;max-width:600px;margin:0 auto;">
+                <h2 style="color:#4f46e5;">New Co-Teaching Lecture Scheduled</h2>
+                <p>Hi <strong>${trainerNames}</strong>,</p>
+                <p>A new DSA co-teaching lecture has been scheduled for all of you:</p>
+                <div style="background:#eef2ff;border-left:4px solid #4f46e5;padding:15px;margin:20px 0;border-radius:4px;">
+                  <p style="margin:0;"><strong>Topic:</strong> ${topic}</p>
+                  <p style="margin:8px 0 0 0;"><strong>Date:</strong> ${dateStr}</p>
+                  <p style="margin:8px 0 0 0;"><strong>Time:</strong> ${startTime || 'TBD'}</p>
+                  <p style="margin:8px 0 0 0;"><strong>Co-Trainers:</strong> ${trainerNames}</p>
+                  ${batch ? `<p style="margin:8px 0 0 0;"><strong>Batch:</strong> ${batch}</p>` : ''}
+                  ${division ? `<p style="margin:8px 0 0 0;"><strong>Division:</strong> ${division}</p>` : ''}
+                </div>
+                ${descHtml}
+                <p style="margin-top:16px;">${notesMsg}</p>
+                <a href="https://codingnexus.apsit.edu.in/admin/dashboard" style="display:inline-block;background:#4f46e5;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:12px;">Go to DSA Management</a>
+                <p style="margin-top:24px;color:#666;font-size:14px;">Best regards,<br/>Coding Nexus Admin</p>
+              </div>`,
+              text: `New Co-Teaching Lecture Scheduled\n\nHi ${trainerNames},\n\nA new DSA co-teaching lecture has been scheduled:\n\nTopic: ${topic}\nDate: ${dateStr}\nTime: ${startTime || 'TBD'}\nCo-Trainers: ${trainerNames}${batch ? `\nBatch: ${batch}` : ''}${division ? `\nDivision: ${division}` : ''}${descText}\n\n${notesMsg}\n\nBest regards,\nCoding Nexus Admin`
+            });
+          }
+        }
+      } catch (emailErr) {
+        console.error('Failed to send schedule notification:', emailErr.message);
+      }
     }
 
     res.json({ success: true, lectures: created, count: created.length, message: `${created.length} lecture${created.length > 1 ? 's' : ''} scheduled for ${validTrainers.length} trainer${validTrainers.length > 1 ? 's' : ''}` });
@@ -498,11 +583,12 @@ router.put('/lectures/:id', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to edit lectures.' });
     }
-    const { topic, description, batch, lectureDate, startTime, endTime, status, notesRequired } = req.body;
+    const { topic, description, batch, division, lectureDate, startTime, endTime, status, notesRequired } = req.body;
     const data = {};
     if (topic !== undefined) data.topic = topic;
     if (description !== undefined) data.description = description;
     if (batch !== undefined) data.batch = batch;
+    if (division !== undefined) data.division = division;
     if (lectureDate !== undefined) data.lectureDate = new Date(lectureDate);
     if (startTime !== undefined) data.startTime = startTime;
     if (endTime !== undefined) data.endTime = endTime;
@@ -590,7 +676,7 @@ router.post('/lectures/recurring', async (req, res) => {
     if (!canManageSchedule(req)) {
       return res.status(403).json({ success: false, error: 'Access denied. You do not have permission to create recurring schedules.' });
     }
-    const { trainerIds, trainerId, topic, description, batch, startTime, endTime, daysOfWeek, startDate, endDate, count, notesRequired } = req.body;
+    const { trainerIds, trainerId, topic, description, batch, division, startTime, endTime, daysOfWeek, startDate, endDate, count, notesRequired } = req.body;
 
     if (!topic || !startDate || !daysOfWeek || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
       return res.status(400).json({ success: false, error: 'Topic, start date, and at least one day of week are required' });
@@ -634,6 +720,7 @@ router.post('/lectures/recurring', async (req, res) => {
               topic,
               description: description || null,
               batch: batch || null,
+              division: division || null,
               lectureDate: new Date(current),
               startTime: startTime || null,
               endTime: endTime || null,
@@ -1020,7 +1107,8 @@ router.get('/trainer-dashboard', async (req, res) => {
           notesRequired: l.notesRequired,
           noteCount: l.notes.length,
           hasNotes: l.notes.length > 0,
-          noteStatus: l.notes.length === 0 ? 'missing' :
+          noteStatus: !l.notesRequired ? 'optional' :
+            l.notes.length === 0 ? 'missing' :
             l.notes.some(n => n.status === 'approved') ? 'approved' :
             l.notes.some(n => n.status === 'pending') ? 'pending' : 'rejected'
         })),
@@ -1117,6 +1205,117 @@ router.post('/notify-missing', async (req, res) => {
     });
   } catch (error) {
     console.error('Notify missing error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────
+// WEEKLY REPORT — JSON structured report for DSA operations
+// ────────────────────────────────────────────────────────
+
+router.get('/weekly-report', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Default: current week (Monday to Sunday)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const start = startDate ? new Date(startDate) : monday;
+    const end = endDate ? new Date(endDate) : sunday;
+
+    // Fetch all lectures in range
+    const lectures = await prisma.dsaLecture.findMany({
+      where: {
+        lectureDate: { gte: start, lte: end },
+        status: { not: 'cancelled' }
+      },
+      include: {
+        trainer: {
+          include: {
+            admin: {
+              include: { user: { select: { email: true } } }
+            }
+          }
+        }
+      },
+      orderBy: { lectureDate: 'asc' }
+    });
+
+    // Group by trainer
+    const trainerMap = {};
+    lectures.forEach(l => {
+      const tid = l.trainerId;
+      if (!trainerMap[tid]) {
+        trainerMap[tid] = {
+          trainerId: tid,
+          trainerName: l.trainer.admin.name,
+          email: l.trainer.admin.user.email,
+          role: l.trainer.role,
+          isActive: l.trainer.isActive,
+          totalLectures: 0,
+          totalHours: 0,
+          divisions: new Set(),
+          batches: new Set(),
+          lectures: []
+        };
+      }
+      const t = trainerMap[tid];
+      t.totalLectures++;
+      if (l.division) t.divisions.add(l.division);
+      if (l.batch) t.batches.add(l.batch);
+
+      // Calculate hours from startTime-endTime
+      let hours = 1; // default 1 hour
+      if (l.startTime && l.endTime) {
+        const [sh, sm] = l.startTime.split(':').map(Number);
+        const [eh, em] = l.endTime.split(':').map(Number);
+        const startMin = sh * 60 + (sm || 0);
+        const endMin = eh * 60 + (em || 0);
+        hours = Math.max(0.5, (endMin - startMin) / 60);
+      }
+      t.totalHours += hours;
+
+      t.lectures.push({
+        topic: l.topic,
+        description: l.description,
+        date: l.lectureDate.toISOString().split('T')[0],
+        startTime: l.startTime,
+        endTime: l.endTime,
+        batch: l.batch,
+        division: l.division,
+        status: l.status,
+        hours
+      });
+    });
+
+    const report = Object.values(trainerMap).map(t => ({
+      ...t,
+      divisions: Array.from(t.divisions),
+      batches: Array.from(t.batches),
+      totalHours: Math.round(t.totalHours * 10) / 10
+    }));
+
+    // Summary
+    const summary = {
+      weekStart: start.toISOString().split('T')[0],
+      weekEnd: end.toISOString().split('T')[0],
+      totalTrainers: report.length,
+      totalLectures: report.reduce((s, t) => s + t.totalLectures, 0),
+      totalHours: Math.round(report.reduce((s, t) => s + t.totalHours, 0) * 10) / 10,
+      trainers: report
+    };
+
+    res.json({ success: true, report: summary });
+  } catch (error) {
+    console.error('Weekly report error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

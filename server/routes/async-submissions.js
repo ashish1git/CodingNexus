@@ -551,6 +551,8 @@ router.post('/:submissionId/fetch-results', authenticate, async (req, res) => {
         score: submission.score,
         passed: submission.testsPassed,
         total: submission.totalTests,
+        efficiencyMultiplier: submission.efficiencyMultiplier ?? 1.0,
+        optimizationFeedback: submission.optimizationFeedback ?? null,
         message: `✅ Complete: ${submission.testsPassed}/${submission.totalTests} passed`
       });
     }

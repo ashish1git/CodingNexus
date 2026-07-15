@@ -40,6 +40,7 @@ model Student {
   userId          String   @unique
   name            String
   batch           String
+  division        String?
   phone           String?
   profilePhotoUrl String?
   createdAt       DateTime @default(now())
@@ -291,6 +292,7 @@ model Competition {
   prizePool       String?
   maxParticipants Int?
   isActive        Boolean                   @default(true)
+  showLeaderboard Boolean                   @default(true)
   createdBy       String
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
@@ -387,6 +389,8 @@ model ProblemSubmission {
   evaluatedBy             String?
   evaluatedAt             DateTime?
   isEvaluated             Boolean                @default(false)
+  efficiencyMultiplier    Float                  @default(1.0)
+  optimizationFeedback    String?
   competitionSubmission   CompetitionSubmission  @relation(fields: [competitionSubmissionId], references: [id], onDelete: Cascade)
   problem                 Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
   user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1016,6 +1020,7 @@ model DsaLecture {
   topic       String
   description String?
   batch       String?
+  division    String?     // Division name e.g. A, B, C
   lectureDate DateTime
   startTime   String?     // HH:mm format
   endTime     String?     // HH:mm format

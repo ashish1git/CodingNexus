@@ -41,6 +41,7 @@
 
 # prisma
 - After adding DB fields via raw SQL (not Prisma migrations), run `npx prisma generate` and rebuild the Docker image — otherwise the Prisma client won't know about the new fields and queries will throw 500 errors. Confidence: 0.75
+- When adding new fields to the Prisma schema (schema-first approach), also run the corresponding ALTER TABLE or `prisma db push` on the actual database — `prisma generate` only regenerates the client, it does NOT update the database, and missing columns cause all queries to silently fail. Confidence: 0.75
 
 # architecture
 - When adding similar functionality for a different user role (e.g., subadmin tickets), extend the existing model (e.g., SupportTicket) with a type/discriminator field rather than creating a parallel model — reuse over duplication. Confidence: 0.70
@@ -50,3 +51,19 @@
 
 # scoring
 - For code submission grading: award partial marks for correct but unoptimized solutions rather than failing them outright; students should know their solution passed but was not optimally efficient. Confidence: 0.80
+
+# design
+- When hiding a feature like leaderboard, show a placeholder message (e.g., "Leaderboard will be displayed soon") instead of removing the tab/UI element entirely — students panic if the tab disappears. Confidence: 0.70
+
+# api
+- When enriching data from one API response with fields from another source, verify that the field names match between the two data shapes (e.g., `id` vs `submissionId`) — mismatches cause `undefined` values that propagate silently in production. Confidence: 0.70
+
+# admin-ui
+- When displaying student information in admin views (tickets, management, etc.), show all available student profile fields (name, division, batch, rollNo, phone) — don't truncate to just name+rollNo. Users expect the full student context visible at a glance. Confidence: 0.70
+
+# debugging
+- When a user reports a feature still not working after a frontend fix was deployed, verify the actual API response data shape (e.g., log it or check the endpoint) before modifying the frontend — don't assume the nested path (e.g., `user.studentProfile`) matches the real response structure. The fix will silently fail if the data path is wrong. Confidence: 0.75
+- When there are two similar-sounding systems (e.g., subadmin support tickets vs. student support tickets), confirm which system the user is referring to before making changes — editing the wrong component wastes time and the user sees no fix. Confidence: 0.65
+
+# scoring
+- For competition leaderboards: rank by score desc, then submission time asc (who finished first), then execution time asc — submission speed is the primary tiebreaker, not code execution speed. Students who submitted earlier with the same score should rank higher. Confidence: 0.70

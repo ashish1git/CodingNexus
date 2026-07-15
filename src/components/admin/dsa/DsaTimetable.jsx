@@ -15,7 +15,8 @@ const HOURS = Array.from({ length: 14 }, (_, i) => `${String(i + 7).padStart(2, 
 const STATUS_COLORS = {
   scheduled: { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500', border: 'border-blue-200', label: 'Upcoming' },
   completed: { bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500', border: 'border-green-200', label: 'Completed' },
-  cancelled: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', border: 'border-gray-200', label: 'Cancelled' }
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', border: 'border-gray-200', label: 'Cancelled' },
+  pastdue:   { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500', border: 'border-amber-200', label: 'Past Due' }
 };
 
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
@@ -41,7 +42,23 @@ const toDateInput = (date) => new Date(date).toISOString().split('T')[0];
 const getLectureDate = (lecture) => new Date(lecture.lectureDate);
 const isToday = (date) => isSameDay(date, new Date());
 
-const getStatusStyle = (status) => STATUS_COLORS[status] || STATUS_COLORS.scheduled;
+const getStatusStyle = (lecture) => {
+  const status = lecture.status;
+  if (status === 'cancelled') return STATUS_COLORS.cancelled;
+  if (status === 'completed') return STATUS_COLORS.completed;
+  if (status === 'scheduled') {
+    const now = new Date();
+    const lectureDate = new Date(lecture.lectureDate);
+    if (lecture.startTime) {
+      const [h, m] = lecture.startTime.split(':').map(Number);
+      lectureDate.setHours(h || 0, m || 0, 0, 0);
+    } else {
+      lectureDate.setHours(23, 59, 59, 999);
+    }
+    return lectureDate < now ? STATUS_COLORS.pastdue : STATUS_COLORS.scheduled;
+  }
+  return STATUS_COLORS.scheduled;
+};
 
 const DsaTimetable = ({ trainerView = false }) => {
   const { userDetails } = useAuth();
@@ -57,6 +74,7 @@ const DsaTimetable = ({ trainerView = false }) => {
   const [filterTrainer, setFilterTrainer] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterBatch, setFilterBatch] = useState('all');
+  const [filterDivision, setFilterDivision] = useState('all');
   const [myTrainerId, setMyTrainerId] = useState(null);
 
   const canSchedule = useMemo(() =>
@@ -73,10 +91,10 @@ const DsaTimetable = ({ trainerView = false }) => {
     }
   }, [trainerView, trainers, userDetails]);
 
-  const emptyForm = { trainerIds: [], topic: '', description: '', batch: '', lectureDate: '', startTime: '', endTime: '', notesRequired: true };
+  const emptyForm = { trainerIds: [], topic: '', description: '', batch: '', division: '', lectureDate: '', startTime: '', endTime: '', notesRequired: true };
   const [form, setForm] = useState({ ...emptyForm });
   const [recurringForm, setRecurringForm] = useState({
-    trainerIds: [], topic: '', description: '', batch: '',
+    trainerIds: [], topic: '', description: '', batch: '', division: '',
     startTime: '', endTime: '', startDate: '', endDate: '', count: 12,
     daysOfWeek: { monday: true, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
     notesRequired: true
@@ -102,12 +120,34 @@ const DsaTimetable = ({ trainerView = false }) => {
       if (filterTrainer !== 'all' && l.trainerId !== filterTrainer) return false;
       if (filterStatus !== 'all' && l.status !== filterStatus) return false;
       if (filterBatch !== 'all' && l.batch !== filterBatch) return false;
+      if (filterDivision !== 'all' && l.division !== filterDivision) return false;
       return true;
-    }), [lectures, filterTrainer, filterStatus, filterBatch]);
+    }), [lectures, filterTrainer, filterStatus, filterBatch, filterDivision]);
+
+  // Group co-teaching lectures (same date, time, topic, batch) for display
+  const groupedLectures = useMemo(() => {
+    const groups = {};
+    filteredLectures.forEach(l => {
+      const key = `${l.topic}||${l.lectureDate}||${l.startTime || ''}||${l.endTime || ''}||${l.batch || ''}`;
+      if (!groups[key]) {
+        groups[key] = { ids: [l.id], trainerNames: [l.trainerName], lectures: [l] };
+      } else {
+        groups[key].ids.push(l.id);
+        groups[key].trainerNames.push(l.trainerName);
+        groups[key].lectures.push(l);
+      }
+    });
+    return Object.values(groups);
+  }, [filteredLectures]);
 
   const batches = useMemo(() => {
     const b = new Set(lectures.map(l => l.batch).filter(Boolean));
     return ['all', ...Array.from(b)];
+  }, [lectures]);
+
+  const divisions = useMemo(() => {
+    const d = new Set(lectures.map(l => l.division).filter(Boolean));
+    return ['all', ...Array.from(d)];
   }, [lectures]);
 
   const calendarDays = useMemo(() => {
@@ -143,6 +183,7 @@ const DsaTimetable = ({ trainerView = false }) => {
         topic: editingLecture.topic || '',
         description: editingLecture.description || '',
         batch: editingLecture.batch || '',
+        division: editingLecture.division || '',
         lectureDate: toDateInput(getLectureDate(editingLecture)),
         startTime: editingLecture.startTime || '',
         endTime: editingLecture.endTime || '',
@@ -217,7 +258,7 @@ const DsaTimetable = ({ trainerView = false }) => {
     const res = await dsaService.createRecurringSchedule({
       trainerIds: recurringForm.trainerIds,
       topic: recurringForm.topic,
-      description: recurringForm.description, batch: recurringForm.batch,
+      description: recurringForm.description, batch: recurringForm.batch, division: recurringForm.division,
       startTime: recurringForm.startTime, endTime: recurringForm.endTime,
       startDate: recurringForm.startDate, endDate: recurringForm.endDate || undefined,
       count: parseInt(recurringForm.count) || 12, daysOfWeek: selectedDays,
@@ -235,18 +276,22 @@ const DsaTimetable = ({ trainerView = false }) => {
   }
 
   const LectureCompact = ({ lecture }) => {
-    const s = getStatusStyle(lecture.status);
+    const s = getStatusStyle(lecture);
+    const label = lecture.trainerNamesLabel || lecture.trainerName || '';
     return (
-      <div className={`${s.bg} ${s.text} px-1.5 py-0.5 rounded text-[10px] font-medium truncate cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1`}
-        onClick={(e) => { e.stopPropagation(); setSelectedLecture(lecture); }} title={`${lecture.topic}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${s.dot} shrink-0`} />
-        <span className="truncate">{lecture.topic}</span>
+      <div className={`${s.bg} ${s.text} px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1.5 border ${s.border}`}
+        onClick={(e) => { e.stopPropagation(); setSelectedLecture(lecture); }} title={`${lecture.topic}${lecture.startTime ? ' @ ' + lecture.startTime : ''} - ${s.label}${label ? ' - ' + label : ''}`}>
+        <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+        <span className="flex-1 truncate">{lecture.topic}</span>
+        {lecture.startTime && <span className="text-[10px] opacity-75 shrink-0">{lecture.startTime}</span>}
+        {label && <span className="text-[10px] opacity-60 shrink-0 max-w-[80px] truncate">{label}</span>}
       </div>
     );
   };
 
   const LectureCard = ({ lecture }) => {
-    const s = getStatusStyle(lecture.status);
+    const s = getStatusStyle(lecture);
+    const label = lecture.trainerNamesLabel || lecture.trainerName || '';
     return (
       <div className={`p-2 ${s.bg} ${s.text} rounded-lg border ${s.border} cursor-pointer hover:shadow-md transition-all`}
         onClick={() => setSelectedLecture(lecture)}>
@@ -254,10 +299,11 @@ const DsaTimetable = ({ trainerView = false }) => {
           <BookOpen className="w-3 h-3 shrink-0" />
           <span className="font-medium text-xs truncate">{lecture.topic}</span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] opacity-75">
+        <div className="flex items-center gap-2 text-[10px] opacity-75 flex-wrap">
           <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{lecture.startTime || '--'}</span>
           {lecture.batch && <span>{lecture.batch}</span>}
         </div>
+        {label && <div className="text-[10px] opacity-60 mt-0.5 truncate">{label}</div>}
       </div>
     );
   };
@@ -294,6 +340,7 @@ const DsaTimetable = ({ trainerView = false }) => {
               <button key={l.id} onClick={() => setSelectedLecture(l)}
                 className="flex items-center gap-1 whitespace-nowrap px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-[11px] font-medium hover:bg-blue-100 transition-colors">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />{l.topic} - {formatDate(getLectureDate(l))}
+                <span className="opacity-60 ml-0.5">({l.trainerName})</span>
               </button>
             ))}
           </div>
@@ -334,6 +381,10 @@ const DsaTimetable = ({ trainerView = false }) => {
           <select value={filterBatch} onChange={e => setFilterBatch(e.target.value)}
             className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             {batches.map(b => <option key={b} value={b}>{b === 'all' ? 'All Batches' : b}</option>)}
+          </select>
+          <select value={filterDivision} onChange={e => setFilterDivision(e.target.value)}
+            className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {divisions.map(d => <option key={d} value={d}>{d === 'all' ? 'All Divisions' : `Div ${d}`}</option>)}
           </select>
         </div>
       </div>
@@ -384,6 +435,25 @@ const MonthView = ({ days, LectureCompact, currentDate }) => (
       {days.map((day, i) => {
         const today = day.date && isToday(day.date);
         const isCurrent = day.date?.getMonth() === currentDate.getMonth();
+        // Group co-teaching lectures within this cell
+        const cellGroups = {};
+        (day.lectures || []).forEach(l => {
+          const key = `${l.topic}||${l.startTime || '--'}||${l.batch || ''}`;
+          if (!cellGroups[key]) {
+            cellGroups[key] = { lectures: [l], trainerNames: [l.trainerName] };
+          } else {
+            cellGroups[key].lectures.push(l);
+            if (!cellGroups[key].trainerNames.includes(l.trainerName)) {
+              cellGroups[key].trainerNames.push(l.trainerName);
+            }
+          }
+        });
+        const grouped = Object.values(cellGroups).map(g => ({
+          ...g.lectures[0],
+          trainerNamesLabel: g.trainerNames.join(' & '),
+          allLectures: g.lectures
+        }));
+
         return (
           <div key={i} className={`min-h-[90px] md:min-h-[110px] border-r border-b border-gray-200 p-1.5 transition-colors
             ${today ? 'bg-indigo-50/50' : ''} ${!isCurrent ? 'bg-gray-50' : 'bg-white hover:bg-gray-50/50'}`}>
@@ -391,8 +461,8 @@ const MonthView = ({ days, LectureCompact, currentDate }) => (
               <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full
                 ${today ? 'bg-indigo-600 text-white' : isCurrent ? 'text-gray-700' : 'text-gray-400'}`}>{day.day}</div>
               <div className="space-y-0.5">
-                {day.lectures?.slice(0, 3).map(l => <LectureCompact key={l.id} lecture={l} />)}
-                {day.lectures?.length > 3 && <div className="text-[10px] text-gray-400 font-medium pl-1">+{day.lectures.length - 3} more</div>}
+                {grouped.slice(0, 3).map(l => <LectureCompact key={l.id} lecture={l} />)}
+                {grouped.length > 3 && <div className="text-[10px] text-gray-400 font-medium pl-1">+{grouped.length - 3} more</div>}
               </div>
             </>}
           </div>
@@ -413,14 +483,35 @@ const WeekView = ({ days, LectureCard }) => (
       ))}
     </div>
     <div className="grid grid-cols-7 gap-1">
-      {days.map((d, i) => (
-        <div key={i} className={`min-h-[200px] md:min-h-[300px] p-1.5 rounded-xl border ${isToday(d.date) ? 'border-indigo-200 bg-indigo-50/20' : 'border-gray-200 bg-white'}`}>
-          <div className="space-y-1">
-            {d.lectures.length === 0 && <div className="text-[10px] text-gray-300 text-center py-8">No lectures</div>}
-            {d.lectures.map(l => <LectureCard key={l.id} lecture={l} />)}
+      {days.map((d, i) => {
+        // Group co-teaching lectures within this cell
+        const cellGroups = {};
+        (d.lectures || []).forEach(l => {
+          const key = `${l.topic}||${l.startTime || '--'}||${l.batch || ''}`;
+          if (!cellGroups[key]) {
+            cellGroups[key] = { lectures: [l], trainerNames: [l.trainerName] };
+          } else {
+            cellGroups[key].lectures.push(l);
+            if (!cellGroups[key].trainerNames.includes(l.trainerName)) {
+              cellGroups[key].trainerNames.push(l.trainerName);
+            }
+          }
+        });
+        const grouped = Object.values(cellGroups).map(g => ({
+          ...g.lectures[0],
+          trainerNamesLabel: g.trainerNames.join(' & '),
+          allLectures: g.lectures
+        }));
+
+        return (
+          <div key={i} className={`min-h-[200px] md:min-h-[300px] p-1.5 rounded-xl border ${isToday(d.date) ? 'border-indigo-200 bg-indigo-50/20' : 'border-gray-200 bg-white'}`}>
+            <div className="space-y-1">
+              {grouped.length === 0 && <div className="text-[10px] text-gray-300 text-center py-8">No lectures</div>}
+              {grouped.map(l => <LectureCard key={l.id} lecture={l} />)}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>
 );
@@ -428,11 +519,32 @@ const WeekView = ({ days, LectureCard }) => (
 const DayView = ({ lectures, currentDate, onSelect }) => {
   const dayLectures = lectures.filter(l => isSameDay(getLectureDate(l), currentDate))
     .sort((a, b) => (a.startTime || '00:00').localeCompare(b.startTime || '00:00'));
-  const grouped = {};
+
+  // Group co-teaching lectures by (topic, time, batch)
+  const groupMap = {};
   dayLectures.forEach(l => {
+    const key = `${l.topic}||${l.startTime || '--'}||${l.batch || ''}`;
+    if (!groupMap[key]) {
+      groupMap[key] = { lectures: [l], trainerNames: [l.trainerName] };
+    } else {
+      groupMap[key].lectures.push(l);
+      if (!groupMap[key].trainerNames.includes(l.trainerName)) {
+        groupMap[key].trainerNames.push(l.trainerName);
+      }
+    }
+  });
+  const grouped = Object.values(groupMap).map(g => ({
+    ...g.lectures[0],
+    trainerNamesLabel: g.trainerNames.join(' & '),
+    allLectures: g.lectures
+  }));
+
+  // Group by hour for display
+  const hourGroups = {};
+  grouped.forEach(l => {
     const h = (l.startTime || '00:00').split(':')[0];
-    if (!grouped[h]) grouped[h] = [];
-    grouped[h].push(l);
+    if (!hourGroups[h]) hourGroups[h] = [];
+    hourGroups[h].push(l);
   });
 
   return (
@@ -443,7 +555,7 @@ const DayView = ({ lectures, currentDate, onSelect }) => {
       </div>
       <div className="max-h-[500px] overflow-y-auto space-y-0.5 pr-2">
         {HOURS.map(hour => {
-          const slot = grouped[hour] || [];
+          const slot = hourGroups[hour] || [];
           return (
             <div key={hour} className="flex gap-3 min-h-[48px]">
               <div className="w-14 text-right text-[11px] text-gray-400 font-medium pt-1.5 shrink-0">{hour}</div>
@@ -451,7 +563,8 @@ const DayView = ({ lectures, currentDate, onSelect }) => {
                 {slot.length > 0 ? (
                   <div className="space-y-1">
                     {slot.map(l => {
-                      const s = getStatusStyle(l.status);
+                      const s = getStatusStyle(l);
+                      const displayTrainers = l.trainerNamesLabel || l.trainerName || '';
                       return (
                         <div key={l.id} onClick={() => onSelect(l)}
                           className={`flex items-center gap-3 p-2 rounded-lg border ${s.border} ${s.bg} cursor-pointer`}>
@@ -459,7 +572,7 @@ const DayView = ({ lectures, currentDate, onSelect }) => {
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-medium text-gray-900 truncate">{l.topic}</div>
                             <div className="text-[10px] text-gray-500 flex items-center gap-2">
-                              <span>{l.trainerName}</span>
+                              <span>{displayTrainers}</span>
                               {l.batch && <span>{l.batch}</span>}
                             </div>
                           </div>
@@ -516,6 +629,18 @@ const LectureFormModal = ({ editing, form, setForm, trainers, onClose, onSubmit 
               <option value="">All batches</option>
               <option value="Basic">Basic</option>
               <option value="Advanced">Advanced</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Division</label>
+            <select value={form.division} onChange={e => setForm({ ...form, division: e.target.value })}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+              <option value="">All divisions</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
             </select>
           </div>
         </div>
@@ -606,11 +731,23 @@ const RecurringFormModal = ({ form, setForm, trainers, toggleDay, onClose, onSub
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
-              <select value={form.batch} onChange={e => setForm({ ...form, batch: e.target.value })}
+              <select value={recurringForm.batch} onChange={e => setRecurringForm({ ...recurringForm, batch: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
                 <option value="">All batches</option>
                 <option value="Basic">Basic</option>
                 <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Division</label>
+              <select value={recurringForm.division} onChange={e => setRecurringForm({ ...recurringForm, division: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                <option value="">All divisions</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
               </select>
             </div>
           </div>
@@ -684,7 +821,9 @@ const RecurringFormModal = ({ form, setForm, trainers, toggleDay, onClose, onSub
 
 const LectureDetailModal = ({ lecture, onClose, canSchedule, onEdit, onCancel, onReschedule, onDelete }) => {
   if (!lecture) return null;
-  const s = getStatusStyle(lecture.status);
+  const s = getStatusStyle(lecture);
+  // Derive co-trainer info if present from grouped display
+  const trainerLabel = lecture.trainerNamesLabel || lecture.trainerName || '';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6" onClick={e => e.stopPropagation()}>
@@ -694,7 +833,7 @@ const LectureDetailModal = ({ lecture, onClose, canSchedule, onEdit, onCancel, o
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-3">{lecture.topic}</h3>
         <div className="space-y-2.5 text-sm">
-          <div className="flex items-center gap-2 text-gray-600"><Users className="w-4 h-4 text-gray-400" /><span>{lecture.trainerName}</span></div>
+          <div className="flex items-center gap-2 text-gray-600"><Users className="w-4 h-4 text-gray-400" /><span>{trainerLabel}</span></div>
           <div className="flex items-center gap-2 text-gray-600"><Calendar className="w-4 h-4 text-gray-400" /><span>{formatDate(getLectureDate(lecture))}</span></div>
           {lecture.startTime && (
             <div className="flex items-center gap-2 text-gray-600"><Clock className="w-4 h-4 text-gray-400" /><span>{lecture.startTime}{lecture.endTime ? ` - ${lecture.endTime}` : ''}</span></div>

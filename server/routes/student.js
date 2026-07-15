@@ -830,14 +830,15 @@ router.post('/profile/photo', upload.single('photo'), async (req, res) => {
 // Update profile
 router.put('/profile', async (req, res) => {
   try {
-    const { name, phone, profilePhotoUrl } = req.body;
+    const { name, phone, profilePhotoUrl, division } = req.body;
 
     await prisma.student.update({
       where: { userId: req.user.id },
       data: {
         name,
         phone,
-        profilePhotoUrl
+        profilePhotoUrl,
+        division
       }
     });
 
