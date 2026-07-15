@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* Safari backdrop-filter fallback */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg {
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+}

@@ -26,6 +26,9 @@ function copyDir(src, dest) {
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    target: ['es2020', 'edge88', 'firefox89', 'chrome88', 'safari15']
+  },
   plugins: [
     react(),
     tailwindcss(),
