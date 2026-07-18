@@ -45,7 +45,12 @@ const StudentManagement = () => {
     try {
       const response = await adminService.getAllStudents();
       if (response.success) {
-        setStudents(response.students || []);
+        const normalized = (response.students || []).map(s => ({
+          ...s,
+          mobile: s.phone || s.mobile || '',   // normalize backend {phone} → frontend {mobile}
+          division: s.division || ''            // ensure division is always a string
+        }));
+        setStudents(normalized);
       } else {
         toast.error(response.error || 'Failed to fetch students');
         setStudents([]);
@@ -159,25 +164,25 @@ const StudentManagement = () => {
       if (response.success) {
         console.log('✅ Update response:', response);
         
-        if (response.student) {
-          console.log('📥 Updated student data from backend:', response.student);
-          console.log('🔄 Batch updated to:', response.student.batch);
+        if (response.studentProfile) {
+          console.log('📥 Updated student data from backend:', response.studentProfile);
+          console.log('🔄 Batch updated to:', response.studentProfile.batch);
         }
         
         toast.success('Student updated successfully!');
         
         // Update local state immediately if backend returned the updated student
-        if (response.student) {
+        if (response.studentProfile) {
           setStudents(prevStudents =>
             prevStudents.map(s =>
               s.id === selectedStudent.id
                 ? {
                     ...s,
-                    name: response.student.name,
-                    batch: response.student.batch,
-                    division: response.student.division,
-                    phone: response.student.phone,
-                    mobile: response.student.phone
+                    name: response.studentProfile.name,
+                    batch: response.studentProfile.batch,
+                    division: response.studentProfile.division,
+                    phone: response.studentProfile.phone,
+                    mobile: response.studentProfile.phone
                   }
                 : s
             )

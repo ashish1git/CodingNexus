@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import prisma from '../config/db.js';
-import { authenticate, authorizeRole } from '../middleware/auth.js';
+import { authenticate, authorizeRole, checkPermission } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
 import { sendEmail } from '../services/email/brevo.service.js';
 import { subadminWelcome, ticketReplyNotification } from '../services/email/emailTemplates.js';
@@ -12,10 +12,7 @@ const router = express.Router();
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
   if (!name || !name.trim()) return '';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
-  return `${parts[1]} ${parts[0]}`;
+  return name.trim();
 };
 
 // All routes require admin authentication
@@ -63,7 +60,7 @@ router.get('/users/:userId', async (req, res) => {
 // Create student (admin only) - auto-activated
 router.post('/students', async (req, res) => {
   try {
-    const { email, password, name, moodleId, batch, phone, rollNo } = req.body;
+    const { email, password, name, moodleId, batch, phone, rollNo, division } = req.body;
 
     // Check if user exists
     const existingUser = await prisma.user.findFirst({
@@ -101,7 +98,8 @@ router.post('/students', async (req, res) => {
             name,
             rollNo,
             batch: normalizedBatch,
-            phone
+            phone,
+            division
           }
         }
       },
@@ -153,6 +151,7 @@ router.get('/students', async (req, res) => {
           rollNo: student.rollNo,
           batch: student.batch,
           phone: student.phone,
+          division: student.division,
           profilePhotoUrl: student.profilePhotoUrl,
           createdAt: u.createdAt
         };
@@ -167,10 +166,10 @@ router.get('/students', async (req, res) => {
 router.put('/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, batch, phone, profilePhotoUrl, isActive } = req.body;
+    const { name, batch, phone, profilePhotoUrl, isActive, division } = req.body;
 
     console.log('🔧 UPDATE REQUEST for student:', id);
-    console.log('📦 Request body:', { name, batch, phone, profilePhotoUrl, isActive });
+    console.log('📦 Request body:', { name, batch, phone, profilePhotoUrl, isActive, division });
 
     // Update user
     if (isActive !== undefined) {
@@ -186,6 +185,7 @@ router.put('/students/:id', async (req, res) => {
     if (batch !== undefined) updateData.batch = batch.toLowerCase();
     if (phone !== undefined) updateData.phone = phone;
     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = profilePhotoUrl;
+    if (division !== undefined) updateData.division = division;
     
     console.log('🎯 Update data for Prisma:', updateData);
 
@@ -212,6 +212,7 @@ router.put('/students/:id', async (req, res) => {
           rollNo: currentUser.studentProfile?.rollNo,
           batch: currentUser.studentProfile?.batch,
           phone: currentUser.studentProfile?.phone,
+          division: currentUser.studentProfile?.division,
           profilePhotoUrl: currentUser.studentProfile?.profilePhotoUrl
         }
       });
@@ -226,6 +227,7 @@ router.put('/students/:id', async (req, res) => {
         name: name || 'Student',
         batch: batch ? batch.toLowerCase() : 'basic',
         phone,
+        division,
         profilePhotoUrl
       }
     });
@@ -255,6 +257,7 @@ router.put('/students/:id', async (req, res) => {
         rollNo: updatedUser.studentProfile?.rollNo,
         batch: updatedUser.studentProfile?.batch,
         phone: updatedUser.studentProfile?.phone,
+        division: updatedUser.studentProfile?.division,
         profilePhotoUrl: updatedUser.studentProfile?.profilePhotoUrl
       }
     };
@@ -398,7 +401,7 @@ router.get('/notes', async (req, res) => {
 });
 
 // Delete note
-router.delete('/notes/:id', async (req, res) => {
+router.delete('/notes/:id', checkPermission('manageNotes'), async (req, res) => {
   try {
     await prisma.note.delete({
       where: { id: req.params.id }
@@ -412,25 +415,102 @@ router.delete('/notes/:id', async (req, res) => {
 // ============ ANNOUNCEMENTS ============
 
 // Create announcement
+// Create announcement
 router.post('/announcements', async (req, res) => {
   try {
-    const { title, message, batch, priority } = req.body;
+    const { title, message, content, batch, division, priority, notifyEmail } = req.body;
+    const body = message || content;
 
-    // Normalize batch to lowercase
-    const normalizedBatch = batch && batch !== 'All' ? batch.toLowerCase() : batch;
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: 'Title and message are required' });
+    }
 
-    await prisma.announcement.create({
+    // Normalize batch to lowercase consistently: 'all', 'basic', 'advanced'
+    const normalizedBatch = batch ? batch.toLowerCase() : 'all';
+
+    // When batch is 'all', division must be null (no such thing as "all batches of FE-A")
+    const effectiveDivision = normalizedBatch === 'all' ? null : (division || null);
+
+    const announcement = await prisma.announcement.create({
       data: {
         title,
-        message,
+        message: body,
         batch: normalizedBatch,
+        division: effectiveDivision,
         priority: priority || 'normal',
+        notifyEmail: notifyEmail || false,
         createdBy: req.user.id
       }
     });
 
-    res.json({ success: true });
+    // Email notification
+    if (notifyEmail) {
+      try {
+        // Build Prisma filter
+        const studentWhere = { role: 'student', isActive: true };
+
+        // Batch filter
+        if (normalizedBatch !== 'all') {
+          studentWhere.studentProfile = { batch: normalizedBatch };
+        }
+
+        let students = await prisma.user.findMany({
+          where: studentWhere,
+          include: { studentProfile: true }
+        });
+
+        // Further filter by division if specified and batch is not 'all'
+        if (effectiveDivision) {
+          students = students.filter(s => s.studentProfile?.division === effectiveDivision);
+        }
+
+        const emails = students.map(s => s.email).filter(Boolean);
+
+        if (emails.length > 0) {
+          const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #4f46e5;">${title}</h2>
+              <div style="background: #f3f4f6; border-left: 4px solid #4f46e5; padding: 16px; margin: 16px 0;">
+                <p style="white-space: pre-wrap; margin: 0;">${body}</p>
+              </div>
+              <p style="color: #6b7280; font-size: 12px;">
+                ${effectiveDivision
+                  ? `Targeted for: ${normalizedBatch} batch, ${effectiveDivision} division`
+                  : normalizedBatch === 'all'
+                    ? 'Sent to all active students'
+                    : `Targeted for: ${normalizedBatch} batch`}<br>
+                Coding Nexus Portal
+              </p>
+            </div>`;
+
+          const emailText = `Announcement: ${title}\n\n${body}`;
+
+          // Send individually (Brevo wrapper sends one per call; serverless-safe approach)
+          let sent = 0;
+          for (const email of emails) {
+            try {
+              await sendEmail({
+                to: email,
+                subject: `📢 [Coding Nexus] ${title}`,
+                html: emailHtml,
+                text: emailText
+              });
+              sent++;
+            } catch (e) {
+              console.warn(`Email to ${email} failed:`, e.message);
+            }
+          }
+          console.log(`📧 Announcement email: ${sent}/${emails.length} sent`);
+        }
+      } catch (emailErr) {
+        console.error('Email notification failed:', emailErr);
+        // Don't fail the announcement creation if emails fail
+      }
+    }
+
+    res.json({ success: true, announcement });
   } catch (error) {
+    console.error('Create announcement error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -439,9 +519,24 @@ router.post('/announcements', async (req, res) => {
 router.get('/announcements', async (req, res) => {
   try {
     const announcements = await prisma.announcement.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: {
+        creator: {
+          select: {
+            email: true,
+            studentProfile: { select: { name: true } },
+            adminProfile: { select: { name: true } }
+          }
+        }
+      }
     });
-    res.json({ success: true, announcements });
+
+    const mapped = announcements.map(a => ({
+      ...a,
+      createdBy: a.creator?.studentProfile?.name || a.creator?.adminProfile?.name || a.creator?.email || a.createdBy
+    }));
+
+    res.json({ success: true, announcements: mapped });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -466,6 +561,116 @@ router.delete('/announcements/:id', async (req, res) => {
     await prisma.announcement.delete({
       where: { id: req.params.id }
     });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ FORMS / SURVEYS / FEEDBACK ============
+
+// Create form
+router.post('/forms', async (req, res) => {
+  try {
+    const { title, description, batch, division, formType, questions, isActive, notifyEmail } = req.body;
+    if (!title || !questions || !Array.isArray(questions)) {
+      return res.status(400).json({ success: false, error: 'Title and questions (array) are required' });
+    }
+    const normalizedBatch = batch ? batch.toLowerCase() : 'all';
+    const effectiveDivision = normalizedBatch === 'all' ? null : (division || null);
+
+    const form = await prisma.form.create({
+      data: {
+        title,
+        description: description || null,
+        batch: normalizedBatch,
+        division: effectiveDivision,
+        formType: formType || 'survey',
+        questions,
+        isActive: isActive !== false,
+        notifyEmail: notifyEmail || false
+      }
+    });
+
+    if (notifyEmail) {
+      try {
+        const studentWhere = { role: 'student', isActive: true };
+        if (normalizedBatch !== 'all') studentWhere.studentProfile = { batch: normalizedBatch };
+        let students = await prisma.user.findMany({ where: studentWhere, include: { studentProfile: true } });
+        if (effectiveDivision) students = students.filter(s => s.studentProfile?.division === effectiveDivision);
+        for (const s of students) {
+          try {
+            await sendEmail({
+              to: s.email,
+              subject: `📋 [Coding Nexus] New ${formType || 'Form'}: ${title}`,
+              html: `<div style="font-family:Arial;max-width:600px;margin:0 auto"><h2 style="color:#4f46e5">${title}</h2><p>${description || ''}</p><p style="color:#6b7280;font-size:12px">Please log in to the Coding Nexus portal to fill out this form.</p></div>`,
+              text: `New ${formType || 'Form'}: ${title}\n\n${description || ''}\n\nPlease visit the Coding Nexus portal to submit.`
+            });
+          } catch (_) {}
+        }
+        console.log(`📧 Form notification sent to ${students.length} students`);
+      } catch (_) {}
+    }
+
+    res.json({ success: true, form });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all forms
+router.get('/forms', async (req, res) => {
+  try {
+    const forms = await prisma.form.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, forms });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single form with submissions
+router.get('/forms/:id', async (req, res) => {
+  try {
+    const form = await prisma.form.findUnique({
+      where: { id: req.params.id },
+      include: {
+        submissions: {
+          include: { user: { include: { studentProfile: true } } }
+        }
+      }
+    });
+    if (!form) return res.status(404).json({ success: false, error: 'Form not found' });
+    res.json({ success: true, form });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update form
+router.put('/forms/:id', async (req, res) => {
+  try {
+    const { title, description, batch, division, formType, questions, isActive, notifyEmail } = req.body;
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (batch !== undefined) { data.batch = batch.toLowerCase(); data.division = batch.toLowerCase() === 'all' ? null : (division || null); }
+    if (division !== undefined && batch?.toLowerCase() !== 'all') data.division = division;
+    if (formType !== undefined) data.formType = formType;
+    if (questions !== undefined) data.questions = questions;
+    if (isActive !== undefined) data.isActive = isActive;
+    if (notifyEmail !== undefined) data.notifyEmail = notifyEmail;
+
+    const form = await prisma.form.update({ where: { id: req.params.id }, data });
+    res.json({ success: true, form });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete form
+router.delete('/forms/:id', async (req, res) => {
+  try {
+    await prisma.form.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1548,6 +1753,9 @@ router.get('/tickets', async (req, res) => {
       ...ticket,
       studentName: ticket.user?.studentProfile?.name || 'Unknown',
       studentRollNo: ticket.user?.studentProfile?.rollNo || 'N/A',
+      studentBatch: ticket.user?.studentProfile?.batch || 'N/A',
+      studentDivision: ticket.user?.studentProfile?.division || 'N/A',
+      studentPhone: ticket.user?.studentProfile?.phone || 'N/A',
       responses: ticket.response ? (() => {
         try {
           return JSON.parse(ticket.response);

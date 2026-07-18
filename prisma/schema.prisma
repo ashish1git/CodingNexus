@@ -30,6 +30,8 @@ model User {
   competitionRegistrations2     AptitudeCompetitionRegistration[]
   competitionAttempts           AptitudeCompetitionAttempt[]
   passwordResetOTPs              PasswordResetOTP[]
+  announcements               Announcement[]           @relation("AnnouncementCreator")
+  formSubmissions             FormSubmission[]
 
   @@index([email])
   @@index([moodleId])
@@ -47,6 +49,7 @@ model Student {
   updatedAt       DateTime @updatedAt
   rollNo          String?
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dsaProblems     DsaProblem[]
 
   @@index([batch])
 }
@@ -78,17 +81,21 @@ model Note {
 }
 
 model Announcement {
-  id        String   @id @default(uuid())
-  title     String
-  message   String
-  batch     String
-  priority  String   @default("normal")
-  isActive  Boolean  @default(true)
-  createdBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  batch       String
+  division    String?
+  priority    String   @default("normal")
+  isActive    Boolean  @default(true)
+  notifyEmail Boolean  @default(false)
+  createdBy   String
+  creator     User     @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([batch])
+  @@index([division])
   @@index([createdAt])
 }
 
@@ -124,6 +131,39 @@ model QuizAttempt {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([quizId, userId])
+  @@index([userId])
+}
+
+// ====== Form / Survey / Feedback System ======
+
+model Form {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  batch       String        @default("all")
+  division    String?
+  formType    String        @default("survey")   // survey | feedback | quiz_form
+  questions   Json
+  isActive    Boolean       @default(true)
+  notifyEmail Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  submissions FormSubmission[]
+
+  @@index([batch])
+  @@index([formType])
+}
+
+model FormSubmission {
+  id          String    @id @default(uuid())
+  formId      String
+  userId      String
+  answers     Json
+  submittedAt DateTime  @default(now())
+  form        Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, userId])
   @@index([userId])
 }
 
@@ -1067,4 +1107,20 @@ model DsaNote {
   @@index([lectureId])
   @@index([status])
   @@index([trainerId, status])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DSA Sheet — Student Problem Progress
+// ──────────────────────────────────────────────────────────────────
+
+model DsaProblem {
+  problemId   String
+  studentId   String    // FK to Student.userId
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  bookmarked  Boolean   @default(false)
+  student     Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+
+  @@id([problemId, studentId])
+  @@index([studentId])
 }

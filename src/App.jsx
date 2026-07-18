@@ -38,6 +38,9 @@ import Competitions from './components/student/Competitions';
 const CompetitionProblems = lazy(() => import('./components/student/competition/CompetitionProblems'));
 import CompetitionResults from './components/student/competition/competitionResults/CompetitionResults';
 import StudentCertificates from './components/student/StudentCertificates';
+import StudentAnnouncements from './components/student/StudentAnnouncements';
+import StudentFormList from './components/student/StudentFormList';
+import StudentFormSubmit from './components/student/StudentFormSubmit';
 import AptitudeTests from './components/student/AptitudeTests';
 import AptitudeAttempt from './components/student/AptitudeAttempt';
 import AptitudeResults from './components/student/AptitudeResults';
@@ -48,6 +51,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import StudentManagement from './components/admin/StudentManagement';
 import NotesUpload from './components/admin/NotesUpload';
 import AnnouncementManager from './components/admin/AnnouncementManager';
+import FormManager from './components/admin/FormManager';
 import AttendanceManager from './components/admin/AttendanceManager';
 import QuizCreator from './components/admin/QuizCreator';
 import QuizManager from './components/admin/QuizManager';
@@ -254,6 +258,30 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route 
+                path="/student/announcements" 
+                element={
+                  <ProtectedRoute>
+                    <StudentAnnouncements />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/forms" 
+                element={
+                  <ProtectedRoute>
+                    <StudentFormList />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/student/forms/:id" 
+                element={
+                  <ProtectedRoute>
+                    <StudentFormSubmit />
+                  </ProtectedRoute>
+                } 
+              />
               <Route
                 path="/student/certificates"
                 element={
@@ -344,6 +372,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <AnnouncementManager />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/forms" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <FormManager />
                   </ProtectedRoute>
                 } 
               />

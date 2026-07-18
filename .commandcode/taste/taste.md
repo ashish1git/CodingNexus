@@ -24,11 +24,12 @@
 
 # design
 - Preserve existing visual design and styling when making content updates — avoid full UI rewrites unless explicitly requested. Prefer targeted content changes (text, badges, copy) over complete redesigns. Confidence: 0.70
+- When adding new content cards to a dashboard, place them side-by-side in the existing grid row rather than in a separate full-width section below — full-width stacked sections push content below the fold and require scrolling to see. Confidence: 0.65
 - Do not expose internal tech stack details (Judge0, Monaco Editor, specific engines/libraries) on public-facing pages like About or Landing — the user considers these implementation secrets. Confidence: 0.85
 
 # workflow
 - For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80
-- For feature implementation requests, skip planning/discussion and implement directly and quickly; explain what was done after implementation, not before. Confidence: 0.65
+- For feature implementation requests, skip planning/discussion and implement directly and quickly; explain what was done after implementation, not before. Confidence: 0.70
 - When backend changes involve DB schema modifications or new API routes, proactively run the migration and rebuild/restart the server (Docker/PM2) — don't declare the task done until the deployed server picks up the changes. Confidence: 0.80
 - Frontend-only changes require `npm run build` to deploy; backend changes require Docker container rebuild and `docker compose up -d` to restart. Don't mix up the deployment paths. Confidence: 0.70
 - When changes span both frontend AND backend (new routes, new pages, new API endpoints), run BOTH the frontend build (`npm run build`) AND the Docker rebuild (`docker compose up -d --build`) — the system won't work in production unless both deployment paths are completed. Confidence: 0.75

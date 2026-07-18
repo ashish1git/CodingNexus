@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Users, BookOpen, Bell, Calendar, Award, HelpCircle,
+  Users, BookOpen, Bell, Calendar, Award, HelpCircle, ClipboardList,
   LogOut, Menu, X, Shield, TrendingUp, FileText, UserPlus, Trophy, CalendarDays, Mail, UserCheck, Ghost, Brain, User, MessageCircle, Monitor
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -91,6 +91,7 @@ const AdminDashboard = () => {
     { icon: <BookOpen />, label: 'Notes', path: '/admin/notes' },
     { icon: <BookOpen />, label: 'DSA Management', path: '/admin/dsa' },
     { icon: <Bell />, label: 'Announcements', path: '/admin/announcements' },
+    { icon: <ClipboardList />, label: 'Forms', path: '/admin/forms' },
     { icon: <Calendar />, label: 'Attendance', path: '/admin/attendance' },
     { icon: <Award />, label: 'Quizzes', path: '/admin/quiz' },
     { icon: <Trophy />, label: 'Competitions', path: '/admin/competitions' },

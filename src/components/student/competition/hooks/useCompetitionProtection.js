@@ -12,6 +12,28 @@ import {
 const MAX_VIOLATIONS = 3;
 
 /**
+ * Collect browser diagnostic info for fullscreen troubleshooting.
+ */
+const getFullscreenDiag = () => ({
+  timestamp: new Date().toISOString(),
+  browser: (() => {
+    const ua = navigator.userAgent;
+    if (ua.includes('Edg/')) return 'Edge';
+    if (ua.includes('Chrome/')) return 'Chrome';
+    if (ua.includes('Firefox/')) return 'Firefox';
+    if (ua.includes('Safari/') && !ua.includes('Chrome/')) return 'Safari';
+    return 'Unknown';
+  })(),
+  userAgent: navigator.userAgent.substring(0, 200),
+  fullscreenEnabled: document.fullscreenEnabled,
+  fullscreenElement: !!document.fullscreenElement,
+  userActivationIsActive: navigator.userActivation ? navigator.userActivation.isActive : 'unavailable',
+  platform: navigator.platform,
+  screenSize: `${screen.width}x${screen.height}`,
+  windowSize: `${window.innerWidth}x${window.innerHeight}`
+});
+
+/**
  * Fullscreen enforcement, tab-switch detection, clipboard blocking, and
  * violation logging for coding competitions.
  *
@@ -27,6 +49,8 @@ export default function useCompetitionProtection(competition, { submittedRef, se
   const [showWarningOverlay, setShowWarningOverlay] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  const [fullscreenFailed, setFullscreenFailed] = useState(false);   // F11 fallback trigger
+  const [fullscreenDiag, setFullscreenDiag] = useState(null);        // last diagnostic
 
   const violationLogRef = useRef([]);
   const deviceInfoRef = useRef(null);
@@ -159,6 +183,7 @@ export default function useCompetitionProtection(competition, { submittedRef, se
       isFullscreenRef.current = inFullscreen;
       if (inFullscreen) {
         setShowFullscreenPrompt(false);
+        setFullscreenFailed(false);
         violationLogRef.current.push(buildLogEntry('fullscreen_enter', 'student entered fullscreen'));
         persistNow();
       } else {
@@ -166,6 +191,22 @@ export default function useCompetitionProtection(competition, { submittedRef, se
         persistNow();
         recordViolation('exited fullscreen (pressed Escape)');
       }
+    };
+
+    const handleFullscreenError = (e) => {
+      const diag = getFullscreenDiag();
+      setFullscreenDiag(diag);
+      setFullscreenFailed(true);
+      setIsFullscreen(false);
+      isFullscreenRef.current = false;
+
+      console.error('🔴 FULLSCREEN ERROR', diag, e);
+
+      violationLogRef.current.push(buildLogEntry(
+        'fullscreen_error',
+        `fullscreenerror event: ${e?.message || 'unknown'} | enabled=${diag.fullscreenEnabled} | hasElement=${diag.fullscreenElement} | activation=${diag.userActivationIsActive}`
+      ));
+      persistNow();
     };
 
     const logBlocked = (reason) => {
@@ -235,6 +276,7 @@ export default function useCompetitionProtection(competition, { submittedRef, se
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('fullscreenerror', handleFullscreenError);
     document.addEventListener('copy', handleCopy);
     document.addEventListener('paste', handlePaste);
     document.addEventListener('contextmenu', handleContextMenu);
@@ -247,6 +289,7 @@ export default function useCompetitionProtection(competition, { submittedRef, se
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('fullscreenerror', handleFullscreenError);
       document.removeEventListener('copy', handleCopy);
       document.removeEventListener('paste', handlePaste);
       document.removeEventListener('contextmenu', handleContextMenu);
@@ -257,6 +300,37 @@ export default function useCompetitionProtection(competition, { submittedRef, se
   const enterFullscreen = () => {
     // Already in fullscreen — nothing to do
     if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+      setShowFullscreenPrompt(false);
+      setFullscreenFailed(false);
+      return;
+    }
+
+    // Pre-check: is fullscreen even possible?
+    if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) {
+      const diag = getFullscreenDiag();
+      setFullscreenDiag(diag);
+      setFullscreenFailed(true);
+      console.error('🔴 Fullscreen pre-check failed — fullscreenEnabled is false', diag);
+      violationLogRef.current.push(buildLogEntry(
+        'fullscreen_error',
+        `fullscreenEnabled=false | ua=${diag.userAgent}`
+      ));
+      persistNow();
+      toast.error('Fullscreen is not allowed in this browser/context');
+      return;
+    }
+
+    const diag = getFullscreenDiag();
+    if (!diag.userActivationIsActive && diag.userActivationIsActive !== 'unavailable') {
+      setFullscreenDiag(diag);
+      setFullscreenFailed(true);
+      console.error('🔴 Fullscreen pre-check failed — no user activation', diag);
+      violationLogRef.current.push(buildLogEntry(
+        'fullscreen_error',
+        `no user activation | ua=${diag.userAgent}`
+      ));
+      persistNow();
+      toast.error('Fullscreen requires a direct user action. Please click the button again.');
       return;
     }
 
@@ -268,20 +342,35 @@ export default function useCompetitionProtection(competition, { submittedRef, se
           promise.then(() => {
             isFullscreenRef.current = true;
             setIsFullscreen(true);
+            setFullscreenFailed(false);
             toast.success('✅ Fullscreen enabled - tab switching is locked');
           }).catch(err => {
-            // fullscreenchange handler already logs the event; only log on failure
-            violationLogRef.current.push(buildLogEntry('fullscreen_error', `fullscreen request failed: ${err.message}`));
+            const failDiag = getFullscreenDiag();
+            setFullscreenDiag(failDiag);
+            setFullscreenFailed(true);
+            console.error('🔴 Fullscreen request rejected', failDiag, err);
+            violationLogRef.current.push(buildLogEntry(
+              'fullscreen_error',
+              `request rejected: ${err.name}/${err.message} | fullscreenEnabled=${failDiag.fullscreenEnabled}`
+            ));
             persistNow();
-            toast.error('Could not enable fullscreen: ' + err.message);
+            toast.error('Could not enable fullscreen. Press F11 or use the button below to try again.');
           });
         } else {
           isFullscreenRef.current = true;
           setIsFullscreen(true);
+          setFullscreenFailed(false);
           toast.success('✅ Fullscreen enabled');
         }
       } catch (err) {
-        violationLogRef.current.push(buildLogEntry('fullscreen_error', `fullscreen error: ${err.message}`));
+        const failDiag = getFullscreenDiag();
+        setFullscreenDiag(failDiag);
+        setFullscreenFailed(true);
+        console.error('🔴 Fullscreen threw exception', failDiag, err);
+        violationLogRef.current.push(buildLogEntry(
+          'fullscreen_error',
+          `exception: ${err.name}/${err.message} | fullscreenEnabled=${failDiag.fullscreenEnabled}`
+        ));
         persistNow();
         toast.error('Could not enter fullscreen: ' + err.message);
       }
@@ -294,9 +383,13 @@ export default function useCompetitionProtection(competition, { submittedRef, se
     } else if (elem.msRequestFullscreen) {
       tryRequest('msRequestFullscreen');
     } else {
-      violationLogRef.current.push(buildLogEntry('fullscreen_error', 'fullscreen not supported by browser'));
+      const failDiag = getFullscreenDiag();
+      setFullscreenDiag(failDiag);
+      setFullscreenFailed(true);
+      console.error('🔴 No fullscreen API available', failDiag);
+      violationLogRef.current.push(buildLogEntry('fullscreen_error', 'no fullscreen API on this browser'));
       persistNow();
-      toast.error('Fullscreen not supported in this browser');
+      toast.error('Fullscreen not supported in this browser. Press F11 to enter browser fullscreen.');
     }
   };
 
@@ -310,6 +403,8 @@ export default function useCompetitionProtection(competition, { submittedRef, se
     isFullscreen,
     setIsFullscreen,
     enterFullscreen,
+    fullscreenFailed,
+    fullscreenDiag,
     violationLogRef,
     tabSwitchCountRef,
     clearViolationLog: clearLog

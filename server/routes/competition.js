@@ -7,6 +7,12 @@ import { wrapCodeForExecution } from '../utils/codeWrapper.js';
 
 const router = express.Router();
 
+// Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
+const formatDisplayName = (name) => {
+  if (!name || !name.trim()) return '';
+  return name.trim();
+};
+
 // ─── Server-side starter code generator (mirrors frontend) ──────────
 const generateStarterCode = (problem) => {
   const { functionName = 'solution', returnType = 'int', parameters = [] } = problem;
@@ -256,7 +262,7 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
     for (const sub of submissions) {
       const entry = {
         userId: sub.userId,
-        name: sub.user.studentProfile?.name || sub.user.email,
+        name: formatDisplayName(sub.user.studentProfile?.name) || sub.user.email,
         moodleId: sub.user.moodleId || sub.user.email.split('@')[0],
         batch: sub.user.studentProfile?.batch,
         division: sub.user.studentProfile?.division || '',
@@ -267,10 +273,11 @@ router.get('/:id/leaderboard', authenticate, async (req, res) => {
         submittedAt: sub.submittedAt
       };
 
-      // Two entries share the same rank only if BOTH score and submission time match
+      // Tied rank: same score AND same submission time => shared rank
+      // Otherwise sequential (submission time is the primary tiebreaker)
       if (previousEntry === null ||
           previousEntry.totalScore !== entry.totalScore ||
-          previousEntry.submittedAt?.getTime() !== entry.submittedAt?.getTime()) {
+          new Date(previousEntry.submittedAt).getTime() !== new Date(entry.submittedAt).getTime()) {
         currentRank = leaderboard.length + 1;
       }
 

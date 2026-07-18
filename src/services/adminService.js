@@ -647,7 +647,24 @@ export const adminService = {
       console.error('Get Docker containers error:', error);
       return { success: false, error: error.message };
     }
-  }
+  },
+
+  // ============ FORMS / SURVEYS ============
+
+  async createForm(data) {
+    try { const r = await apiClient.post('/admin/forms', data); if (r.success) toast.success('Form created'); return r; }
+    catch (e) { toast.error(e.message); return { success: false, error: e.message }; }
+  },
+  async getAllForms() { try { return await apiClient.get('/admin/forms'); } catch (e) { return { success: false, error: e.message }; } },
+  async getFormById(id) { try { return await apiClient.get(`/admin/forms/${id}`); } catch (e) { return { success: false, error: e.message }; } },
+  async updateForm(id, data) {
+    try { const r = await apiClient.put(`/admin/forms/${id}`, data); if (r.success) toast.success('Form updated'); return r; }
+    catch (e) { toast.error(e.message); return { success: false, error: e.message }; }
+  },
+  async deleteForm(id) {
+    try { const r = await apiClient.delete(`/admin/forms/${id}`); if (r.success) toast.success('Form deleted'); return r; }
+    catch (e) { toast.error(e.message); return { success: false, error: e.message }; }
+  },
 };
 
 export default adminService;

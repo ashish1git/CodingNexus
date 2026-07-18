@@ -86,7 +86,7 @@ const MaintenancePage = () => {
             </div>
             <div className="bg-slate-900/50 rounded p-3">
               <div className="text-slate-400 mb-1">Expected Duration</div>
-              <div className="text-blue-400 font-semibold">24-48 hours</div>
+              <div className="text-blue-400 font-semibold">under 5-7 minutes</div>
             </div>
           </div>
         </div>

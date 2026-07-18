@@ -143,12 +143,8 @@ export const classNames = (...classes) => {
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 // e.g., "Pandey Tarun Shailesh" → "Tarun Pandey"
 // e.g., "Vishwakarma Ashish Chhotelal" → "Ashish Vishwakarma"
-// e.g., "Ashish Vishwakarma" → "Ashish Vishwakarma" (lastName firstName swap)
-// e.g., "Tarun" → "Tarun" (single name passthrough)
+// Display name as-is (no swapping)
 export const formatDisplayName = (name) => {
   if (!name || !name.trim()) return '';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
-  return `${parts[1]} ${parts[0]}`;
+  return name.trim();
 };

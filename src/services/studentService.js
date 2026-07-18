@@ -200,7 +200,14 @@ export const studentService = {
       toast.error(error.message || 'Failed to update profile');
       return { success: false, error: error.message };
     }
-  }
+  },
+
+  // ============ FORMS / SURVEYS ============
+
+  async getForms() { try { return await apiClient.get('/student/forms'); } catch (e) { return { success: false, error: e.message }; } },
+  async getFormById(id) { try { return await apiClient.get(`/student/forms/${id}`); } catch (e) { return { success: false, error: e.message }; } },
+  async submitForm(id, answers) { try { return await apiClient.post(`/student/forms/${id}/submit`, { answers }); } catch (e) { return { success: false, error: e.message }; } },
+  async getMyFormSubmissions() { try { return await apiClient.get('/student/form-submissions'); } catch (e) { return { success: false, error: e.message }; } },
 };
 
 export default studentService;

@@ -114,6 +114,7 @@ const CompetitionProblems = () => {
     tabSwitchCount, showWarningOverlay, setShowWarningOverlay,
     showFullscreenPrompt, setShowFullscreenPrompt,
     isFullscreen, setIsFullscreen, enterFullscreen,
+    fullscreenFailed, fullscreenDiag,
     violationLogRef, tabSwitchCountRef, clearViolationLog: clearSessionLog
   } = useCompetitionProtection(competition, {
     submittedRef, serverTimeOffsetRef, onKick: handleKick
@@ -240,6 +241,12 @@ const CompetitionProblems = () => {
         showFullscreenPrompt={showFullscreenPrompt}
         onEnterFullscreen={enterFullscreen}
         competitionStatus={competitionStatus}
+        fullscreenFailed={fullscreenFailed}
+        fullscreenDiag={fullscreenDiag}
+        onDismissFullscreenFailed={() => {
+          setShowFullscreenPrompt(false);
+          setIsFullscreen(true);  // let the student proceed with browser F11 fullscreen
+        }}
       />
 
       {/* Custom Scrollbar Styles */}

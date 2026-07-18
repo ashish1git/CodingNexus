@@ -1,7 +1,8 @@
 import React from 'react';
 
 /**
- * Competition overlays: tab-switch warning, 60s warning, fullscreen prompt.
+ * Competition overlays: tab-switch warning, 60s warning, fullscreen prompt,
+ * and F11 fallback dialog when requestFullscreen fails.
  */
 export default function Overlays({
   showWarningOverlay,
@@ -11,8 +12,21 @@ export default function Overlays({
   onDismissTimeWarning,
   showFullscreenPrompt,
   onEnterFullscreen,
-  competitionStatus
+  competitionStatus,
+  fullscreenFailed,
+  fullscreenDiag,
+  onDismissFullscreenFailed
 }) {
+  // Temporarily unblock F11 when showing fallback dialog
+  const handleF11FallbackKeyDown = (e) => {
+    if (e.key === 'F11') {
+      // Allow F11 through — we want user to use browser fullscreen
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   return (
     <>
       {/* ⚠️ TAB SWITCH WARNING OVERLAY */}
@@ -69,7 +83,7 @@ export default function Overlays({
       )}
 
       {/* 🔒 FULLSCREEN REQUIRED BANNER */}
-      {showFullscreenPrompt && !showWarningOverlay && competitionStatus === 'ongoing' && (
+      {showFullscreenPrompt && !showWarningOverlay && !fullscreenFailed && competitionStatus === 'ongoing' && (
         <div className="fixed inset-0 z-[9998] bg-black/90 flex items-center justify-center">
           <div className="bg-[#1e1e1e] border-2 border-yellow-500 rounded-2xl p-10 max-w-md w-full mx-4 text-center shadow-2xl shadow-yellow-500/20">
             <div className="text-6xl mb-4">🔒</div>
@@ -84,6 +98,55 @@ export default function Overlays({
             >
               🖥️ Enter Fullscreen & Start Competition
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🔧 F11 FALLBACK DIALOG — shown when requestFullscreen fails */}
+      {fullscreenFailed && !showWarningOverlay && competitionStatus === 'ongoing' && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center"
+          onKeyDown={handleF11FallbackKeyDown}
+        >
+          <div className="bg-[#1e1e1e] border-2 border-red-500 rounded-2xl p-10 max-w-lg w-full mx-4 text-center shadow-2xl shadow-red-500/30">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-3">Fullscreen Failed</h2>
+            <p className="text-gray-300 mb-4">
+              Automatic fullscreen could not be activated on this device.
+            </p>
+
+            {/* Diagnostic info */}
+            {fullscreenDiag && (
+              <div className="bg-[#111] border border-[#333] rounded-lg p-3 mb-4 text-left text-xs font-mono text-gray-400 space-y-1">
+                <p><span className="text-gray-500">Browser:</span> {fullscreenDiag.browser} | {fullscreenDiag.platform}</p>
+                <p><span className="text-gray-500">fullscreenEnabled:</span> <span className={fullscreenDiag.fullscreenEnabled ? 'text-green-400' : 'text-red-400'}>{String(fullscreenDiag.fullscreenEnabled)}</span></p>
+                <p><span className="text-gray-500">userActivation:</span> <span className={fullscreenDiag.userActivationIsActive ? 'text-green-400' : 'text-red-400'}>{String(fullscreenDiag.userActivationIsActive)}</span></p>
+                <p className="truncate"><span className="text-gray-500">UA:</span> {fullscreenDiag.userAgent}</p>
+              </div>
+            )}
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
+              <p className="text-yellow-400 font-bold text-lg mb-1">Press F11</p>
+              <p className="text-yellow-300/70 text-sm">
+                Press the <kbd className="px-1.5 py-0.5 bg-yellow-500/20 border border-yellow-500/40 rounded text-yellow-300 font-mono text-xs">F11</kbd> key
+                on your keyboard to manually enter fullscreen mode, then click Continue.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onEnterFullscreen}
+                className="flex-1 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors text-sm"
+              >
+                🔄 Retry Fullscreen
+              </button>
+              <button
+                onClick={onDismissFullscreenFailed}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors text-sm"
+              >
+                Continue (F11 pressed)
+              </button>
+            </div>
           </div>
         </div>
       )}

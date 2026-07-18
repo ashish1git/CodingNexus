@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Bell, Calendar, Award, Code, HelpCircle,
-  LogOut, Menu, X, User, Clock, TrendingUp, FileText, Trophy, Brain, Sparkles
+  LogOut, Menu, X, User, Clock, TrendingUp, FileText, Trophy, Brain, Sparkles, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
 import { certificateService } from '../../services/certificateService';
+import { formatDisplayName } from '../../utils/helpers';
 import dataCache from '../../utils/dataCache';
 import toast from 'react-hot-toast';
 
@@ -338,10 +339,11 @@ const STYLES = `
 /* Content Grid */
 .sdb-content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 20px;
   margin-bottom: 24px;
 }
+@media (max-width: 1200px) { .sdb-content-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { .sdb-content-grid { grid-template-columns: 1fr; } }
 
 /* Glass Cards */
@@ -396,7 +398,12 @@ const STYLES = `
 .sdb-announce-title { font-size: 0.88rem; font-weight: 600; color: #e2e8f0; }
 .sdb-announce-body { font-size: 0.78rem; color: #94a3b8; margin-top: 4px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.sdb-announce-date { font-size: 0.7rem; color: #64748b; margin-top: 6px; }
+.sdb-announce-body.expanded { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.sdb-announce-body a { color: #818cf8; text-decoration: underline; word-break: break-all; }
+.sdb-announce-body a:hover { color: #a5b4fc; }
+.sdb-announce-date { font-size: 0.7rem; color: #64748b; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+.sdb-announce-expand { font-size: 0.72rem; color: #818cf8; cursor: pointer; background: none; border: none; padding: 0; font-weight: 600; }
+.sdb-announce-expand:hover { color: #a5b4fc; }
 
 /* Quiz item */
 .sdb-quiz-item {
@@ -433,6 +440,26 @@ const STYLES = `
   transform: translateY(-2px);
   box-shadow: 0 8px 22px rgba(124,58,237,0.55);
 }
+
+/* Form list item */
+.sdb-form-item {
+  background: rgba(109,40,217,0.08);
+  border: 1px solid rgba(139,92,246,0.2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+.sdb-form-item:last-child { margin-bottom: 0; }
+.sdb-form-item:hover {
+  background: rgba(109,40,217,0.16);
+  border-color: rgba(139,92,246,0.4);
+  transform: translateX(3px);
+}
+.sdb-form-title { font-size: 0.88rem; font-weight: 600; color: #e2e8f0; }
+.sdb-form-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.sdb-form-type { font-size: 0.68rem; padding: 2px 8px; border-radius: 50px; font-weight: 600; background: rgba(16,185,129,0.15); color: #34d399; }
+.sdb-form-questions { font-size: 0.72rem; color: #94a3b8; }
 
 /* Empty state */
 .sdb-empty {
@@ -538,9 +565,24 @@ const StudentDashboard = () => {
   });
   const [recentAnnouncements, setRecentAnnouncements] = useState([]);
   const [upcomingQuizzes, setUpcomingQuizzes] = useState([]);
+  const [activeForms, setActiveForms] = useState([]);
   const [availableCertificatesCount, setAvailableCertificatesCount] = useState(0);
 
-  // Helper function to format quiz duration
+  const [announcementsExpanded, setAnnouncementsExpanded] = useState({});
+
+  // Helper to convert plain-text URLs into clickable links and preserve newlines
+  const formatAnnouncementBody = (text) => {
+    if (!text) return '';
+    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (urlRegex.test(part)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a>;
+      }
+      // Preserve newlines
+      return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>;
+    });
+  };
   const formatQuizDuration = (minutes) => {
     if (!minutes) return "N/A";
     const hours = Math.floor(minutes / 60);
@@ -589,14 +631,16 @@ const StudentDashboard = () => {
       setStats(cachedData.stats);
       setUpcomingQuizzes(cachedData.upcomingQuizzes);
       setRecentAnnouncements(cachedData.recentAnnouncements);
+      if (cachedData.activeForms) setActiveForms(cachedData.activeForms);
     }
     try {
-      const [notesRes, attendanceRes, quizzesRes, attemptsRes, announcementsRes] = await Promise.all([
+      const [notesRes, attendanceRes, quizzesRes, attemptsRes, announcementsRes, formsRes] = await Promise.all([
         studentService.getNotes(),
         studentService.getAttendance(),
         studentService.getQuizzes(),
         studentService.getQuizAttempts(),
-        studentService.getAnnouncements()
+        studentService.getAnnouncements(),
+        studentService.getForms()
       ]);
       const totalNotesCount = notesRes.success ? notesRes.data.length : 0;
       let attendancePercentage = 0;
@@ -628,6 +672,7 @@ const StudentDashboard = () => {
       const announcements = announcementsRes.success
         ? announcementsRes.data.slice(0, 5).map(a => ({ ...a, createdAt: new Date(a.createdAt) }))
         : [];
+      const formsList = formsRes.success ? formsRes.data || [] : [];
       const newStats = {
         totalNotes: totalNotesCount, attendance: attendancePercentage,
         attendancePercentage, quizzesAttempted: quizzesAttemptedCount,
@@ -636,7 +681,8 @@ const StudentDashboard = () => {
       setStats(newStats);
       setUpcomingQuizzes(upcomingQuizzesList);
       setRecentAnnouncements(announcements);
-      dataCache.set('dashboard', userId, { stats: newStats, upcomingQuizzes: upcomingQuizzesList, recentAnnouncements: announcements });
+      setActiveForms(formsList);
+      dataCache.set('dashboard', userId, { stats: newStats, upcomingQuizzes: upcomingQuizzesList, recentAnnouncements: announcements, activeForms: formsList });
       console.log('✅ Dashboard data refreshed and cached');
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -654,21 +700,22 @@ const StudentDashboard = () => {
   };
 
   const menuItems = [
-    { icon: <User className="w-4 h-4" />, label: 'Profile', path: '/student/profile' },
+    { icon: <User className="w-4 h-4" />, label: 'Profile', path: '/student/profile',isNew:true },
     { icon: <BookOpen className="w-4 h-4" />, label: 'Notes', path: '/student/notes' },
     { icon: <Calendar className="w-4 h-4" />, label: 'Attendance', path: '/student/attendance' },
     { icon: <Award className="w-4 h-4" />, label: 'Quizzes', path: '/student/quiz/list' },
     { icon: <Trophy className="w-4 h-4" />, label: 'Competitions', path: '/student/competitions' },
-    { icon: <Brain className="w-4 h-4" />, label: 'Aptitude', path: '/student/aptitude', isNew: true },
-    { icon: <Sparkles className="w-4 h-4" />, label: 'Practice', path: '/student/practice', isNew: true },
+    { icon: <Brain className="w-4 h-4" />, label: 'Aptitude', path: '/student/aptitude', isNew: false },
+    { icon: <Sparkles className="w-4 h-4" />, label: 'Practice', path: '/student/practice', isNew: false },
     { icon: <FileText className="w-4 h-4" />, label: 'Certificates', path: '/student/certificates', badge: availableCertificatesCount, isNew: false },
+    { icon: <ClipboardList className="w-4 h-4" />, label: 'Forms', path: '/student/forms' },
     { icon: <Code className="w-4 h-4" />, label: 'Code Editor', path: '/student/code-editor' },
     { icon: <HelpCircle className="w-4 h-4" />, label: 'Support', path: '/student/support' },
   ];
 
-  const firstName = userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0];
+  const firstName = formatDisplayName(userDetails?.studentProfile?.name || userDetails?.name || '').split(' ')[0];
   const profilePhoto = userDetails?.studentProfile?.profilePhotoUrl || userDetails?.photoURL;
-  const profileInitial = userDetails?.studentProfile?.name?.charAt(0).toUpperCase() || userDetails?.name?.charAt(0).toUpperCase();
+  const profileInitial = (userDetails?.studentProfile?.name || userDetails?.name || 'S').charAt(0).toUpperCase();
 
   return (
     <div className="sdb-root">
@@ -718,7 +765,7 @@ const StudentDashboard = () => {
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="sdb-profile-name">
-                {userDetails?.studentProfile?.name || userDetails?.name}
+                {formatDisplayName(userDetails?.studentProfile?.name || userDetails?.name)}
               </div>
               <div className="sdb-profile-roll">
                 {userDetails?.studentProfile?.rollNo || userDetails?.rollNo}
@@ -787,20 +834,38 @@ const StudentDashboard = () => {
                   </div>
                   <span className="sdb-card-title">Recent Announcements</span>
                 </div>
+                <Link to="/student/announcements" className="sdb-view-all">View All →</Link>
               </div>
 
               {recentAnnouncements.length > 0 ? (
-                recentAnnouncements.map((ann) => (
-                  <div key={ann.id} className="sdb-announce-item">
-                    <div className="sdb-announce-title">{ann.title}</div>
-                    <div className="sdb-announce-body">{ann.content}</div>
-                    <div className="sdb-announce-date">
-                      {ann.createdAt && ann.createdAt.toLocaleDateString
-                        ? ann.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        : 'N/A'}
+                recentAnnouncements.map((ann) => {
+                  const body = ann.message || ann.content || '';
+                  const isExpanded = announcementsExpanded[ann.id];
+                  const isLong = body.length > 150;
+                  return (
+                    <div key={ann.id} className="sdb-announce-item">
+                      <div className="sdb-announce-title">{ann.title}</div>
+                      <div className={`sdb-announce-body ${isExpanded ? 'expanded' : ''}`}>
+                        {formatAnnouncementBody(isExpanded ? body : body.substring(0, 150) + (isLong ? '…' : ''))}
+                      </div>
+                      <div className="sdb-announce-date">
+                        <span>
+                          {ann.createdAt && ann.createdAt.toLocaleDateString
+                            ? ann.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : 'N/A'}
+                        </span>
+                        {isLong && (
+                          <button
+                            className="sdb-announce-expand"
+                            onClick={() => setAnnouncementsExpanded(prev => ({ ...prev, [ann.id]: !prev[ann.id] }))}
+                          >
+                            {isExpanded ? 'Show less ▲' : 'Read more ▼'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="sdb-empty">
                   <div className="sdb-empty-icon">📭</div>
@@ -843,6 +908,37 @@ const StudentDashboard = () => {
                 <div className="sdb-empty">
                   <div className="sdb-empty-icon">🎯</div>
                   No upcoming quizzes
+                </div>
+              )}
+            </div>
+
+            {/* Active Forms & Surveys */}
+            <div className="sdb-glass-card">
+              <div className="sdb-card-header">
+                <div className="sdb-card-title-row">
+                  <div className="sdb-card-icon-wrap" style={{ background: 'rgba(16,185,129,0.18)' }}>
+                    <ClipboardList size={17} color="#34d399" />
+                  </div>
+                  <span className="sdb-card-title">Active Forms</span>
+                </div>
+                <Link to="/student/forms" className="sdb-view-all">View All →</Link>
+              </div>
+              {activeForms.length > 0 ? (
+                activeForms.slice(0, 5).map(f => (
+                  <Link to={`/student/forms/${f.id}`} key={f.id} style={{ textDecoration: 'none' }}>
+                    <div className="sdb-form-item">
+                      <div className="sdb-form-title">{f.title}</div>
+                      <div className="sdb-form-meta">
+                        <span className="sdb-form-type">{f.formType?.replace('_', ' ') || 'form'}</span>
+                        <span className="sdb-form-questions">{(f.questions||[]).length} question{(f.questions||[]).length !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="sdb-empty">
+                  <div className="sdb-empty-icon">📋</div>
+                  No active forms
                 </div>
               )}
             </div>

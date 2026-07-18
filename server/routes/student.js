@@ -6,10 +6,7 @@ import upload, { uploadToCloudinary } from '../middleware/upload.js';
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
   if (!name || !name.trim()) return '';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
-  return `${parts[1]} ${parts[0]}`;
+  return name.trim();
 };
 
 const router = express.Router();
@@ -656,18 +653,119 @@ router.get('/announcements', async (req, res) => {
       where: { userId: req.user.id }
     });
 
+    if (!student) {
+      return res.json({ success: true, data: [] });
+    }
+
     const announcements = await prisma.announcement.findMany({
       where: {
         OR: [
-          { batch: student.batch },
-          { batch: 'All' }
+          { batch: student.batch?.toLowerCase() },
+          { batch: 'all' },
+          // Legacy: handle old uppercase 'All' records that may still exist
+          { batch: 'All' },
+          // Division-specific: announcement targets this student's exact division
+          ...(student.division ? [{ division: student.division }] : [])
         ],
         isActive: true
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, data: announcements });
+    // Remove duplicates (an announcement could match multiple OR conditions)
+    const seen = new Set();
+    const unique = announcements.filter(a => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+
+    res.json({ success: true, data: unique });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ FORMS / SURVEYS / FEEDBACK ============
+
+// Get forms available to the student (by batch + division + 'all')
+router.get('/forms', async (req, res) => {
+  try {
+    const student = await prisma.student.findUnique({ where: { userId: req.user.id } });
+    if (!student) return res.json({ success: true, data: [] });
+
+    const forms = await prisma.form.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { batch: 'all' },
+          { batch: student.batch?.toLowerCase() },
+          { batch: 'All' },
+          ...(student.division ? [{ division: student.division }] : [])
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const seen = new Set();
+    const unique = forms.filter(f => { if (seen.has(f.id)) return false; seen.add(f.id); return true; });
+
+    res.json({ success: true, data: unique });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single form with student's existing submission if any
+router.get('/forms/:id', async (req, res) => {
+  try {
+    const form = await prisma.form.findUnique({ where: { id: req.params.id } });
+    if (!form) return res.status(404).json({ success: false, error: 'Form not found' });
+
+    const submission = await prisma.formSubmission.findUnique({
+      where: { formId_userId: { formId: req.params.id, userId: req.user.id } }
+    });
+
+    res.json({ success: true, form: { ...form, mySubmission: submission } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Submit form
+router.post('/forms/:id/submit', async (req, res) => {
+  try {
+    const { answers } = req.body;
+    if (!answers) return res.status(400).json({ success: false, error: 'Answers are required' });
+
+    const existing = await prisma.formSubmission.findUnique({
+      where: { formId_userId: { formId: req.params.id, userId: req.user.id } }
+    });
+    if (existing) return res.status(409).json({ success: false, error: 'You have already submitted this form' });
+
+    const submission = await prisma.formSubmission.create({
+      data: {
+        formId: req.params.id,
+        userId: req.user.id,
+        answers
+      }
+    });
+
+    res.json({ success: true, submission });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get my submissions
+router.get('/form-submissions', async (req, res) => {
+  try {
+    const submissions = await prisma.formSubmission.findMany({
+      where: { userId: req.user.id },
+      include: { form: { select: { id: true, title: true, formType: true } } },
+      orderBy: { submittedAt: 'desc' }
+    });
+    res.json({ success: true, data: submissions });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

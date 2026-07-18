@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useGuest } from '../../context/GuestContext';
 import { studentService } from '../../services/studentService';
 import ChangePasswordModal from '../shared/ChangePasswordModal';
+import { formatDisplayName } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
@@ -14,9 +15,8 @@ const StudentProfile = () => {
   const { guestUser, isGuest } = useGuest();
 
   // For guests, use the username they chose; for regular students, use the full name
-  const displayName = isGuest
-    ? guestUser?.username
-    : (userDetails?.studentProfile?.name || userDetails?.name || 'Student');
+  const rawName = userDetails?.studentProfile?.name || userDetails?.name || '';
+  const displayName = isGuest ? guestUser?.username : (formatDisplayName(rawName) || 'Student');
   const [uploading, setUploading] = useState(false);
   const [photoURL, setPhotoURL] = useState(userDetails?.profilePhotoUrl || userDetails?.photoURL || null);
   const [showCropModal, setShowCropModal] = useState(false);
@@ -264,7 +264,8 @@ const StudentProfile = () => {
   };
 
   const attendance = userDetails?.attendance ?? 0;
-  const userFirstName = isGuest ? guestUser?.username : (userDetails?.studentProfile?.name?.split(' ')[0] || userDetails?.name?.split(' ')[0] || 'User');
+  const formattedName = formatDisplayName(userDetails?.studentProfile?.name || userDetails?.name);
+  const userFirstName = isGuest ? guestUser?.username : (formattedName.split(' ')[0] || 'User');
   const studentProfile = userDetails?.studentProfile || {};
   const currentDivision = studentProfile?.division || userDetails?.division || '';
   const joinedDate = new Date(userDetails?.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });

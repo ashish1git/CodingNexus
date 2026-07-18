@@ -14,10 +14,7 @@ const STUDENT_EMAIL_DOMAIN = '@apsit.edu.in';
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
   if (!name || !name.trim()) return '';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[1]} ${parts[0]}`;
-  return `${parts[1]} ${parts[0]}`;
+  return name.trim();
 };
 
 // Generate JWT token
@@ -32,7 +29,8 @@ const generateToken = (userId, role) => {
 // Student Signup
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, name, moodleId, batch, phone } = req.body;
+    const { email, password, name, moodleId, batch, phone: rawPhone, mobile } = req.body;
+    const phone = rawPhone || mobile;  // accept both field names
 
     // Check if user exists
     const existingUser = await prisma.user.findFirst({

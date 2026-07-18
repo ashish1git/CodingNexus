@@ -514,7 +514,7 @@ const handleUpload = async (e) => {
                             Preview
                           </button>
                           
-                          {userDetails?.role === 'superadmin' && (
+                          {canManageNotes && (
                             <button
                               onClick={() => handleDelete(note)}
                               className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-medium border border-red-200"
