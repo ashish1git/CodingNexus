@@ -322,7 +322,8 @@ router.get('/me', authenticate, async (req, res) => {
         name: formatDisplayName(user.studentProfile.name),
         phone: user.studentProfile.phone,
         rollNo: user.studentProfile.rollNo,
-        profilePhotoUrl: user.studentProfile.profilePhotoUrl
+        profilePhotoUrl: user.studentProfile.profilePhotoUrl,
+        dsaAccess: user.studentProfile.dsaAccess
       }),
       ...(user.adminProfile && {
         name: user.adminProfile.name,

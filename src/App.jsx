@@ -88,6 +88,7 @@ import TeamApplicationsManager from './components/admin/TeamApplicationsManager'
 import GuestManagementPage from './components/admin/GuestManagementPage';
 import AptitudeManager from './components/admin/AptitudeManager';
 import MonitoringDashboard from './components/admin/MonitoringDashboard';
+const DsaSheet = lazy(() => import('./components/student/dsa/DsaSheet'));
 const RecruitmentConfigManager = lazy(() => import('./components/admin/RecruitmentConfigManager'));
 const RecruitmentSubmissions = lazy(() => import('./components/admin/RecruitmentSubmissions'));
 
@@ -322,6 +323,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <PracticePage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* DSA Sheet */}
+              <Route
+                path="/student/dsa-sheet"
+                element={
+                  <ProtectedRoute>
+                    <DsaSheet />
                   </ProtectedRoute>
                 }
               />

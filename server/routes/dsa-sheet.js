@@ -1,11 +1,71 @@
 import express from 'express';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const codesFile = path.join(__dirname, '..', 'dsa-codes.json');
+
+function loadCodes() {
+  try { return JSON.parse(fs.readFileSync(codesFile, 'utf-8')); }
+  catch { return { codes: [] }; }
+}
 
 const router = express.Router();
 
 router.use(authenticate);
 router.use(authorizeRole('student'));
+
+// POST /unlock — verify access code and grant access (BEFORE the gate)
+router.post('/unlock', async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ success: false, error: 'Access code required' });
+
+    const data = loadCodes();
+    const entry = data.codes.find(c => c.code === code.trim());
+    if (!entry) return res.status(403).json({ success: false, error: 'Invalid access code' });
+
+    if (entry.maxUses && entry.used >= entry.maxUses) {
+      return res.status(403).json({ success: false, error: 'This code has reached its usage limit' });
+    }
+
+    const student = await prisma.student.findUnique({ where: { userId: req.user.id } });
+    if (student?.dsaAccess) {
+      return res.json({ success: true, data: { alreadyUnlocked: true } });
+    }
+
+    await prisma.student.upsert({
+      where: { userId: req.user.id },
+      update: { dsaAccess: true },
+      create: { userId: req.user.id, name: req.user.name || 'Unknown', batch: 'unknown', dsaAccess: true },
+    });
+
+    // Increment usage count
+    entry.used = (entry.used || 0) + 1;
+    fs.writeFileSync(codesFile, JSON.stringify(data, null, 2));
+
+    res.json({ success: true, data: { unlocked: true } });
+  } catch (error) {
+    console.error('DSA unlock error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DSA access gate — only students with dsaAccess=true can use these routes
+router.use(async (req, res, next) => {
+  try {
+    const student = await prisma.student.findUnique({ where: { userId: req.user.id }, select: { dsaAccess: true } });
+    if (!student?.dsaAccess) {
+      return res.status(403).json({ success: false, error: 'DSA Sheet access not granted' });
+    }
+    next();
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // GET /progress — returns completed & bookmarked problem IDs for the student
 router.get('/progress', async (req, res) => {

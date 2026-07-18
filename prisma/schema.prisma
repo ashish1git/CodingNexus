@@ -48,6 +48,7 @@ model Student {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   rollNo          String?
+  dsaAccess       Boolean   @default(false)
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   dsaProblems     DsaProblem[]
 

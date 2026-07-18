@@ -12,7 +12,8 @@ import {
   ClipboardList,
   UserCog,
   Code,
-  Shield
+  Shield,
+  Code2
 } from 'lucide-react';
 import { classNames } from '../../utils/helpers';
 
@@ -26,6 +27,7 @@ const Sidebar = () => {
     { path: '/student/attendance', label: 'Attendance', icon: Calendar },
     { path: '/student/quiz/sample', label: 'Quizzes', icon: ClipboardList },
     { path: '/student/code-editor', label: 'Code Editor', icon: Code },
+    { path: '/student/dsa-sheet', label: 'DSA Sheet', icon: Code2 },
     { path: '/student/support', label: 'Support', icon: MessageSquare }
   ];
 

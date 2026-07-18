@@ -1,0 +1,34 @@
+Single command:
+
+    node scripts/dsa-codes.mjs add
+
+  That's it. No arguments needed. It generates a random code like CNX-DSA-A3F72B with unlimited uses. Give that code to the
+  student.
+
+  If you want a limited-use code (e.g., 30 students max):
+
+    node scripts/dsa-codes.mjs add "batch-A" 30
+
+  Where "batch-A" is just a label for your reference, and 30 is the max uses. Give the generated code to students — once 30
+  people use it, it stops working.
+
+ All set. Here's the flow:
+
+  You (admin):
+
+    node scripts/dsa-codes.mjs add "batch-A" 30   # 30 uses only
+    node scripts/dsa-codes.mjs add "all"          # unlimited
+    node scripts/dsa-codes.mjs list               # see all codes
+    node scripts/dsa-codes.mjs remove CNX-DSA-XX  # revoke a code
+
+  Student:
+
+  1. Clicks "DSA Sheet" in sidebar
+  2. Sees unlock screen: "Enter your access code"
+  3. Types the code → gets instant access
+  4. Access persists across logins (stored in DB)
+
+  Codes file is mounted into Docker, so no rebuild needed when you generate new codes — just restart nginx: docker compose 
+  restart nginx.
+
+  Test code already created: CNX-DSA-52BE63 (max 50 uses).

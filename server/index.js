@@ -21,6 +21,7 @@ import monitoringRoutes from './routes/monitoring.js';
 import guestRoutes from './routes/guest.js';
 import aptitudeRoutes from './routes/aptitude.js';
 import dsaRoutes from './routes/dsa.js';
+import dsaSheetRoutes from './routes/dsa-sheet.js';
 import aptitudeQuestionRoutes from './routes/aptitude/questions.js';
 import aptitudeAiRoutes from './routes/aptitude/aiQuestions.js';
 import aptitudePracticeRoutes from './routes/aptitude/practice.js';
@@ -192,6 +193,7 @@ app.use('/api/aptitude/competition', aptitudeCompetitionRoutes);
 app.use('/api/aptitude/questions', aptitudeQuestionRoutes);
 app.use('/api/aptitude', aptitudeRoutes);
 app.use('/api/admin/dsa', dsaRoutes);
+app.use('/api/student/dsa-sheet', dsaSheetRoutes);
 app.use('/api/admin/monitoring', monitoringRoutes);
 
 // Health check & server time

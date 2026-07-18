@@ -1,0 +1,25 @@
+{
+  "codes": [
+    {
+      "code": "CNX-DSA-52BE63",
+      "label": "beta-testers",
+      "maxUses": 50,
+      "used": 0,
+      "created": "2026-07-18T15:56:45.148Z"
+    },
+    {
+      "code": "CNX-DSA-03E534",
+      "label": "Ashish",
+      "maxUses": 1,
+      "used": 1,
+      "created": "2026-07-18T16:15:45.324Z"
+    },
+    {
+      "code": "CNX-DSA-9A7FE3",
+      "label": "lucky10",
+      "maxUses": 15,
+      "used": 0,
+      "created": "2026-07-18T17:02:01.397Z"
+    }
+  ]
+}

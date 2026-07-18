@@ -9,6 +9,7 @@
 
 # communication
 - Explicitly report or enumerate every change made when performing edits — the user wants to be told what was changed, not just have it done silently. Confidence: 0.70
+- When documenting CLI commands: show the simplest, no-argument command first as the primary example, then mention optional arguments separately. Don't list all variants at once — the user finds multi-variant command references confusing. Confidence: 0.65
 
 # datetime
 - Display times in Indian time (IST / en-IN locale) for competition views and admin competition creation. Confidence: 0.80
@@ -58,6 +59,8 @@
 
 # api
 - When enriching data from one API response with fields from another source, verify that the field names match between the two data shapes (e.g., `id` vs `submissionId`) — mismatches cause `undefined` values that propagate silently in production. Confidence: 0.70
+- For feature gating: prefer self-service access code systems (admin generates codes via script, students enter codes to unlock) over manual DB-flag toggling — the user finds direct DB access too tedious for granting student access. Confidence: 0.70
+- When building access code systems: implement BOTH grant and revoke paths — revoking/deleting a code should also revoke access for students who already used it, not just prevent new unlocks. The user expects full lifecycle control over access. Confidence: 0.65
 
 # admin-ui
 - When displaying student information in admin views (tickets, management, etc.), show all available student profile fields (name, division, batch, rollNo, phone) — don't truncate to just name+rollNo. Users expect the full student context visible at a glance. Confidence: 0.70
