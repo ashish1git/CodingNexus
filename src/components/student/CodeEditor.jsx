@@ -87,6 +87,8 @@ const CodeEditor = () => {
   const [output, setOutput] = useState('');
   const [input, setInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  const [showInputModal, setShowInputModal] = useState(false);
+  const [modalInput, setModalInput] = useState('');
 
   const languages = [
     { value: 'java', icon: 'JA' },
@@ -146,7 +148,7 @@ int main(){
     setInput('');
   };
 
-  const runCode = async () => {
+  const executeCode = async (stdinContent) => {
     setIsRunning(true);
     setOutput('Running code...\n');
 
@@ -157,7 +159,7 @@ int main(){
         body: JSON.stringify({
           source_code: code,
           language_id: judge0Map[language],
-          stdin: input
+          stdin: stdinContent
         })
       });
 
@@ -184,6 +186,21 @@ int main(){
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const handleRunClick = () => {
+    setModalInput(input);
+    setShowInputModal(true);
+  };
+
+  const handleModalRun = () => {
+    setShowInputModal(false);
+    setInput(modalInput);
+    executeCode(modalInput);
+  };
+
+  const handleModalCancel = () => {
+    setShowInputModal(false);
   };
 
   return (
@@ -255,7 +272,7 @@ int main(){
             </div>
 
             <button
-              onClick={runCode}
+              onClick={handleRunClick}
               disabled={isRunning}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 px-6 py-2 rounded-lg font-semibold text-sm shadow-lg transition-all duration-200 flex items-center gap-2"
             >
@@ -335,6 +352,62 @@ int main(){
           </div>
         </div>
       </div>
+
+      {/* Input Confirmation Modal */}
+      {showInputModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Provide Input</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Enter all program inputs separated by newlines
+                </p>
+              </div>
+              <button
+                onClick={handleModalCancel}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <textarea
+                className="w-full h-40 bg-slate-900 border border-slate-600 rounded-xl p-4 text-sm font-mono text-cyan-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                placeholder={`e.g. if program reads two numbers:\n5\n10`}
+                value={modalInput}
+                onChange={(e) => setModalInput(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    handleModalRun();
+                  }
+                }}
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Tip: Press Ctrl+Enter to run quickly
+              </p>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={handleModalCancel}
+                className="px-5 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleModalRun}
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 transition-colors flex items-center gap-2 shadow-lg"
+              >
+                <Play size={16} />
+                Run Code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

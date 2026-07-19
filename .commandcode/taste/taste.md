@@ -71,3 +71,6 @@
 
 # scoring
 - For competition leaderboards: rank by score desc, then submission time asc (who finished first), then execution time asc — submission speed is the primary tiebreaker, not code execution speed. Students who submitted earlier with the same score should rank higher. Confidence: 0.70
+
+# architecture
+- When making changes to the standalone practice code editor (CodeEditor.jsx, server/routes/code.js), do NOT modify competition-related code (competition hooks, async-submissions, codeWrapper.js) — the practice and competition code paths are deliberately separate and should stay that way. Confidence: 0.65
