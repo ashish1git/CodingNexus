@@ -31,13 +31,17 @@ async function main() {
     if (idx === -1) { console.log('Code not found:', code); process.exit(1); }
     data.codes.splice(idx, 1);
     save();
-    console.log(`Removed code: ${code} (already-unlocked students still have access — use revoke)`);
+    console.log(`Removed code: ${code} (already-unlocked students still have access — use revoke <email>)`);
   } else if (action === 'revoke') {
     const email = args[0];
     if (!email) { console.log('Usage: node scripts/dsa-codes.mjs revoke <email>'); process.exit(1); }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) { console.log('Student not found:', email); process.exit(1); }
-    await prisma.student.update({ where: { userId: user.id }, data: { dsaAccess: false } });
+    await prisma.student.upsert({
+      where: { userId: user.id },
+      update: { dsaAccess: false },
+      create: { userId: user.id, name: user.name || 'Unknown', batch: 'unknown', dsaAccess: false },
+    });
     console.log(`✅ Revoked DSA access from: ${email}`);
   } else if (action === 'revoke-all') {
     const { count } = await prisma.student.updateMany({ where: { dsaAccess: true }, data: { dsaAccess: false } });

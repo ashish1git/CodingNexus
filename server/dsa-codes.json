@@ -1,25 +1,18 @@
 {
   "codes": [
     {
-      "code": "CNX-DSA-52BE63",
-      "label": "beta-testers",
-      "maxUses": 50,
-      "used": 0,
-      "created": "2026-07-18T15:56:45.148Z"
+      "code": "CNX-DSA-AD295A",
+      "label": "core team",
+      "maxUses": 8,
+      "used": 6,
+      "created": "2026-07-19T15:50:10.525Z"
     },
     {
-      "code": "CNX-DSA-03E534",
-      "label": "Ashish",
+      "code": "CNX-DSA-947742",
+      "label": "personal use",
       "maxUses": 1,
       "used": 1,
-      "created": "2026-07-18T16:15:45.324Z"
-    },
-    {
-      "code": "CNX-DSA-9A7FE3",
-      "label": "lucky10",
-      "maxUses": 15,
-      "used": 5,
-      "created": "2026-07-18T17:02:01.397Z"
+      "created": "2026-07-19T15:59:10.691Z"
     }
   ]
 }

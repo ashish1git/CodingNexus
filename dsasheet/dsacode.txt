@@ -32,3 +32,10 @@ Single command:
   restart nginx.
 
   Test code already created: CNX-DSA-52BE63 (max 50 uses).
+
+     # Revoke DSA access from one student
+    node scripts/dsa-codes.mjs revoke <email>
+    # example: node scripts/dsa-codes.mjs revoke student@apsit.edu.in
+
+    # Revoke DSA access from ALL students
+    node scripts/dsa-codes.mjs revoke-all
