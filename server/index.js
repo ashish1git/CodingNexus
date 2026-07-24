@@ -9,7 +9,7 @@ import logger from './utils/logger.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
-import competitionRoutes from './routes/competition.js';
+import competitionRoutes from './routes/competition/index.js';
 import contestRoutes from './routes/contest.js';
 import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
