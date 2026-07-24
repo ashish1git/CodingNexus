@@ -11,19 +11,19 @@ const ContactPage = () => {
       name: 'Ashish Vishwakarma',
       class: 'BE-B',
       phone: '8104287477',
-      role: 'Club Lead'
+      role: 'Lead'
     },
     {
       name: 'Sumit Thakur',
       class: 'BE-B',
       phone: '7887647604',
-      role: 'Technical Head'
+      role: 'Co-Head'
     },
     {
       name: 'Chetan Shende',
       class: 'BE-B',
       phone: '9022729825',
-      role: 'Events Coordinator'
+      role: 'Co-Head'
     }
   ];
 

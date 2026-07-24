@@ -40,7 +40,7 @@ export default function Overlays({
               <span className="text-red-400 font-bold text-lg">Violations: {tabSwitchCount} / 3</span>
             </div>
             <p className="text-yellow-400 text-sm font-semibold mb-2">
-              ⚠️ After 3 violations your solutions will be auto-submitted and you will be removed.
+              ⚠️ After 3 violations your solutions will be auto-submitted and you will be removed from the Competition.
             </p>
             <p className="text-gray-500 text-sm mb-6">
               All tab switches are logged and reviewed by administrators. Repeated violations may result in disqualification.
