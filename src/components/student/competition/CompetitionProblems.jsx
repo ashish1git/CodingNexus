@@ -123,6 +123,31 @@ const CompetitionProblems = () => {
   // ── Local UI state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('description');
   const [showProblemList, setShowProblemList] = useState(true);
+  const [showDescription, setShowDescription] = useState(true);
+  const [descriptionWidth, setDescriptionWidth] = useState(35);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef(null);
+
+  // Drag-to-resize handlers on window level so dragging works even when cursor leaves container
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMove = (e) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const totalWidth = rect.width;
+      const pct = Math.max(20, Math.min(80, (x / totalWidth) * 100));
+      setDescriptionWidth(pct);
+    };
+    const onUp = () => setIsDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isDragging]);
 
   // ── Handlers ────────────────────────────────────────────────────────
   const switchProblem = (newProblem) => {
@@ -373,7 +398,7 @@ const CompetitionProblems = () => {
       )}
 
       {/* Main Layout */}
-      <div className="flex h-[calc(100vh-57px)]">
+      <div className="flex h-[calc(100vh-57px)]" ref={containerRef}>
         <ProblemList
           problems={competition.problems}
           selectedProblem={selectedProblem}
@@ -383,14 +408,38 @@ const CompetitionProblems = () => {
           onToggle={() => setShowProblemList(p => !p)}
         />
 
-        <div className="flex-1 flex h-full">
-          <ProblemDescription
-            selectedProblem={selectedProblem}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            competitionStatus={competitionStatus}
-          />
+        {showDescription && (
+          <>
+            <div
+              className="shrink-0 w-[3px] bg-[#3e3e3e] hover:bg-blue-500 cursor-col-resize transition-colors group relative"
+              onMouseDown={() => setIsDragging(true)}
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 bg-gray-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <div className="overflow-y-auto bg-[#1a1a1a] scrollbar-thin scrollbar-thumb-[#3e3e3e] scrollbar-track-transparent transition-all duration-200" style={{ width: `${descriptionWidth}%`, minWidth: '320px', maxWidth: '70%' }}>
+              <ProblemDescription
+                selectedProblem={selectedProblem}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                competitionStatus={competitionStatus}
+                onToggleDescription={() => setShowDescription(false)}
+              />
+            </div>
+          </>
+        )}
 
+        <div className="flex-1 flex flex-col min-w-0">
+          {!showDescription && (
+            <div className="shrink-0 px-3 py-1.5 bg-[#262626] border-b border-[#3e3e3e] flex items-center">
+              <button
+                onClick={() => setShowDescription(true)}
+                className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-[#3e3e3e] transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm12 0H5v8h10V5z" clipRule="evenodd" /></svg>
+                Show Problem Description
+              </button>
+            </div>
+          )}
           <CodeEditorPanel
             code={code}
             setCode={setCode}

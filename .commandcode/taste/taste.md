@@ -24,17 +24,9 @@
 - For role-based authorization systems: explicitly define roles (e.g., DSA_TRAINER, DSA_OPERATIONS) as first-class entities rather than inferring roles from permission flags — permissions define capabilities, roles define identity; keep roles mutually exclusive by design. Confidence: 0.65
 
 # design
-- Preserve existing visual design and styling when making content updates — avoid full UI rewrites unless explicitly requested. Prefer targeted content changes (text, badges, copy) over complete redesigns. Confidence: 0.70
-- When adding new content cards to a dashboard, place them side-by-side in the existing grid row rather than in a separate full-width section below — full-width stacked sections push content below the fold and require scrolling to see. Confidence: 0.65
-- Do not expose internal tech stack details (Judge0, Monaco Editor, specific engines/libraries) on public-facing pages like About or Landing — the user considers these implementation secrets. Confidence: 0.85
-
+See [design/taste.md](design/taste.md)
 # workflow
-- For production or infrastructure changes, first inspect the current state, then present a clear plan of what will happen, and wait for explicit confirmation ("yes") before executing. Confidence: 0.80
-- For feature implementation requests, skip planning/discussion and implement directly and quickly; explain what was done after implementation, not before. Confidence: 0.70
-- When backend changes involve DB schema modifications or new API routes, proactively run the migration and rebuild/restart the server (Docker/PM2) — don't declare the task done until the deployed server picks up the changes. Confidence: 0.80
-- Frontend-only changes require `npm run build` to deploy; backend changes require Docker container rebuild and `docker compose up -d` to restart. Don't mix up the deployment paths. Confidence: 0.70
-- When changes span both frontend AND backend (new routes, new pages, new API endpoints), run BOTH the frontend build (`npm run build`) AND the Docker rebuild (`docker compose up -d --build`) — the system won't work in production unless both deployment paths are completed. Confidence: 0.75
-
+See [workflow/taste.md](workflow/taste.md)
 # debugging
 - When debugging "Cannot access 'X' before initialization" TDZ errors in a Vite/Rollup production build, build with `--minify false` to reveal actual variable names instead of minified single-letter names (S,N,etc.) - this immediately identifies whether the error is in your code or a dependency. Confidence: 0.85
 
@@ -53,9 +45,6 @@
 
 # scoring
 - For code submission grading: award partial marks for correct but unoptimized solutions rather than failing them outright; students should know their solution passed but was not optimally efficient. Confidence: 0.80
-
-# design
-- When hiding a feature like leaderboard, show a placeholder message (e.g., "Leaderboard will be displayed soon") instead of removing the tab/UI element entirely — students panic if the tab disappears. Confidence: 0.70
 
 # api
 - When enriching data from one API response with fields from another source, verify that the field names match between the two data shapes (e.g., `id` vs `submissionId`) — mismatches cause `undefined` values that propagate silently in production. Confidence: 0.70

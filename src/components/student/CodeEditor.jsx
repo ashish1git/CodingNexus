@@ -1,5 +1,5 @@
 // src/components/student/CodeEditor.jsx
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, X } from 'lucide-react';
 import Editor from '@monaco-editor/react';
@@ -81,14 +81,76 @@ function registerJavaSnippets(monaco) {
 
 const CodeEditor = () => {
   const editorRef = useRef(null);
+  const containerRef = useRef(null);
 
-  const [language, setLanguage] = useState('java');
-  const [code, setCode] = useState(getDefaultCode('java'));
+  const LS_KEY = 'codingnexus_playground';
+
+  // Restore saved state on mount
+  const savedState = (() => {
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+  })();
+
+  const [language, setLanguage] = useState(savedState.language || 'java');
+  const [codes, setCodes] = useState(() => {
+    const defaults = { java: '', python: '', cpp: '', javascript: '', c: '' };
+    return { ...defaults, ...savedState.codes };
+  });
+  const [input, setInput] = useState(savedState.input || '');
   const [output, setOutput] = useState('');
-  const [input, setInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [showInputModal, setShowInputModal] = useState(false);
   const [modalInput, setModalInput] = useState('');
+
+  const code = codes[language] || getDefaultCode(language);
+
+  // Persist to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ language, codes, input })); } catch {}
+  }, [language, codes, input]);
+
+  // If language slot is empty, populate with default template on mount
+  useEffect(() => {
+    if (!codes[language]) {
+      setCodes(prev => ({ ...prev, [language]: getDefaultCode(language) }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resizable panel sizes (percentages)
+  const [editorHeightPct, setEditorHeightPct] = useState(55);
+  const [inputHeightPct, setInputHeightPct] = useState(45);
+  const [isDraggingEditor, setIsDraggingEditor] = useState(false);
+  const [isDraggingInput, setIsDraggingInput] = useState(false);
+
+  // Drag-to-resize handlers on window level
+  useEffect(() => {
+    if (!isDraggingEditor && !isDraggingInput) return;
+    const onMove = (e) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const totalHeight = rect.height;
+      const pct = Math.max(20, Math.min(80, (y / totalHeight) * 100));
+      if (isDraggingEditor) {
+        setEditorHeightPct(pct);
+        setInputHeightPct(100 - pct);
+      } else if (isDraggingInput) {
+        const inputPct = Math.max(20, Math.min(80, pct));
+        setInputHeightPct(inputPct);
+        setEditorHeightPct(100 - inputPct);
+      }
+    };
+    const onUp = () => {
+      setIsDraggingEditor(false);
+      setIsDraggingInput(false);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isDraggingEditor, isDraggingInput]);
 
   const languages = [
     { value: 'java', icon: 'JA' },
@@ -142,10 +204,11 @@ int main(){
   };
 
   const handleLanguageChange = (lang) => {
+    if (!codes[lang]) {
+      setCodes(prev => ({ ...prev, [lang]: getDefaultCode(lang) }));
+    }
     setLanguage(lang);
-    setCode(getDefaultCode(lang));
     setOutput('');
-    setInput('');
   };
 
   const executeCode = async (stdinContent) => {
@@ -249,11 +312,11 @@ int main(){
       </div>
       {/* ================================== */}
 
-      {/* Main Content - Fixed Height Calculation */}
-      <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 max-w-[1920px] mx-auto w-full overflow-hidden">
+      {/* Main Content - Resizable split */}
+      <div className="flex-1 flex flex-col p-3 sm:p-4 gap-1 max-w-[1920px] mx-auto w-full overflow-hidden" ref={containerRef}>
         
         {/* Top Section - Editor */}
-        <div className="h-[calc(100%-12rem)] bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-2xl flex flex-col">
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-2xl flex flex-col" style={{ height: `${editorHeightPct}%` }}>
           
           {/* Editor Header */}
           <div className="px-4 py-3 bg-slate-900/80 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
@@ -288,7 +351,7 @@ int main(){
               theme="vs-dark"
               language={language}
               value={code}
-              onChange={(v) => setCode(v || '')}
+              onChange={(v) => setCodes(prev => ({ ...prev, [language]: v || '' }))}
               onMount={handleEditorMount}
               options={{
                 fontSize: 15,
@@ -304,8 +367,16 @@ int main(){
           </div>
         </div>
 
+        {/* Draggable Divider */}
+        <div
+          className="shrink-0 h-[4px] rounded-full cursor-ns-resize bg-slate-700/30 hover:bg-indigo-500/60 transition-colors mx-4 group relative"
+          onMouseDown={() => setIsDraggingEditor(true)}
+        >
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-slate-500/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+
         {/* Bottom Section - Input & Output */}
-        <div className="h-44 grid grid-cols-1 lg:grid-cols-2 gap-3 flex-shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 min-h-0" style={{ height: `${inputHeightPct}%` }}>
           
           {/* Input Section */}
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl overflow-hidden border border-slate-700/50 shadow-lg flex flex-col">

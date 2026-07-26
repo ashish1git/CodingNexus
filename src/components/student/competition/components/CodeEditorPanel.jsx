@@ -20,7 +20,7 @@ export default function CodeEditorPanel({
   testResults, showTestCases, setShowTestCases
 }) {
   return (
-    <div className="w-1/2 h-full flex flex-col bg-[#1e1e1e] border-l border-[#3e3e3e]">
+    <div className="flex-1 h-full flex flex-col bg-[#1e1e1e] border-l border-[#3e3e3e]">
       {/* Editor Header */}
       <div className="px-4 py-2.5 bg-[#262626] border-b border-[#3e3e3e] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
