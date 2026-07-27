@@ -1,0 +1,92 @@
+# ==============================
+# Coding Nexus — Local Development Setup (Docker Desktop / macOS / Windows)
+# ==============================
+# 
+# Unlike the production server (which uses network_mode: host),
+# your laptop needs standard bridge networking.
+# This compose file runs: app + postgres + judge0 + redis
+# ==============================
+
+services:
+
+  # ── PostgreSQL Database ─────────────────
+  db:
+    image: postgres:15
+    container_name: codingnexus-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sumit
+      POSTGRES_PASSWORD: sumit123
+      POSTGRES_DB: sumitdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # ── Judge0 Code Execution ──────────────
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    container_name: codingnexus-judge0-server
+    restart: unless-stopped
+    ports:
+      - "2358:2358"
+    privileged: true
+    volumes:
+      - ./judge0/judge0-v1.13.1/judge0.conf:/judge0.conf:ro
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: codingnexus-judge0-workers
+    command: ["./scripts/workers"]
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - ./judge0/judge0-v1.13.1/judge0.conf:/judge0.conf:ro
+
+  judge0-db:
+    image: postgres:16.2
+    container_name: codingnexus-judge0-db
+    restart: unless-stopped
+    volumes:
+      - j0pgdata:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0pass
+      POSTGRES_DB: judge0
+
+  judge0-redis:
+    image: redis:7.2.4
+    container_name: codingnexus-judge0-redis
+    restart: unless-stopped
+    command:
+      - "bash"
+      - "-c"
+      - 'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    environment:
+      REDIS_PASSWORD: judge0pass
+
+  # ── App (Node.js) ──────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+        - VITE_CLOUDINARY_CLOUD_NAME=dtxktmolj
+        - VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
+        - VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
+    container_name: codingnexus-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    depends_on:
+      - db
+      - judge0-server
+    volumes:
+      - ./server/dsa-codes.json:/app/server/dsa-codes.json
+
+volumes:
+  pgdata:
+  j0pgdata:
