@@ -1,3 +1,15 @@
+# ==============================
+# Coding Nexus — Docker Compose Configuration
+# ==============================
+# 
+# ENVIRONMENT VARIABLE FLOW:
+#   .env.example → copy to .env → docker-compose auto-reads for build args
+#   .env.docker  → loaded into container at runtime via env_file
+#
+# NEVER export secrets in shell — docker-compose prioritizes shell over files.
+# All critical values live in .env.docker only.
+# ==============================
+
 services:
 
   app:
@@ -5,65 +17,29 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+        # Build-time Vite variables (baked into frontend JS — non-secret)
+        - VITE_API_URL=${VITE_API_URL:-/api}
+        - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME:-dtxktmolj}
+        - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET:-profile_photos}
+        - VITE_CLOUDINARY_NOTES_PRESET=${VITE_CLOUDINARY_NOTES_PRESET:-codingnexus_notes}
+
     container_name: codingnexus-app
     restart: unless-stopped
     network_mode: "host"
     user: root
 
+    # All runtime environment comes from this file
     env_file:
       - .env.docker
 
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./server/dsa-codes.json:/app/server/dsa-codes.json
-
+    # Only safe, non-secret defaults that can be safely overridden
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=${PORT:-3000}
 
-      # JWT Configuration
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
-
-      # CORS Configuration
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5000}
-
-      # Cloudinary Configuration
-      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
-      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
-      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
-      - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME}
-      - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET}
-      - VITE_CLOUDINARY_NOTES_PRESET=${VITE_CLOUDINARY_NOTES_PRESET}
-
-      # Judge0 Configuration
-      - JUDGE0_URL=${JUDGE0_URL:-http://64.227.149.20:2358}
-      - VITE_JUDGE0_URL=${VITE_JUDGE0_URL:-http://64.227.149.20:2358}
-
-      # Brevo Email Configuration
-      - BREVO_API_KEY=${BREVO_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM}
-      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
-      - EMAIL_SERVICE=${EMAIL_SERVICE:-brevo}
-
-      # Async Submissions
-      - ENABLE_POLLING=${ENABLE_POLLING:-false}
-      - POLL_INTERVAL=${POLL_INTERVAL:-15000}
-
-      # Maintenance Mode
-      - MAINTENANCE_MODE=${MAINTENANCE_MODE:-false}
-      - VITE_MAINTENANCE_MODE=${VITE_MAINTENANCE_MODE:-false}
-
-      # AI APIs
-      - USE_GEMINI_DIRECT=${USE_GEMINI_DIRECT:-false}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
-
-      # Frontend API URL
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}
-
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./server/dsa-codes.json:/app/server/dsa-codes.json
 
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]

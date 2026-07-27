@@ -2,11 +2,13 @@
  * Brevo Email Service Module
  * 
  * A production-ready email service using Brevo TransactionalEmailsApi
- * Supports HTML and plain text emails with proper error handling
+ * Supports dual API key fallback — if primary reaches daily quota, secondary kicks in automatically
  * 
  * Environment Variables Required:
- * - BREVO_API_KEY: Brevo API key for authentication
- * - EMAIL_FROM: Sender email address
+ * - BREVO_API_KEY: Primary Brevo API key (official account)
+ * - BREVO_API_KEY_SECONDARY: Fallback Brevo API key (backup account)
+ * - EMAIL_FROM: Primary sender email address
+ * - EMAIL_FROM_SECONDARY: Fallback sender email address
  * - EMAIL_FROM_NAME: Sender display name
  */
 
@@ -14,42 +16,45 @@ import * as brevo from '@getbrevo/brevo';
 
 // Validate required environment variables
 const validateConfig = () => {
-  const requiredVars = ['BREVO_API_KEY', 'EMAIL_FROM', 'EMAIL_FROM_NAME'];
-  const missing = requiredVars.filter(v => !process.env[v]);
+  const hasPrimary = process.env.BREVO_API_KEY && process.env.EMAIL_FROM && process.env.EMAIL_FROM_NAME;
+  const hasFallback = process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY;
   
-  if (missing.length > 0) {
-    console.warn(`⚠️  Missing Brevo configuration: ${missing.join(', ')}`);
+  if (!hasPrimary && !hasFallback) {
+    console.warn('⚠️  Missing Brevo configuration: no API keys configured');
     return false;
   }
   return true;
 };
 
-// Initialize Brevo API client
-let apiInstance = null;
+// API client cache: primary + fallback
+let apiPrimary = null;
+let apiFallback = null;
 
-const initializeBrevo = () => {
-  if (apiInstance) return apiInstance;
-  
-  if (!validateConfig()) {
-    console.error('❌ Brevo configuration is incomplete. Email service disabled.');
-    return null;
-  }
-
+const initClient = (apiKey) => {
   try {
-    apiInstance = new brevo.TransactionalEmailsApi();
-    const apiKey = apiInstance.authentications['apiKey'];
-    apiKey.apiKey = process.env.BREVO_API_KEY;
-    
-    console.log('✅ Brevo email service initialized successfully');
-    return apiInstance;
+    const api = new brevo.TransactionalEmailsApi();
+    api.authentications['apiKey'].apiKey = apiKey;
+    return api;
   } catch (error) {
-    console.error('❌ Failed to initialize Brevo:', error.message);
+    console.error('❌ Failed to initialize Brevo client:', error.message);
     return null;
   }
 };
 
+const initializeBrevo = () => {
+  if (!apiPrimary && process.env.BREVO_API_KEY) {
+    apiPrimary = initClient(process.env.BREVO_API_KEY);
+    if (apiPrimary) console.log('✅ Brevo primary (official) initialized');
+  }
+  if (!apiFallback && process.env.BREVO_API_KEY_SECONDARY) {
+    apiFallback = initClient(process.env.BREVO_API_KEY_SECONDARY);
+    if (apiFallback) console.log('✅ Brevo fallback (backup) initialized');
+  }
+  return apiPrimary || apiFallback;
+};
+
 /**
- * Send email using Brevo
+ * Send email using Brevo with automatic fallback to secondary account
  * 
  * @param {Object} options - Email options
  * @param {string} options.to - Recipient email address
@@ -60,180 +65,156 @@ const initializeBrevo = () => {
  * @param {Array} options.bcc - BCC recipients (optional)
  * @param {Array} options.attachments - Attachments (optional)
  * 
- * @returns {Promise<Object>} - { success: boolean, messageId?: string, error?: string }
- * 
- * @example
- * const result = await sendEmail({
- *   to: 'user@example.com',
- *   subject: 'Welcome!',
- *   html: '<h1>Hello</h1>',
- *   text: 'Hello'
- * });
+ * @returns {Promise<Object>} - { success: boolean, messageId?: string, error?: string, usedFallback?: boolean }
  */
 export const sendEmail = async (options) => {
   const { to, subject, html, text, cc, bcc, attachments } = options;
 
-  // Validate required parameters
   if (!to || !subject) {
-    return {
-      success: false,
-      error: 'Missing required parameters: to and subject are required'
-    };
+    return { success: false, error: 'Missing required parameters: to and subject are required' };
   }
 
-  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(to)) {
-    return {
-      success: false,
-      error: `Invalid email address: ${to}`
-    };
+    return { success: false, error: `Invalid email address: ${to}` };
   }
 
-  try {
-    const api = initializeBrevo();
-    
-    if (!api) {
-      return {
-        success: false,
-        error: 'Brevo service is not configured or initialized'
-      };
-    }
+  const trySend = async (apiKey, senderEmail) => {
+    const api = initClient(apiKey);
+    if (!api) return { success: false, error: 'Brevo client init failed' };
 
-    // Create SendSmtpEmail object
     const sendSmtpEmail = new brevo.SendSmtpEmail();
-
-    // Set sender
-    sendSmtpEmail.sender = {
-      email: process.env.EMAIL_FROM,
-      name: process.env.EMAIL_FROM_NAME
-    };
-
-    // Set recipient(s)
+    sendSmtpEmail.sender = { email: senderEmail, name: process.env.EMAIL_FROM_NAME || 'Coding Nexus' };
     sendSmtpEmail.to = [{ email: to }];
-
-    // Set subject
     sendSmtpEmail.subject = subject;
-
-    // Set content
-    if (html) {
-      sendSmtpEmail.htmlContent = html;
-    }
-    
-    if (text) {
-      sendSmtpEmail.textContent = text;
-    }
-
-    // Set optional fields if provided
-    if (cc && Array.isArray(cc)) {
-      sendSmtpEmail.cc = cc.map(email => ({ email }));
-    }
-
-    if (bcc && Array.isArray(bcc)) {
-      sendSmtpEmail.bcc = bcc.map(email => ({ email }));
-    }
-
-    if (attachments && Array.isArray(attachments)) {
-      sendSmtpEmail.attachment = attachments;
-    }
-
-    // Send email via Brevo
-    console.log('📤 Sending via Brevo...');
-    console.log('Payload:', JSON.stringify({
-      to: sendSmtpEmail.to,
-      subject: sendSmtpEmail.subject,
-      sender: sendSmtpEmail.sender,
-      hasHtml: !!sendSmtpEmail.htmlContent,
-      hasText: !!sendSmtpEmail.textContent
-    }, null, 2));
+    if (html) sendSmtpEmail.htmlContent = html;
+    if (text) sendSmtpEmail.textContent = text;
+    if (cc?.length) sendSmtpEmail.cc = cc.map(e => ({ email: e }));
+    if (bcc?.length) sendSmtpEmail.bcc = bcc.map(e => ({ email: e }));
+    if (attachments?.length) sendSmtpEmail.attachment = attachments;
 
     const result = await api.sendTransacEmail(sendSmtpEmail);
-
-    // Extract messageId from response body (Brevo SDK structure)
     const messageId = result.body?.messageId || result.messageId || 'unknown';
+    return { success: true, messageId };
+  };
 
-    // Log success
-    console.log(`📧 Email sent successfully to ${to}, Message ID: ${messageId}`);
-
-    return {
-      success: true,
-      messageId: messageId,
-      timestamp: new Date().toISOString()
-    };
-
-  } catch (error) {
-    // Log error
-    console.error(`❌ Failed to send email to ${to}:`, error.message);
-    console.error('Error Status:', error.status);
-    console.error('Error Response:', error.response?.body || error.response?.text);
-
-    // Return error details
-    return {
-      success: false,
-      error: error.message || 'Failed to send email',
-      details: error.response?.body || error.response?.text || error.toString()
-    };
+  // Try primary first
+  if (process.env.BREVO_API_KEY && process.env.EMAIL_FROM) {
+    try {
+      console.log(`📤 Sending via primary (${process.env.EMAIL_FROM}) to ${to}`);
+      const result = await trySend(process.env.BREVO_API_KEY, process.env.EMAIL_FROM);
+      if (result.success) {
+        console.log(`📧 Sent successfully via primary, Message ID: ${result.messageId}`);
+        return { ...result, usedFallback: false };
+      }
+    } catch (err) {
+      const isQuotaError = err.status === 429 || err.response?.status === 429 || 
+        (err.message && err.message.includes('429'));
+      if (isQuotaError) {
+        console.warn(`⚠️  Primary Brevo quota exhausted (429), trying fallback...`);
+      } else {
+        console.warn(`⚠️  Primary Brevo failed: ${err.message}. Trying fallback...`);
+      }
+    }
   }
+
+  // Try fallback
+  if (process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY) {
+    try {
+      console.log(`📤 Sending via fallback (${process.env.EMAIL_FROM_SECONDARY}) to ${to}`);
+      const result = await trySend(process.env.BREVO_API_KEY_SECONDARY, process.env.EMAIL_FROM_SECONDARY);
+      if (result.success) {
+        console.log(`📧 Sent successfully via fallback, Message ID: ${result.messageId}`);
+        return { ...result, usedFallback: true };
+      }
+    } catch (err) {
+      console.error(`❌ Fallback Brevo also failed:`, err.message);
+      return { success: false, error: `Both primary and fallback failed: ${err.message}` };
+    }
+  }
+
+  return { success: false, error: 'No Brevo account available' };
 };
 
 /**
- * Send email to multiple recipients
+ * Send email to multiple recipients with rate limiting and auto-retry
+ * Sends sequentially to avoid rate limits (Brevo allows ~100 req/s)
+ * Failed emails are retried up to 2 times with backoff
  * 
  * @param {Object} options - Email options
  * @param {Array<string>} options.to - Array of recipient email addresses
  * @param {string} options.subject - Email subject
  * @param {string} options.html - HTML email body (optional)
  * @param {string} options.text - Plain text email body (optional)
+ * @param {number} options.rateLimitMs - Delay between sends (default: 100ms = 10/sec, safe)
  * 
  * @returns {Promise<Object>} - { total, sent, failed, errors }
  */
 export const sendBulkEmail = async (options) => {
-  const { to, subject, html, text } = options;
+  const { to, subject, html, text, rateLimitMs = 100 } = options;
 
   if (!Array.isArray(to) || to.length === 0) {
-    return {
-      total: 0,
-      sent: 0,
-      failed: 0,
-      errors: ['recipient list is empty or not an array']
-    };
+    return { total: 0, sent: 0, failed: 0, errors: ['recipient list is empty or not an array'] };
   }
 
-  const results = {
-    total: to.length,
-    sent: 0,
-    failed: 0,
-    errors: []
-  };
+  const results = { total: to.length, sent: 0, failed: 0, errors: [] };
+  const failedEmails = [];
 
-  // Send to each recipient in parallel
-  const promises = to.map(async (email) => {
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  console.log(`📊 Starting bulk send to ${to.length} recipients (${rateLimitMs}ms delay between sends)`);
+
+  for (let i = 0; i < to.length; i++) {
+    const email = to[i];
     try {
-      const result = await sendEmail({
-        to: email,
-        subject,
-        html,
-        text
-      });
+      const result = await sendEmail({ to: email, subject, html, text });
 
       if (result.success) {
         results.sent++;
       } else {
-        results.failed++;
-        results.errors.push({ email, error: result.error });
+        failedEmails.push({ email, error: result.error });
+      }
+
+      if ((i + 1) % 10 === 0 || i === to.length - 1) {
+        console.log(`📊 Bulk progress: ${i + 1}/${to.length} (${results.sent} sent, ${failedEmails.length} failed)`);
       }
     } catch (error) {
-      results.failed++;
-      results.errors.push({ email, error: error.message });
+      failedEmails.push({ email, error: error.message });
     }
-  });
 
-  await Promise.all(promises);
+    if (i < to.length - 1) {
+      await delay(rateLimitMs);
+    }
+  }
 
-  console.log(
-    `📊 Bulk email results: ${results.sent}/${results.total} sent successfully, ${results.failed} failed`
-  );
+  if (failedEmails.length > 0) {
+    console.log(`🔄 Retrying ${failedEmails.length} failed emails after 2s cooldown...`);
+    await delay(2000);
 
+    for (const { email } of failedEmails.splice(0, failedEmails.length)) {
+      try {
+        const result = await sendEmail({ to: email, subject, html, text });
+        if (result.success) {
+          results.sent++;
+          console.log(`  ✅ Retry succeeded: ${email}`);
+        } else {
+          results.failed++;
+          results.errors.push({ email, error: result.error });
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ email, error: error.message });
+      }
+      await delay(rateLimitMs);
+    }
+  }
+
+  for (const { email, error } of failedEmails) {
+    results.failed++;
+    results.errors.push({ email, error });
+  }
+
+  console.log(`📊 Bulk email done: ${results.sent}/${results.total} sent, ${results.failed} failed`);
   return results;
 };
 
@@ -247,15 +228,11 @@ export const sendBulkEmail = async (options) => {
  */
 export const sendEventRegistrationEmail = async (event, participant) => {
   try {
-    // Smart URL selection: Use production URL if in production, otherwise use local
-    let frontendUrl = 'http://localhost:22000'|| 'https://codingnexus.apsit.edu.in';
+    let frontendUrl = 'https://codingnexus.apsit.edu.in';
     
     if (process.env.NODE_ENV === 'production') {
-      // In production, use the production/live URL
-      frontendUrl = 'https://codingnexus.vercel.app'|| 'https://codingnexus.apsit.edu.in';
+      frontendUrl = 'https://codingnexus.apsit.edu.in';
     } else if (process.env.FRONTEND_URL) {
-      // In development, try to parse the configured URLs
-      // Prefer https URLs (production) or use the first one
       const urls = process.env.FRONTEND_URL.split(',').map(u => u.trim());
       const httpsUrl = urls.find(u => u.startsWith('https'));
       frontendUrl = httpsUrl || urls[0] || frontendUrl;
@@ -393,28 +370,20 @@ export const verifyConfiguration = () => {
       message: 'Brevo configuration is incomplete. Check environment variables.',
       apiKey: process.env.BREVO_API_KEY,
       sender: process.env.EMAIL_FROM,
-      senderName: process.env.EMAIL_FROM_NAME
+      senderName: process.env.EMAIL_FROM_NAME,
+      hasSecondary: !!(process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY)
     };
   }
 
-  const api = initializeBrevo();
+  const primary = process.env.BREVO_API_KEY ? initClient(process.env.BREVO_API_KEY) : null;
+  const fallback = process.env.BREVO_API_KEY_SECONDARY ? initClient(process.env.BREVO_API_KEY_SECONDARY) : null;
   
-  if (!api) {
-    return {
-      isConfigured: false,
-      message: 'Failed to initialize Brevo API',
-      apiKey: process.env.BREVO_API_KEY,
-      sender: process.env.EMAIL_FROM,
-      senderName: process.env.EMAIL_FROM_NAME
-    };
-  }
-
   return {
     isConfigured: true,
     message: 'Brevo email service is properly configured',
-    apiKey: process.env.BREVO_API_KEY,
-    sender: `${process.env.EMAIL_FROM_NAME} <${process.env.EMAIL_FROM}>`,
-    senderName: process.env.EMAIL_FROM_NAME
+    primary: primary ? `${process.env.EMAIL_FROM_NAME} <${process.env.EMAIL_FROM}>` : 'not configured',
+    fallback: fallback ? `Backup: ${process.env.EMAIL_FROM_SECONDARY}` : 'not configured',
+    fallbackAvailable: !!fallback
   };
 };
 
