@@ -59,7 +59,7 @@ services:
       - j0pgdata:/var/lib/postgresql/data/
     environment:
       POSTGRES_USER: judge0
-      POSTGRES_PASSWORD: judge0pass
+      POSTGRES_PASSWORD: codingnexus81042
       POSTGRES_DB: judge0
 
   judge0-redis:
@@ -69,9 +69,7 @@ services:
     command:
       - "bash"
       - "-c"
-      - 'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"'
-    environment:
-      REDIS_PASSWORD: judge0pass
+      - 'docker-entrypoint.sh --appendonly no --requirepass codingnexus81042'
 
 volumes:
   pgdata:
