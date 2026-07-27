@@ -5,12 +5,9 @@
 - Prefer deterministic, non-AI solutions for data import/parsing when a strict format exists (e.g., JSON import instead of AI-powered PDF parsing). AI introduces reliability risk. Confidence: 0.75
 
 # docker
-- When a Docker container has correct HostConfig.PortBindings but empty NetworkSettings.Ports (corrupted port binding, often from "address already in use" during startup), "docker restart" is insufficient — stop, rm, and recreate the container via "docker compose up -d" to fix. Confidence: 0.85
-
+See [docker/taste.md](docker/taste.md)
 # communication
-- Explicitly report or enumerate every change made when performing edits — the user wants to be told what was changed, not just have it done silently. Confidence: 0.70
-- When documenting CLI commands: show the simplest, no-argument command first as the primary example, then mention optional arguments separately. Don't list all variants at once — the user finds multi-variant command references confusing. Confidence: 0.65
-
+See [communication/taste.md](communication/taste.md)
 # datetime
 - Display times in Indian time (IST / en-IN locale) for competition views and admin competition creation. Confidence: 0.80
 
@@ -28,8 +25,7 @@ See [design/taste.md](design/taste.md)
 # workflow
 See [workflow/taste.md](workflow/taste.md)
 # debugging
-- When debugging "Cannot access 'X' before initialization" TDZ errors in a Vite/Rollup production build, build with `--minify false` to reveal actual variable names instead of minified single-letter names (S,N,etc.) - this immediately identifies whether the error is in your code or a dependency. Confidence: 0.85
-
+See [debugging/taste.md](debugging/taste.md)
 # logging
 - Only log unusual/exceptional events (violations, errors, warnings); avoid logging every normal state transition (e.g. fullscreen enter/exit on every toggle) to prevent log noise. Confidence: 0.70
 

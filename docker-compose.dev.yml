@@ -1,10 +1,18 @@
 # ==============================
-# Coding Nexus — Local Development Setup (Docker Desktop / macOS / Windows)
+# Coding Nexus — Local Development (Infrastructure Only)
 # ==============================
-# 
-# Unlike the production server (which uses network_mode: host),
-# your laptop needs standard bridge networking.
-# This compose file runs: app + postgres + judge0 + redis
+#
+# This runs ONLY the services your app depends on:
+#   PostgreSQL + Judge0 + Redis
+#
+# The app itself runs natively on your machine via:
+#   npm run dev:all   (starts Vite + Express with hot-reload)
+#
+# Why: code changes reflect instantly (hot reload), no Docker rebuild needed.
+#
+# For quick preview of production build:
+#   docker pull ghcr.io/ashish1git/codingnexus:latest
+#   docker run -p 3000:3000 --env-file .env.local ghcr.io/ashish1git/codingnexus:latest
 # ==============================
 
 services:
@@ -23,7 +31,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  # ── Judge0 Code Execution ──────────────
+  # ── Judge0 Code Execution Engine ────────
   judge0-server:
     image: judge0/judge0:1.13.1
     container_name: codingnexus-judge0-server
@@ -64,28 +72,6 @@ services:
       - 'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"'
     environment:
       REDIS_PASSWORD: judge0pass
-
-  # ── App (Node.js) ──────────────────────
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=/api
-        - VITE_CLOUDINARY_CLOUD_NAME=dtxktmolj
-        - VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
-        - VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
-    container_name: codingnexus-app
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env.local
-    depends_on:
-      - db
-      - judge0-server
-    volumes:
-      - ./server/dsa-codes.json:/app/server/dsa-codes.json
 
 volumes:
   pgdata:

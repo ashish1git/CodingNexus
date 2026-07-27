@@ -1,21 +1,17 @@
 # ==============================
-# CD — Deploy codingnexus-app via Docker Compose
+# CD — Build, Push to GHCR, Deploy to Production
 # ==============================
 #
-# Triggers:
-#   Auto: push to main (excluding docs + md files)
-#   Manual: workflow_dispatch from GitHub Actions tab
+# Phase 1 (build-push): GitHub Actions builds Docker image → pushes to GHCR
+# Phase 2 (deploy): SSH into server → pull image from GHCR → restart container
 #
-# What it does:
-#   1. SSH into production server (202.179.85.68)
-#   2. Pull latest code from main
-#   3. Write .env.docker from GitHub Secrets (single source of runtime truth)
-#   4. Build fresh Docker image
-#   5. Stop old container → start new container
-#   6. Health check
+# Benefits:
+#   - Server never builds (10x faster deploy)
+#   - Image always available at ghcr.io/ashish1git/codingnexus
+#   - New devs: docker pull + up in 30 seconds (no 4-min build)
 # ==============================
 
-name: Deploy (Docker)
+name: Build & Deploy
 
 on:
   push:
@@ -26,8 +22,41 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-push:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/ashish1git/codingnexus:latest
+            ghcr.io/ashish1git/codingnexus:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=/api
+            VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME || 'dtxktmolj' }}
+            VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
+            VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
+
   deploy:
-    name: Deploy to Production
+    name: Deploy to Production Server
+    needs: build-push
     runs-on: ubuntu-latest
 
     steps:
@@ -41,16 +70,16 @@ jobs:
           script: |
             set -e
 
-            # ── Navigate ──────────────────────────────────────
             cd ${{ secrets.APP_DIR }}
 
-            # ── Pull latest code ──────────────────────────────
+            # ── Pull latest code (for env files + docker-compose) ──
             git fetch origin main
             git reset --hard origin/main
 
-            # ── Write .env.docker from GitHub Secrets ─────────
-            # This is the SINGLE source of truth for runtime.
-            # docker-compose.yml loads it via env_file.
+            # ── Login to GHCR ────────────────────────────────────
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+
+            # ── Write .env.docker from GitHub Secrets ─────────────
             cat > .env.docker << 'ENVEOF'
             NODE_ENV=production
             PORT=3000
@@ -58,41 +87,32 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JWT_EXPIRES_IN=7d
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-
             JUDGE0_URL=http://localhost:2358
             VITE_JUDGE0_URL=http://localhost:2358
-
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
             VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
             VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
-
             BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
             BREVO_API_KEY_SECONDARY=${{ secrets.BREVO_API_KEY_SECONDARY }}
             EMAIL_FROM=${{ secrets.EMAIL_FROM }}
             EMAIL_FROM_SECONDARY=${{ secrets.EMAIL_FROM_SECONDARY }}
             EMAIL_FROM_NAME=Coding Nexus
             EMAIL_SERVICE=brevo
-
             ENABLE_POLLING=false
             POLL_INTERVAL=15000
             MAINTENANCE_MODE=false
             VITE_MAINTENANCE_MODE=false
-
             USE_GEMINI_DIRECT=${{ secrets.USE_GEMINI_DIRECT || 'false' }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || '' }}
             OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY || '' }}
             OPENROUTER_MODEL=${{ secrets.OPENROUTER_MODEL || '' }}
-
             VITE_API_URL=/api
-            VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
-            VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
-            VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
             ENVEOF
 
-            # ── Also write .env (build-time Vite vars, non-secret) ──
+            # ── Write .env (build-time Vite vars) ─────────────────
             cat > .env << 'ENVEOF'
             VITE_API_URL=/api
             VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
@@ -100,17 +120,20 @@ jobs:
             VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
             ENVEOF
 
-            # ── Build fresh image ────────────────────────────
-            echo "🔨 Building Docker image..."
-            docker compose build --no-cache app
+            # ── Pull pre-built image from GHCR (NO local build!) ──
+            echo "📦 Pulling image from GHCR..."
+            docker pull ghcr.io/ashish1git/codingnexus:latest
 
-            # ── Zero-downtime restart ────────────────────────
+            # ── Tag for docker compose ────────────────────────────
+            docker tag ghcr.io/ashish1git/codingnexus:latest mcodingnexus-app
+
+            # ── Zero-downtime restart ─────────────────────────────
             echo "🔄 Restarting app container..."
-            docker compose stop app
-            docker compose rm -f app
+            docker compose stop app || true
+            docker compose rm -f app || true
             docker compose up -d app
 
-            # ── Wait for healthy ─────────────────────────────
+            # ── Wait for healthy ──────────────────────────────────
             echo "⏳ Waiting for container to be healthy..."
             for i in $(seq 1 30); do
               STATUS=$(docker inspect codingnexus-app --format '{{.State.Health.Status}}' 2>/dev/null || echo "creating")
@@ -121,14 +144,12 @@ jobs:
               sleep 2
             done
 
-            # ── Health check ─────────────────────────────────
+            # ── Health check ──────────────────────────────────────
             echo "🏥 Running health check..."
             curl -sf http://localhost:3000/api/health && echo "" || echo "❌ Health check failed"
-
-            # ── Judge0 check ─────────────────────────────────
             curl -sf http://localhost:2358/about > /dev/null && echo "✅ Judge0 connected" || echo "❌ Judge0 unreachable"
 
-            # ── Show status ──────────────────────────────────
+            # ── Show status ───────────────────────────────────────
             docker ps --format "table {{.Names}}\t{{.Status}}"
 
       - name: Deployment Result

@@ -13,11 +13,14 @@
 services:
 
   app:
+    image: mcodingnexus-app:latest
+    # Image is built by GitHub Actions and tagged as mcodingnexus-app:latest
+    # on the production server. To build manually:
+    #   docker compose build app
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        # Build-time Vite variables (baked into frontend JS — non-secret)
         - VITE_API_URL=${VITE_API_URL:-/api}
         - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME:-dtxktmolj}
         - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET:-profile_photos}

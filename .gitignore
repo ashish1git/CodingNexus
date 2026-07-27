@@ -63,3 +63,6 @@ ssl/
 
 # Added by code-review-graph
 .code-review-graph/
+
+# Command Code
+.commandcode/
