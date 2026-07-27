@@ -1,6 +1,37 @@
-# Coding Nexus — CI/CD Setup Guide
+# Coding Nexus — CI/CD & Local Dev Setup Guide
 
-This guide walks you through setting up automated deployment from GitHub
+## Quick Start — Local Development (Your Laptop)
+
+```bash
+git clone https://github.com/ashish1git/CodingNexus.git
+cd CodingNexus
+
+# Create your local env file
+cp .env.local.example .env.local
+# Edit .env.local — fill in Cloudinary, Brevo, and JWT_SECRET values
+
+# Start everything (app + database + Judge0 + Redis)
+docker compose -f docker-compose.dev.yml up -d --build
+
+# Apply database migrations
+docker compose -f docker-compose.dev.yml exec app npx prisma migrate deploy
+
+# Open http://localhost:3000
+```
+
+What runs locally:
+- `codingnexus-db` — PostgreSQL (port 5432)
+- `codingnexus-judge0-server` — Judge0 code execution (port 2358)
+- `codingnexus-judge0-workers` — Code execution workers
+- `codingnexus-judge0-db` — Judge0's PostgreSQL
+- `codingnexus-judge0-redis` — Judge0's Redis queue
+- `codingnexus-app` — Your Express + Vite app (port 3000)
+
+---
+
+## Production CI/CD Setup
+
+This section walks you through setting up automated deployment from GitHub
 to your production server. Once set up, every `git push` to `main` automatically
 deploys the latest code.
 
