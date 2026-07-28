@@ -125,7 +125,7 @@ const AdminDashboard = () => {
               </button>
               <div className="flex items-center gap-2">
                 <Shield className="w-8 h-8 text-indigo-600" />
-                <span className="text-xl font-bold text-gray-800">Admin Portals</span>
+                <span className="text-xl font-bold text-gray-800">Admin Portal</span>
               </div>
             </div>
             <div className="flex items-center gap-4">
