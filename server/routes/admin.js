@@ -415,7 +415,6 @@ router.delete('/notes/:id', checkPermission('manageNotes'), async (req, res) => 
 // ============ ANNOUNCEMENTS ============
 
 // Create announcement
-// Create announcement
 router.post('/announcements', async (req, res) => {
   try {
     const { title, message, content, batch, division, priority, notifyEmail } = req.body;
@@ -446,30 +445,31 @@ router.post('/announcements', async (req, res) => {
     // Email notification
     if (notifyEmail) {
       try {
-        // Build Prisma filter
-        const studentWhere = { role: 'student', isActive: true, studentProfile: { isNot: null } };
+        // Build Prisma filter — studentProfile relation filters
+        const profileFilter = {};
 
-        // Batch filter — case-insensitive
         if (normalizedBatch !== 'all') {
-          studentWhere.studentProfile.batch = {
+          // Case-insensitive: match both "basic" and "Basic"
+          profileFilter.batch = {
             in: [normalizedBatch, normalizedBatch.charAt(0).toUpperCase() + normalizedBatch.slice(1)]
           };
         }
 
-        // Division filter — push to DB if batch is specified, filter in JS otherwise
-        if (effectiveDivision && normalizedBatch !== 'all') {
-          studentWhere.studentProfile.division = effectiveDivision;
+        if (effectiveDivision) {
+          profileFilter.division = effectiveDivision;
         }
 
         let students = await prisma.user.findMany({
-          where: studentWhere,
+          where: {
+            role: 'student',
+            isActive: true,
+            studentProfile: {
+              isNot: null,
+              ...(Object.keys(profileFilter).length > 0 ? profileFilter : {})
+            }
+          },
           include: { studentProfile: true }
         });
-
-        // Filter by division for 'all' batch (after DB query)
-        if (effectiveDivision && normalizedBatch === 'all') {
-          students = students.filter(s => s.studentProfile?.division === effectiveDivision);
-        }
 
         const emails = students.map(s => s.email).filter(Boolean);
 
