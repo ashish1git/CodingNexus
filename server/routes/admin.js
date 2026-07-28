@@ -447,11 +447,18 @@ router.post('/announcements', async (req, res) => {
     if (notifyEmail) {
       try {
         // Build Prisma filter
-        const studentWhere = { role: 'student', isActive: true };
+        const studentWhere = { role: 'student', isActive: true, studentProfile: { isNot: null } };
 
-        // Batch filter
+        // Batch filter — case-insensitive
         if (normalizedBatch !== 'all') {
-          studentWhere.studentProfile = { batch: normalizedBatch };
+          studentWhere.studentProfile.batch = {
+            in: [normalizedBatch, normalizedBatch.charAt(0).toUpperCase() + normalizedBatch.slice(1)]
+          };
+        }
+
+        // Division filter — push to DB if batch is specified, filter in JS otherwise
+        if (effectiveDivision && normalizedBatch !== 'all') {
+          studentWhere.studentProfile.division = effectiveDivision;
         }
 
         let students = await prisma.user.findMany({
@@ -459,12 +466,14 @@ router.post('/announcements', async (req, res) => {
           include: { studentProfile: true }
         });
 
-        // Further filter by division if specified and batch is not 'all'
-        if (effectiveDivision) {
+        // Filter by division for 'all' batch (after DB query)
+        if (effectiveDivision && normalizedBatch === 'all') {
           students = students.filter(s => s.studentProfile?.division === effectiveDivision);
         }
 
         const emails = students.map(s => s.email).filter(Boolean);
+
+        console.log(`📢 Announcement email targeting: batch="${normalizedBatch}", division="${effectiveDivision || 'none'}" → matched ${students.length} students`);
 
         if (emails.length > 0) {
           const emailHtml = `
