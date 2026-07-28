@@ -25,6 +25,7 @@ services:
         - VITE_CLOUDINARY_CLOUD_NAME=${VITE_CLOUDINARY_CLOUD_NAME:-dtxktmolj}
         - VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET:-profile_photos}
         - VITE_CLOUDINARY_NOTES_PRESET=${VITE_CLOUDINARY_NOTES_PRESET:-codingnexus_notes}
+        - VITE_MAINTENANCE_MODE=${VITE_MAINTENANCE_MODE:-false}
 
     container_name: codingnexus-app
     restart: unless-stopped

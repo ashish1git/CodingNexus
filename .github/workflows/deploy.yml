@@ -53,6 +53,7 @@ jobs:
             VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME || 'dtxktmolj' }}
             VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos
             VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes
+            VITE_MAINTENANCE_MODE=${{ secrets.VITE_MAINTENANCE_MODE || 'false' }}
 
   deploy:
     name: Deploy to Production Server
