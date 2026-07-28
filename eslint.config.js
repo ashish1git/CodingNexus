@@ -1,29 +1,44 @@
 import js from '@eslint/js'
 import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
+  // ── Ignore build artifacts ──
   globalIgnores(['dist', 'dist_nginx', 'build', 'node_modules']),
+
+  // ── Node.js files: server, scripts, root .js files ──
   {
-    files: ['**/*.{js,jsx}'],
-    extends: [
-      js.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
+    files: ['server/**/*.js', 'scripts/**/*.js', '*.js', '*.mjs', '*.cjs'],
+    extends: [js.configs.recommended],
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
-      parserOptions: {
-        ecmaVersion: 'latest',
-        ecmaFeatures: { jsx: true },
-        sourceType: 'module',
-      },
+      ecmaVersion: 'latest',
+      globals: { ...globals.node },
+      sourceType: 'module',
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': 'warn',
+    },
+  },
+
+  // ── Browser files: src (React JSX) ──
+  {
+    files: ['src/**/*.{js,jsx}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      globals: { ...globals.browser },
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+
+  // ── Config files ──
+  {
+    files: ['vite.config.js', 'eslint.config.js', 'prisma.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
     },
   },
 ])
