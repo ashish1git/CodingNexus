@@ -131,13 +131,29 @@ jobs:
             docker pull ghcr.io/ashish1git/codingnexus:latest
 
             # ── Tag for docker compose ────────────────────────────
-            docker tag ghcr.io/ashish1git/codingnexus:latest mcodingnexus-app
+            docker tag ghcr.io/ashish1git/codingnexus:latest mcodingnexus-app:latest
 
-            # ── Zero-downtime restart ─────────────────────────────
+            # ── Restart container directly (bypass docker compose build) ──
             echo "🔄 Restarting app container..."
-            docker compose stop app || true
-            docker compose rm -f app || true
-            docker compose up -d app
+            docker stop codingnexus-app || true
+            docker rm codingnexus-app || true
+            docker run -d \
+              --name codingnexus-app \
+              --restart unless-stopped \
+              --network host \
+              --user root \
+              --env-file .env.docker \
+              --env VITE_CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }} \
+              --env VITE_CLOUDINARY_UPLOAD_PRESET=profile_photos \
+              --env VITE_CLOUDINARY_NOTES_PRESET=codingnexus_notes \
+              --env VITE_MAINTENANCE_MODE=false \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v ${{ secrets.APP_DIR }}/server/dsa-codes.json:/app/server/dsa-codes.json \
+              --health-cmd="wget --quiet --tries=1 --spider http://localhost:3000/api/health" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-start-period=40s \
+              mcodingnexus-app:latest
 
             # ── Wait for healthy ──────────────────────────────────
             echo "⏳ Waiting for container to be healthy..."
