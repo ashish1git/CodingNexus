@@ -465,7 +465,7 @@ router.post('/announcements', async (req, res) => {
             isActive: true,
             studentProfile: {
               isNot: null,
-              ...(Object.keys(profileFilter).length > 0 ? profileFilter : {})
+              is: Object.keys(profileFilter).length > 0 ? profileFilter : undefined
             }
           },
           include: { studentProfile: true }
