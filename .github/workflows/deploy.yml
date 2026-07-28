@@ -167,9 +167,10 @@ jobs:
             done
 
             # ── Sync static assets to host disk for nginx ──────
-            echo "📋 Syncing static assets to dist_nginx..."
+            echo "📋 Syncing static assets to dist/ and dist_nginx/..."
+            docker cp codingnexus-app:/app/dist/. dist/
             docker cp codingnexus-app:/app/dist/. dist_nginx/
-            chmod -R 755 dist_nginx/
+            chmod -R 755 dist/ dist_nginx/
 
             # ── Health check ──────────────────────────────────────
             echo "🏥 Running health check..."
