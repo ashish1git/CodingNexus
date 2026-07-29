@@ -5,6 +5,9 @@
 # Phase 1 (build-push): GitHub Actions builds Docker image → pushes to GHCR
 # Phase 2 (deploy): SSH into server → pull image from GHCR → restart container
 #
+# Trigger: Runs ONLY after CI workflow passes (not in parallel).
+#          This ensures broken code never reaches production.
+#
 # Benefits:
 #   - Server never builds (10x faster deploy)
 #   - Image always available at ghcr.io/ashish1git/codingnexus
@@ -14,17 +17,20 @@
 name: Build & Deploy
 
 on:
-  push:
+  # Only run CD after CI has completed successfully on main
+  workflow_run:
+    workflows: ["CI"]
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
+    types: [completed]
+  # Allow manual trigger from GitHub Actions tab
   workflow_dispatch:
 
 jobs:
   build-push:
     name: Build & Push to GHCR
     runs-on: ubuntu-latest
+    # Only deploy if triggered manually OR if CI passed (not when CI failed)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
