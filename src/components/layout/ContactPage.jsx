@@ -15,7 +15,7 @@ const ContactPage = () => {
     },
     {
       name: 'Sumit Thakur',
-      class: 'BE-B',
+      class: 'BE',
       phone: '7887647604',
       role: 'Co-Head'
     },
@@ -31,8 +31,8 @@ const ContactPage = () => {
     navigator.clipboard.writeText(phone);
     setCopiedPhone(phone);
     setTimeout(() => setCopiedPhone(''), 2000);
-  
-};
+
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950">
