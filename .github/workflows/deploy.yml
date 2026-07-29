@@ -172,6 +172,13 @@ jobs:
             docker cp codingnexus-app:/app/dist/. dist_nginx/
             chmod -R 755 dist/ dist_nginx/
 
+            # ── Reload Nginx to serve new static files ─────────────
+            # CRITICAL: Without this, Nginx keeps serving OLD hashed JS/CSS
+            # files even after docker cp writes new ones to dist_nginx/.
+            # This was the root cause of frontend changes not showing after deploy.
+            echo "🔄 Reloading Nginx to serve new static assets..."
+            sudo nginx -s reload && echo "✅ Nginx reloaded" || echo "⚠️  Nginx reload failed (check if nginx is running)"
+
             # ── Health check ──────────────────────────────────────
             echo "🏥 Running health check..."
             curl -sf http://localhost:3000/api/health && echo "" || echo "❌ Health check failed"

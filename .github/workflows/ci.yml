@@ -4,6 +4,10 @@
 #
 # Runs on: every push + every pull request to main
 # Catches broken code BEFORE it reaches production.
+#
+# Build order:
+#   1. Build Docs (Docusaurus) → docs/build/
+#   2. Build Frontend (Vite)   → dist/  (vite.config.js copies docs/build → dist/docs/)
 # ==============================
 
 name: CI
@@ -39,7 +43,12 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
-      - name: Build frontend
+      # ── Must run BEFORE vite build so copy-docs-build plugin in vite.config.js
+      # ── can copy docs/build/ → dist/docs/. Without this step docs were missing.
+      - name: Build Docs (Docusaurus)
+        run: npm run build-docs
+
+      - name: Build frontend (Vite)
         run: npm run build
 
       - name: Security audit (warn only)

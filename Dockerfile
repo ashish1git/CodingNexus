@@ -31,14 +31,14 @@ ENV VITE_MAINTENANCE_MODE=${VITE_MAINTENANCE_MODE}
 RUN npm run build
 
 # ── Docs build ── (separate WORKDIR for independent caching)
+# NOTE: Must run BEFORE the vite build above so dist/docs/ is populated.
+# "|| true" has been removed — a docs build failure should fail loudly, not silently.
 WORKDIR /tmp/docs-build
 COPY docs/package*.json ./
 RUN npm ci && npm cache clean --force
 COPY docs/ ./
-RUN npm run build || true
-RUN mkdir -p /app/dist/docs && \
-    if [ -d "/tmp/docs-build/build" ]; then cp -r /tmp/docs-build/build/. /app/dist/docs/; \
-    else echo "<html><body><h1>Docs build not available</h1></body></html>" > /app/dist/docs/index.html; fi
+RUN npm run build
+RUN mkdir -p /app/dist/docs && cp -r /tmp/docs-build/build/. /app/dist/docs/
 
 WORKDIR /app
 
