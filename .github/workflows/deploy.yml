@@ -170,7 +170,8 @@ jobs:
             echo "📋 Syncing static assets to dist/ and dist_nginx/..."
             docker cp codingnexus-app:/app/dist/. dist/
             docker cp codingnexus-app:/app/dist/. dist_nginx/
-            sudo chmod -R 755 dist/ dist_nginx/
+            # Note: chmod removed — docker cp already gives files read permissions (644)
+            # which is sufficient for Nginx to serve static assets.
 
             # ── Reload Nginx to serve new static files ─────────────
             # CRITICAL: Without this, Nginx keeps serving OLD hashed JS/CSS
