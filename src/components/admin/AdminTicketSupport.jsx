@@ -448,7 +448,7 @@ const AdminTicketSupport = () => {
                       {new Date(resp.timestamp).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  <p className="text-gray-700 text-sm whitespace-pre-wrap">{resp.message}</p>
+                  <pre className="text-gray-700 text-sm whitespace-pre-wrap break-words font-sans">{resp.message}</pre>
                 </div>
               ))}
             </div>

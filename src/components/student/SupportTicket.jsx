@@ -513,7 +513,7 @@ const SupportTicket = () => {
                         {new Date(response.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <pre className="text-slate-300 text-sm whitespace-pre-wrap break-words font-sans">{response.message}</pre>
+                    <pre className="text-slate-300 text-sm whitespace-pre-wrap break-words">{response.message}</pre>
                   </div>
                 ))
               )}

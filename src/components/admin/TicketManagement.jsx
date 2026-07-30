@@ -635,7 +635,7 @@ const TicketManagement = () => {
                           {new Date(response.timestamp).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-gray-700 whitespace-pre-wrap">{response.message}</p>
+                      <pre className="text-gray-700 text-sm whitespace-pre-wrap break-words font-sans">{response.message}</pre>
                     </div>
                   ))}
                 </div>
