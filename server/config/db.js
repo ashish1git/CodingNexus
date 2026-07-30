@@ -1,9 +1,22 @@
 import 'dotenv/config';
+import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+
+// Try .env.docker first (production), fallback to .env
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envFiles = ['.env.docker', '.env'];
+for (const file of envFiles) {
+  const p = path.resolve(process.cwd(), file);
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p, override: false });
+  }
+}
 
 // Get database URL from environment
 const connectionString = process.env.DATABASE_URL;
