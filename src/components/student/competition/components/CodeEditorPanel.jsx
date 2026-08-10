@@ -17,7 +17,11 @@ export default function CodeEditorPanel({
   handleRunCode,
   handleSaveSolution,
   testResults, showTestCases, setShowTestCases,
-  isFullscreen
+  isFullscreen,
+  showDescription,
+  onToggleDescription,
+  leftWidth,
+  onSetLeftWidth
 }) {
   if (submitted) {
     return (
@@ -34,7 +38,7 @@ export default function CodeEditorPanel({
   return (
     <div className="flex-1 h-full flex flex-col bg-[#0d1117] min-w-0">
       {/* Editor Toolbar — sticky */}
-      <div className="px-4 py-2 bg-[#161b22] border-b border-[#30363d] flex items-center justify-between shrink-0 gap-2">
+      <div className="px-4 py-2 bg-[#161b22] border-b border-[#30363d] flex items-center justify-between shrink-0 gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <div className="relative">
             <select
@@ -49,6 +53,42 @@ export default function CodeEditorPanel({
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
           </div>
           <span className="text-[10px] text-gray-600 hidden sm:inline ml-1">Ctrl+Enter Run</span>
+
+          {/* Quick Split / Panel Layout Controls */}
+          {onToggleDescription && (
+            <div className="flex items-center gap-1 ml-2 border-l border-[#30363d] pl-2">
+              {showDescription ? (
+                <>
+                  <button
+                    onClick={() => onSetLeftWidth?.(leftWidth <= 220 ? 420 : 180)}
+                    className={`px-2 py-1 text-[11px] rounded transition-colors flex items-center gap-1 font-medium ${
+                      leftWidth <= 220
+                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                        : 'bg-[#21262d] text-gray-400 hover:text-white hover:bg-[#30363d]'
+                    }`}
+                    title={leftWidth <= 220 ? "Reset Problem Pane to Standard Size" : "Compact Problem Pane to Maximize Code Editor"}
+                  >
+                    {leftWidth <= 220 ? "↔ Standard Split" : "↙ Compact Problem"}
+                  </button>
+                  <button
+                    onClick={onToggleDescription}
+                    className="px-2 py-1 text-[11px] bg-[#21262d] text-gray-400 hover:text-white hover:bg-[#30363d] rounded transition-colors flex items-center gap-1 font-medium"
+                    title="Hide problem pane completely to maximize editor"
+                  >
+                    ⇥ Hide Problem
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={onToggleDescription}
+                  className="px-2.5 py-1 text-[11px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded transition-colors flex items-center gap-1 font-medium"
+                  title="Show problem description split"
+                >
+                  ⇤ Show Problem
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

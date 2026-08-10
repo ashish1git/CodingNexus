@@ -21,8 +21,8 @@ import ProblemDescription from './components/ProblemDescription';
 import CodeEditorPanel from './components/CodeEditorPanel';
 import Overlays from './components/Overlays';
 
-const LEFT_MIN = 280;
-const LEFT_MAX = 800;
+const LEFT_MIN = 160;
+const LEFT_MAX = 850;
 const LEFT_DEFAULT = 420;
 const STORAGE_KEY = 'comp_split_width';
 
@@ -149,6 +149,24 @@ const CompetitionProblems = () => {
     } catch (e) {}
   }, []);
 
+  const updateLeftWidth = useCallback((newWidth) => {
+    const container = containerRef.current;
+    const rect = container ? container.getBoundingClientRect() : null;
+    const maxW = rect ? Math.min(LEFT_MAX, rect.width - 200) : LEFT_MAX;
+    const clamped = Math.max(LEFT_MIN, Math.min(maxW, newWidth));
+    setLeftWidth(clamped);
+    leftWidthRef.current = clamped;
+    if (leftPanelRef.current) {
+      leftPanelRef.current.style.width = clamped + 'px';
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, String(clamped));
+    } catch (e) {}
+    if (editorRef.current) {
+      editorRef.current.layout();
+    }
+  }, []);
+
   // ── Drag-to-resize (DOM-level, zero React overhead) ──────────────────
   useEffect(() => {
     if (!isDragging) return;
@@ -164,7 +182,8 @@ const CompetitionProblems = () => {
     const onMove = (e) => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const w = Math.max(LEFT_MIN, Math.min(LEFT_MAX, e.clientX - rect.left));
+      const maxW = Math.min(LEFT_MAX, rect.width - 200);
+      const w = Math.max(LEFT_MIN, Math.min(maxW, e.clientX - rect.left));
       // Direct DOM write — instant, no React re-render
       leftEl.style.width = w + 'px';
       leftWidthRef.current = w;
@@ -402,30 +421,40 @@ const CompetitionProblems = () => {
         {/* ── Split pane: Left (description) | Handle | Right (editor) ── */}
         <div className="flex-1 flex min-w-0 overflow-hidden" ref={containerRef}>
           {showDescription && !editorFullscreen && (
-            <>
-              {/* Resize handle */}
-              <div
-                className="shrink-0 w-1 bg-[#30363d] hover:bg-blue-500 cursor-col-resize transition-colors split-handle flex items-center justify-center"
-                onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
-              >
-                <div className="handle-line w-0.5 h-8 bg-[#484f58] rounded-full opacity-0 transition-opacity" />
-              </div>
+            <div
+              ref={leftPanelRef}
+              style={{ width: leftWidth, minWidth: LEFT_MIN, maxWidth: LEFT_MAX }}
+              className="shrink-0 overflow-hidden border-r border-[#30363d] flex flex-col"
+            >
+              <ProblemDescription
+                selectedProblem={selectedProblem}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                competitionStatus={competitionStatus}
+                onToggleDescription={() => setShowDescription(false)}
+              />
+            </div>
+          )}
 
-              {/* Left panel: problem description */}
-              <div
-                ref={leftPanelRef}
-                style={{ width: leftWidth, minWidth: 280, maxWidth: LEFT_MAX }}
-                className="shrink-0 overflow-hidden"
-              >
-                <ProblemDescription
-                  selectedProblem={selectedProblem}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  competitionStatus={competitionStatus}
-                  onToggleDescription={() => setShowDescription(false)}
-                />
+          {/* Resize handle between Problem Description and Code Editor */}
+          {showDescription && !editorFullscreen && (
+            <div
+              className={`shrink-0 w-2.5 bg-[#161b22] hover:bg-blue-600/50 cursor-col-resize transition-all split-handle flex flex-col items-center justify-center select-none group relative border-x border-[#30363d]/60 ${
+                isDragging ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/20' : ''
+              }`}
+              onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDoubleClick={() => {
+                const target = leftWidth <= 220 ? LEFT_DEFAULT : 180;
+                updateLeftWidth(target);
+              }}
+              title="Drag to resize Problem/Editor split • Double-click to toggle compact problem view"
+            >
+              <div className="w-1 h-8 rounded-full bg-[#484f58] group-hover:bg-white transition-colors flex flex-col justify-center items-center gap-0.5 py-1">
+                <div className="w-0.5 h-0.5 bg-gray-300 group-hover:bg-blue-900 rounded-full" />
+                <div className="w-0.5 h-0.5 bg-gray-300 group-hover:bg-blue-900 rounded-full" />
+                <div className="w-0.5 h-0.5 bg-gray-300 group-hover:bg-blue-900 rounded-full" />
               </div>
-            </>
+            </div>
           )}
 
           {/* Right panel: code editor — takes remaining space */}
@@ -436,7 +465,7 @@ const CompetitionProblems = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1.5 opacity-50" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm12 0H5v8h10V5z" clipRule="evenodd" />
                 </svg>
-                Show Problem
+                Show Problem Description
               </button>
             )}
             <CodeEditorPanel
@@ -452,6 +481,10 @@ const CompetitionProblems = () => {
               showTestCases={showTestCases}
               setShowTestCases={setShowTestCases}
               isFullscreen={editorFullscreen}
+              showDescription={showDescription}
+              onToggleDescription={() => setShowDescription(p => !p)}
+              leftWidth={leftWidth}
+              onSetLeftWidth={updateLeftWidth}
             />
           </div>
         </div>
