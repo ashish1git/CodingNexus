@@ -33,6 +33,23 @@ export default defineConfig({
     react(),
     tailwindcss(),
     {
+      name: 'patch-monaco-cdn',
+      // @monaco-editor/loader v1.7.0 hardcodes monaco-editor@0.55.1/min/vs
+      // which has an incompatible AMD loader format. Replace with 0.52.2 at build time.
+      transform(code, id) {
+        if (id.includes('@monaco-editor/loader') || id.includes('monaco-loader')) {
+          const patched = code.replace(
+            /https:\/\/cdn\.jsdelivr\.net\/npm\/monaco-editor@[\d.]+\/min\/vs/g,
+            'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'
+          );
+          if (patched !== code) {
+            return { code: patched, map: null };
+          }
+        }
+        return null;
+      }
+    },
+    {
       name: 'copy-docs-build',
       closeBundle() {
         const docsBuildPath = path.join(__dirname, 'docs/build');
@@ -114,9 +131,6 @@ export default defineConfig({
   // Monaco Editor: load from CDN instead of bundling (15MB saving, offload to global edge network)
   optimizeDeps: {
     exclude: ['@monaco-editor/react']
-  },
-  define: {
-    'import.meta.env.VITE_MONACO_CDN': JSON.stringify('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs')
   }
 })
 

@@ -24,17 +24,55 @@ router.get('/notes', async (req, res) => {
       where: { userId: req.user.id }
     });
 
+    if (!student) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Build OR conditions: match student's batch (case-insensitive) OR "all"/"All"
+    const studentBatchLower = student.batch?.toLowerCase();
+    const batchConditions = [
+      { batch: studentBatchLower },
+      { batch: 'all' },
+      { batch: 'All' }
+    ];
+
+    // For classYear: show notes matching student's classYear, or show all if not set yet
+    // Division is for organization/labeling only — NOT a visibility filter (BE-A can see BE-B notes)
+    const classYearConditions = student.classYear 
+      ? [{ classYear: student.classYear }, { classYear: null }]
+      : undefined;
+
+    const whereConditions = [{ OR: batchConditions }];
+    if (classYearConditions) whereConditions.push({ OR: classYearConditions });
+
     const notes = await prisma.note.findMany({
-      where: {
-        OR: [
-          { batch: student.batch },
-          { batch: 'All' }
-        ]
-      },
+      where: { AND: whereConditions },
       orderBy: { uploadedAt: 'desc' }
     });
 
-    res.json({ success: true, data: notes });
+    const enrichedNotes = await Promise.all(notes.map(async (note) => {
+      let uploadedByName = 'Admin';
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: note.uploadedBy },
+          select: {
+            email: true,
+            adminProfile: { select: { name: true } },
+            studentProfile: { select: { name: true } }
+          }
+        });
+        if (user?.adminProfile?.name) {
+          uploadedByName = user.adminProfile.name;
+        } else if (user?.studentProfile?.name) {
+          uploadedByName = user.studentProfile.name;
+        } else if (user?.email) {
+          uploadedByName = user.email.split('@')[0];
+        }
+      } catch (e) { /* ignore */ }
+      return { ...note, uploadedByName };
+    }));
+
+    res.json({ success: true, data: enrichedNotes });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -928,16 +966,18 @@ router.post('/profile/photo', upload.single('photo'), async (req, res) => {
 // Update profile
 router.put('/profile', async (req, res) => {
   try {
-    const { name, phone, profilePhotoUrl, division } = req.body;
+    const { name, phone, profilePhotoUrl, classYear, division } = req.body;
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = profilePhotoUrl;
+    if (classYear !== undefined) updateData.classYear = classYear || null;
+    if (division !== undefined) updateData.division = division || null;
 
     await prisma.student.update({
       where: { userId: req.user.id },
-      data: {
-        name,
-        phone,
-        profilePhotoUrl,
-        division
-      }
+      data: updateData
     });
 
     res.json({ success: true });

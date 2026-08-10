@@ -42,6 +42,7 @@ model Student {
   userId          String   @unique
   name            String
   batch           String
+  classYear       String?
   division        String?
   phone           String?
   profilePhotoUrl String?
@@ -53,6 +54,8 @@ model Student {
   dsaProblems     DsaProblem[]
 
   @@index([batch])
+  @@index([classYear])
+  @@index([division])
 }
 
 model Admin {
@@ -73,11 +76,15 @@ model Note {
   description String?
   fileUrl     String
   batch       String
+  classYear   String?
+  division    String?
   subject     String?
   uploadedBy  String
   uploadedAt  DateTime @default(now())
 
   @@index([batch])
+  @@index([classYear])
+  @@index([division])
   @@index([uploadedAt])
 }
 

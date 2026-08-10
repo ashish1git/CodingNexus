@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
-  Clock, Trophy, CheckCircle, AlertCircle, Award, Maximize
+  Clock, Trophy, CheckCircle, AlertCircle, Award, Maximize, Minimize
 } from 'lucide-react';
 import competitionService from '../../../services/competitionService';
 import toast from 'react-hot-toast';
@@ -21,14 +21,22 @@ import ProblemDescription from './components/ProblemDescription';
 import CodeEditorPanel from './components/CodeEditorPanel';
 import Overlays from './components/Overlays';
 
+const LEFT_MIN = 280;
+const LEFT_MAX = 800;
+const LEFT_DEFAULT = 420;
+const STORAGE_KEY = 'comp_split_width';
+
 const CompetitionProblems = () => {
   const { competitionId } = useParams();
   const navigate = useNavigate();
 
-  // ── Shared refs (cross-cutting between hooks) ───────────────────────
   const submittedRef = useRef(false);
+  const containerRef = useRef(null);
+  const leftWidthRef = useRef(LEFT_DEFAULT);
+  const rafRef = useRef(null);
+  const editorRef = useRef(null);
 
-  // ── Data fetching ───────────────────────────────────────────────────
+  // ── Data fetching ────────────────────────────────────────────────────
   const {
     competition, loading,
     selectedProblem, setSelectedProblem,
@@ -36,14 +44,13 @@ const CompetitionProblems = () => {
     submitted, setSubmitted
   } = useCompetitionFetch(competitionId);
 
-  // ── Refs synced with fetch state (needed before useCodeEditor) ──────
   const problemSolutionsRef = useRef({});
   const selectedProblemRef = useRef(null);
   useEffect(() => { problemSolutionsRef.current = problemSolutions; }, [problemSolutions]);
   useEffect(() => { selectedProblemRef.current = selectedProblem; }, [selectedProblem]);
   useEffect(() => { submittedRef.current = submitted; }, [submitted]);
 
-  // ── Code editor (MUST be before callbacks that reference code/language) ──
+  // ── Code editor ──────────────────────────────────────────────────────
   const {
     code, setCode, language, setLanguage,
     handleEditorDidMount,
@@ -54,35 +61,35 @@ const CompetitionProblems = () => {
   } = useCodeEditor(
     selectedProblem, competitionId, submitted, competition,
     { problemSolutions, setProblemSolutions, problemSolutionsRef, selectedProblemRef, submittedRef }
-    // violationLogRef and serverTimeOffsetRef not available yet — useCodeEditor
-    // only uses them inside effects with fallbacks, so undefined is safe
   );
 
-  // ── Timer ───────────────────────────────────────────────────────────
+  // Capture editor ref
+  const onEditorMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    handleEditorDidMount(editor, monaco);
+  }, [handleEditorDidMount]);
+
+  // ── Timer ────────────────────────────────────────────────────────────
   const autoSubmitOnTimeout = useCallback(async () => {
     submittedRef.current = true;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-
     const latestSolutions = { ...problemSolutionsRef.current };
     if (selectedProblemRef.current && code?.trim()) {
       latestSolutions[selectedProblemRef.current.id] = {
         ...latestSolutions[selectedProblemRef.current.id], code, language
       };
     }
-
     const solutions = Object.entries(latestSolutions)
       .filter(([, s]) => s?.saved || s?.code?.trim())
       .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
-
     if (solutions.length > 0) {
       try {
         await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
         competitionService.clearDrafts(competitionId).catch(() => {});
-        const key = getStorageKey(competitionId, 'violations');
-        clearViolationStorage(key);
+        clearViolationStorage(getStorageKey(competitionId, 'violations'));
         toast.success('⏰ Solutions auto-submitted - time expired');
       } catch (e) {
-        toast.error(e.response?.data?.error || 'Auto-submit failed, redirecting...');
+        toast.error(e.response?.data?.error || 'Auto-submit failed');
       }
     }
     setTimeout(() => navigate(`/student/competition/${competitionId}/results`), 500);
@@ -94,7 +101,7 @@ const CompetitionProblems = () => {
     getTimeUntilStart: timeUntilStart, serverTimeOffsetRef
   } = useTimer(competition, { submittedRef, onExpiry: autoSubmitOnTimeout });
 
-  // ── Protection ──────────────────────────────────────────────────────
+  // ── Protection ───────────────────────────────────────────────────────
   const handleKick = useCallback(async (count, violationLog) => {
     submittedRef.current = true;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -115,45 +122,98 @@ const CompetitionProblems = () => {
     showFullscreenPrompt, setShowFullscreenPrompt,
     isFullscreen, setIsFullscreen, enterFullscreen,
     fullscreenFailed, fullscreenDiag,
-    violationLogRef, tabSwitchCountRef, clearViolationLog: clearSessionLog
+    violationLogRef, tabSwitchCountRef
   } = useCompetitionProtection(competition, {
     submittedRef, serverTimeOffsetRef, onKick: handleKick
   });
 
-  // ── Local UI state ──────────────────────────────────────────────────
+  // ── Layout state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('description');
   const [showProblemList, setShowProblemList] = useState(true);
   const [showDescription, setShowDescription] = useState(true);
-  const [descriptionWidth, setDescriptionWidth] = useState(35);
+  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
   const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef(null);
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
+  const leftPanelRef = useRef(null);
 
-  // Drag-to-resize handlers on window level so dragging works even when cursor leaves container
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const v = parseInt(saved, 10);
+        if (v >= LEFT_MIN && v <= LEFT_MAX) {
+          setLeftWidth(v);
+          leftWidthRef.current = v;
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // ── Drag-to-resize (DOM-level, zero React overhead) ──────────────────
   useEffect(() => {
     if (!isDragging) return;
+
+    const leftEl = leftPanelRef.current;
+    const editorEl = editorRef.current;
+    if (!leftEl) return;
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const container = containerRef.current;
+
     const onMove = (e) => {
-      const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const totalWidth = rect.width;
-      const pct = Math.max(20, Math.min(80, (x / totalWidth) * 100));
-      setDescriptionWidth(pct);
+      const w = Math.max(LEFT_MIN, Math.min(LEFT_MAX, e.clientX - rect.left));
+      // Direct DOM write — instant, no React re-render
+      leftEl.style.width = w + 'px';
+      leftWidthRef.current = w;
+      // Force Monaco to re-layout with new container size
+      if (editorEl) editorEl.layout();
     };
-    const onUp = () => setIsDragging(false);
+
+    const onUp = () => {
+      setIsDragging(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const finalW = leftWidthRef.current;
+      setLeftWidth(finalW);
+      try { localStorage.setItem(STORAGE_KEY, String(finalW)); } catch (e) {}
+      if (editorEl) editorEl.layout();
+    };
+
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
   }, [isDragging]);
 
-  // ── Handlers ────────────────────────────────────────────────────────
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (submitted || submitting) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleRunCode().catch(() => {});
+      }
+      if (e.key === 'F11' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F')) {
+        e.preventDefault();
+        setEditorFullscreen(f => !f);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [submitted, submitting, handleRunCode]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────
   const switchProblem = (newProblem) => {
     if (selectedProblem && code?.trim()) {
       competitionService.saveDraft(competitionId, selectedProblem.id, code, language)
-        .catch(e => console.warn('Failed to save draft on switch:', e.message));
+        .catch(e => console.warn('Draft save failed:', e.message));
       setProblemSolutions(prev => ({
         ...prev,
         [selectedProblem.id]: { ...prev[selectedProblem.id], code, language }
@@ -166,7 +226,6 @@ const CompetitionProblems = () => {
 
   const handleSubmitAll = async (isAutoSubmit = false) => {
     if (submitted || submitting) return;
-
     submittedRef.current = true;
 
     const latestSolutions = { ...problemSolutions };
@@ -182,81 +241,61 @@ const CompetitionProblems = () => {
     if (solvedCount === 0) {
       submittedRef.current = false;
       setSubmitted(false);
-      toast.error('You have not written any code yet. Please write at least one solution before submitting.');
+      toast.error('Please write at least one solution before submitting.');
       return;
     }
 
     if (!isAutoSubmit && solvedCount < totalProblems) {
-      const unsolvedProblems = competition.problems.filter(
+      const unsolved = competition.problems.filter(
         p => !latestSolutions[p.id]?.saved && !latestSolutions[p.id]?.code?.trim()
       );
       if (!window.confirm(
-        `Warning: You have only attempted ${solvedCount}/${totalProblems} problems.\n\n` +
-        `Unattempted problems:\n${unsolvedProblems.map(p => `• ${p.title}`).join('\n')}\n\n` +
-        'Are you sure you want to submit? You can only submit once and this action cannot be undone.'
-      )) {
-        submittedRef.current = false;
-        setSubmitted(false);
-        return;
-      }
+        `Only ${solvedCount}/${totalProblems} attempted.\n\nUnattempted:\n${unsolved.map(p => `• ${p.title}`).join('\n')}\n\nSubmit anyway?`
+      )) { submittedRef.current = false; setSubmitted(false); return; }
     } else if (!isAutoSubmit) {
-      if (!window.confirm(
-        `You have attempted all ${totalProblems} problems! Are you sure you want to submit? ` +
-        'You can only submit once and this action cannot be undone.'
-      )) {
-        submittedRef.current = false;
-        setSubmitted(false);
-        return;
+      if (!window.confirm(`All ${totalProblems} attempted! Submit now?`)) {
+        submittedRef.current = false; setSubmitted(false); return;
       }
     }
 
     setSubmitted(true);
     setSubmitting(true);
-    toast.loading(isAutoSubmit ? 'Auto-submitting solutions...' : 'Submitting all solutions...');
+    toast.loading('Submitting...');
 
     try {
       const solutions = Object.entries(latestSolutions)
         .filter(([, s]) => s?.saved || s?.code?.trim())
         .map(([problemId, s]) => ({ problemId, code: s.code, language: s.language }));
-
       await competitionService.submitSolutions(competitionId, solutions, [...violationLogRef.current]);
-      competitionService.clearDrafts(competitionId).catch(e => console.warn('Failed to clear drafts:', e.message));
-      const key = getStorageKey(competitionId, 'violations');
-      clearViolationStorage(key);
-
+      competitionService.clearDrafts(competitionId).catch(() => {});
+      clearViolationStorage(getStorageKey(competitionId, 'violations'));
       setSubmitted(true);
       setSubmitting(false);
       toast.dismiss();
-      toast.success(`Submitted ${solvedCount}/${totalProblems} solutions successfully! 🎉`);
-
+      toast.success(`Submitted ${solvedCount}/${totalProblems}! 🎉`);
       setTimeout(() => {
         if (document.fullscreenElement) document.exitFullscreen();
         navigate(`/student/competition/${competitionId}/results`);
-      }, 2000);
+      }, 1500);
     } catch (error) {
       toast.dismiss();
-      toast.error(error.response?.data?.error || 'Failed to submit solutions');
+      toast.error(error.response?.data?.error || 'Submit failed');
       submittedRef.current = false;
       setSubmitted(false);
       setSubmitting(false);
     }
   };
 
-  // ── Guard: loading ──────────────────────────────────────────────────
   if (loading || !competition) return <Loading />;
 
-  // ── Render ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white">
-
-      {/* Overlays */}
+    <div className={`min-h-screen bg-[#0d1117] text-white ${editorFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       <Overlays
         showWarningOverlay={showWarningOverlay}
         tabSwitchCount={tabSwitchCount}
         onDismissWarning={() => {
           document.documentElement.requestFullscreen?.().then(() => {
-            setIsFullscreen(true);
-            setShowFullscreenPrompt(false);
+            setIsFullscreen(true); setShowFullscreenPrompt(false);
           }).catch(() => {});
           setShowWarningOverlay(false);
           window.focus();
@@ -268,137 +307,89 @@ const CompetitionProblems = () => {
         competitionStatus={competitionStatus}
         fullscreenFailed={fullscreenFailed}
         fullscreenDiag={fullscreenDiag}
-        onDismissFullscreenFailed={() => {
-          setShowFullscreenPrompt(false);
-          setIsFullscreen(true);  // let the student proceed with browser F11 fullscreen
-        }}
+        onDismissFullscreenFailed={() => { setShowFullscreenPrompt(false); setIsFullscreen(true); }}
       />
 
-      {/* Custom Scrollbar Styles */}
       <style>{`
-        .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: #3e3e3e; border-radius: 4px; }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #4e4e4e; }
+        .comp-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .comp-scroll::-webkit-scrollbar-track { background: transparent; }
+        .comp-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .comp-scroll::-webkit-scrollbar-thumb:hover { background: #484f58; }
+        .split-handle:hover .handle-line { opacity: 1; }
       `}</style>
 
-      {/* Header */}
-      <div className="bg-[#282828] border-b border-[#3e3e3e] sticky top-0 z-10 shadow-lg">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Trophy className="w-5 h-5 text-yellow-400" />
-                <h1 className="text-base font-semibold text-white">{competition.title}</h1>
-                {competition.difficulty && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(competition.difficulty)}`}>
-                    {competition.difficulty.charAt(0).toUpperCase() + competition.difficulty.slice(1)}
-                  </span>
-                )}
-              </div>
+      {/* Top bar */}
+      <div className="bg-[#161b22] border-b border-[#30363d] px-4 h-12 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <Trophy className="w-4 h-4 text-yellow-400 shrink-0" />
+          <h1 className="text-sm font-semibold text-white truncate">{competition.title}</h1>
+          {competition.difficulty && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${getDifficultyColor(competition.difficulty)}`}>
+              {competition.difficulty.charAt(0).toUpperCase() + competition.difficulty.slice(1)}
+            </span>
+          )}
+          {competitionStatus === 'ongoing' && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/25">Live</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {competitionStatus === 'ongoing' && (
+            <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border font-mono ${
+              timeRemaining.expired ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+              timeRemaining.hours === 0 && timeRemaining.minutes < 10 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 animate-pulse' :
+              'bg-[#21262d] border-[#30363d] text-gray-300'
+            }`}>
+              <Clock className="w-3.5 h-3.5" />{getTimeRemainingDisplay()}
             </div>
-            <div className="flex items-center gap-4">
-              <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border ${
-                timeRemaining.expired
-                  ? 'bg-red-600/20 border-red-600/50 text-red-400'
-                  : timeRemaining.hours === 0 && timeRemaining.minutes < 10
-                    ? 'bg-orange-600/20 border-orange-600/50 text-orange-400 animate-pulse'
-                    : timeRemaining.hours === 0 && timeRemaining.minutes < 30
-                      ? 'bg-yellow-600/20 border-yellow-600/50 text-yellow-400'
-                      : 'bg-[#1e1e1e] border-[#3e3e3e]'
-              }`}>
-                <Clock className={`w-4 h-4 ${
-                  timeRemaining.expired ? 'text-red-400' :
-                  timeRemaining.hours === 0 && timeRemaining.minutes < 10 ? 'text-orange-400' :
-                  timeRemaining.hours === 0 && timeRemaining.minutes < 30 ? 'text-yellow-400' :
-                  'text-blue-400'
-                }`} />
-                <span className={`font-mono font-bold ${
-                  timeRemaining.expired ? 'text-red-400' :
-                  timeRemaining.hours === 0 && timeRemaining.minutes < 10 ? 'text-orange-400' :
-                  'text-gray-300'
-                }`}>{getTimeRemainingDisplay()}</span>
-              </div>
-              <div className="text-sm px-3 py-1.5 bg-[#1e1e1e] rounded-lg border border-[#3e3e3e]">
-                <span className="text-gray-400">Solved: </span>
-                <span className="text-yellow-400 font-bold">
-                  {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length}
-                </span>
-              </div>
-              {tabSwitchCount > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-red-400" />
-                  <span className="text-red-400 text-xs font-bold">Violations: {tabSwitchCount}</span>
-                </div>
-              )}
-              <button
-                onClick={enterFullscreen}
-                className="p-2 text-gray-400 hover:text-white transition-colors hover:bg-[#3e3e3e] rounded-lg"
-                title="Enter Fullscreen"
-              >
-                <Maximize className="w-5 h-5" />
-              </button>
-              {!submitted && (
-                <button
-                  onClick={handleSubmitAll}
-                  disabled={submitting}
-                  className="px-5 py-2 bg-linear-to-r from-green-600 to-green-500 text-white text-sm rounded-lg hover:from-green-700 hover:to-green-600 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-green-500/30 hover:shadow-green-500/50"
-                >
-                  <Trophy className="w-4 h-4" />
-                  Submit All Solutions
-                </button>
-              )}
-              {submitted && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 text-green-400 text-sm rounded-lg border border-green-600/30 font-semibold">
-                    <CheckCircle className="w-4 h-4" />
-                    Submitted
-                  </div>
-                  <Link
-                    to={`/student/competition/${competitionId}/results`}
-                    className="px-4 py-2 bg-linear-to-r from-blue-600 to-blue-500 text-white text-sm rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50"
-                  >
-                    <Award className="w-4 h-4" />
-                    View Results
-                  </Link>
-                </div>
-              )}
+          )}
+          <span className="text-xs text-gray-500 tabular-nums">
+            {Object.keys(problemSolutions).filter(id => problemSolutions[id]?.saved).length}/{competition.problems.length} solved
+          </span>
+          {tabSwitchCount > 0 && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/30">{tabSwitchCount} violations</span>
+          )}
+          <button onClick={() => setEditorFullscreen(f => !f)}
+            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-[#21262d] transition-colors"
+            title={editorFullscreen ? 'Exit fullscreen (F11)' : 'Fullscreen (F11)'}>
+            {editorFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+          {!submitted && (
+            <button onClick={handleSubmitAll} disabled={submitting}
+              className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-md shadow-green-600/20">
+              <Trophy className="w-3.5 h-3.5" />Submit All
+            </button>
+          )}
+          {submitted && (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 text-xs rounded border border-green-500/25 font-medium">
+                <CheckCircle className="w-3.5 h-3.5" /> Submitted
+              </span>
+              <Link to={`/student/competition/${competitionId}/results`}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition font-medium flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5" />Results
+              </Link>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Competition Status Banner */}
       {competitionStatus === 'not-started' && (
-        <div className="bg-blue-600/20 border-b border-blue-600/50 px-4 py-3">
-          <div className="flex items-center justify-center gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-400" />
-            <p className="text-blue-300 font-semibold">
-              Competition hasn't started yet. {timeUntilStart}
-            </p>
-            <span className="text-blue-400 text-sm">
-              Start Time: {formatToIST(competition.startTime)}
-            </span>
-          </div>
+        <div className="bg-blue-600/10 border-b border-blue-600/25 px-4 py-1.5 text-center">
+          <p className="text-blue-300 text-xs">Starts {timeUntilStart} · {formatToIST(competition.startTime)}</p>
         </div>
       )}
       {competitionStatus === 'ended' && (
-        <div className="bg-red-600/20 border-b border-red-600/50 px-4 py-3">
-          <div className="flex items-center justify-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <p className="text-red-300 font-semibold">Competition has ended</p>
-            <Link
-              to={`/student/competition/${competitionId}/results`}
-              className="ml-4 px-4 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition"
-            >
-              View Results
-            </Link>
-          </div>
+        <div className="bg-red-600/10 border-b border-red-600/25 px-4 py-1.5 flex items-center justify-center gap-3">
+          <AlertCircle className="w-4 h-4 text-red-400" />
+          <p className="text-red-300 text-xs font-medium">Competition ended</p>
+          <Link to={`/student/competition/${competitionId}/results`}
+            className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition">View Results</Link>
         </div>
       )}
 
-      {/* Main Layout */}
-      <div className="flex h-[calc(100vh-57px)]" ref={containerRef}>
+      {/* ─── MAIN LAYOUT ─── */}
+      <div className="flex overflow-hidden" style={{ height: editorFullscreen ? 'calc(100vh - 48px)' : 'calc(100vh - 105px)' }}>
+        {/* Problem list sidebar (fixed width) */}
         <ProblemList
           problems={competition.problems}
           selectedProblem={selectedProblem}
@@ -408,58 +399,64 @@ const CompetitionProblems = () => {
           onToggle={() => setShowProblemList(p => !p)}
         />
 
-        {showDescription && (
-          <>
-            <div
-              className="shrink-0 w-[3px] bg-[#3e3e3e] hover:bg-blue-500 cursor-col-resize transition-colors group relative"
-              onMouseDown={() => setIsDragging(true)}
-            >
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 bg-gray-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="overflow-y-auto bg-[#1a1a1a] scrollbar-thin scrollbar-thumb-[#3e3e3e] scrollbar-track-transparent transition-all duration-200" style={{ width: `${descriptionWidth}%`, minWidth: '320px', maxWidth: '70%' }}>
-              <ProblemDescription
-                selectedProblem={selectedProblem}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                competitionStatus={competitionStatus}
-                onToggleDescription={() => setShowDescription(false)}
-              />
-            </div>
-          </>
-        )}
-
-        <div className="flex-1 flex flex-col min-w-0">
-          {!showDescription && (
-            <div className="shrink-0 px-3 py-1.5 bg-[#262626] border-b border-[#3e3e3e] flex items-center">
-              <button
-                onClick={() => setShowDescription(true)}
-                className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-[#3e3e3e] transition-colors"
+        {/* ── Split pane: Left (description) | Handle | Right (editor) ── */}
+        <div className="flex-1 flex min-w-0 overflow-hidden" ref={containerRef}>
+          {showDescription && !editorFullscreen && (
+            <>
+              {/* Resize handle */}
+              <div
+                className="shrink-0 w-1 bg-[#30363d] hover:bg-blue-500 cursor-col-resize transition-colors split-handle flex items-center justify-center"
+                onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm12 0H5v8h10V5z" clipRule="evenodd" /></svg>
-                Show Problem Description
-              </button>
-            </div>
+                <div className="handle-line w-0.5 h-8 bg-[#484f58] rounded-full opacity-0 transition-opacity" />
+              </div>
+
+              {/* Left panel: problem description */}
+              <div
+                ref={leftPanelRef}
+                style={{ width: leftWidth, minWidth: 280, maxWidth: LEFT_MAX }}
+                className="shrink-0 overflow-hidden"
+              >
+                <ProblemDescription
+                  selectedProblem={selectedProblem}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  competitionStatus={competitionStatus}
+                  onToggleDescription={() => setShowDescription(false)}
+                />
+              </div>
+            </>
           )}
-          <CodeEditorPanel
-            code={code}
-            setCode={setCode}
-            language={language}
-            setLanguage={setLanguage}
-            selectedProblem={selectedProblem}
-            submitted={submitted}
-            submitting={submitting}
-            isSaved={problemSolutions[selectedProblem?.id]?.saved}
-            handleEditorDidMount={handleEditorDidMount}
-            handleRunCode={handleRunCode}
-            handleSaveSolution={handleSaveSolution}
-            testResults={testResults}
-            showTestCases={showTestCases}
-            setShowTestCases={setShowTestCases}
-          />
+
+          {/* Right panel: code editor — takes remaining space */}
+          <div className="flex-1 flex flex-col min-w-[200px] overflow-hidden">
+            {!showDescription && !editorFullscreen && (
+              <button onClick={() => setShowDescription(true)}
+                className="shrink-0 px-3 py-1.5 bg-[#161b22] border-b border-[#30363d] flex items-center text-xs text-gray-400 hover:text-white hover:bg-[#21262d] transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1.5 opacity-50" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm12 0H5v8h10V5z" clipRule="evenodd" />
+                </svg>
+                Show Problem
+              </button>
+            )}
+            <CodeEditorPanel
+              code={code} setCode={setCode}
+              language={language} setLanguage={setLanguage}
+              selectedProblem={selectedProblem}
+              submitted={submitted} submitting={submitting}
+              isSaved={problemSolutions[selectedProblem?.id]?.saved}
+              handleEditorDidMount={onEditorMount}
+              handleRunCode={handleRunCode}
+              handleSaveSolution={handleSaveSolution}
+              testResults={testResults}
+              showTestCases={showTestCases}
+              setShowTestCases={setShowTestCases}
+              isFullscreen={editorFullscreen}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Async Submission Status Modal */}
       {['submitted', 'processing', 'completed', 'error', 'timeout'].includes(asyncStatus) && (
         <SubmissionStatusUI status={asyncStatus} result={asyncResult} pollCount={pollCount} />
       )}

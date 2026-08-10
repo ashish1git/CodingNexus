@@ -1,7 +1,7 @@
 // src/components/admin/NotesUpload.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Upload, FileText, Trash2, Download, Search, Filter, ExternalLink, Eye, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, Trash2, Download, Search, Filter, ExternalLink, Eye, ShieldAlert, BookOpen, GraduationCap, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import { hasPermission, getPermissionDeniedMessage } from '../../utils/permissions';
@@ -18,6 +18,10 @@ import {
 
 import toast from 'react-hot-toast';
 
+const CLASS_YEARS = ['FE', 'SE', 'TE', 'BE'];
+const DIVISIONS = ['A', 'B', 'C'];
+const PAGE_SIZE = 12;
+
 const NotesUpload = () => {
   const { userDetails } = useAuth();
   const [notes, setNotes] = useState([]);
@@ -26,14 +30,18 @@ const NotesUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBatch, setFilterBatch] = useState('All');
+  const [filterClassYear, setFilterClassYear] = useState('All');
+  const [filterDivision, setFilterDivision] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    batch: 'All',
+    batch: '',
+    classYear: '',
+    division: '',
     file: null
   });
 
-  // Check permissions
   const canManageNotes = hasPermission(userDetails, 'manageNotes');
 
   useEffect(() => {
@@ -42,7 +50,11 @@ const NotesUpload = () => {
 
   useEffect(() => {
     filterNotes();
-  }, [notes, searchTerm, filterBatch]);
+  }, [notes, searchTerm, filterBatch, filterClassYear, filterDivision]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterBatch, filterClassYear, filterDivision]);
 
   const fetchNotes = async () => {
     setLoading(true);
@@ -51,7 +63,7 @@ const NotesUpload = () => {
       if (response.success && response.notes) {
         const notesList = response.notes.map(note => ({
           ...note,
-          createdAt: new Date(note.createdAt)
+          createdAt: note.uploadedAt ? new Date(note.uploadedAt) : (note.createdAt ? new Date(note.createdAt) : null)
         }));
         setNotes(notesList);
       } else {
@@ -71,12 +83,21 @@ const NotesUpload = () => {
     let filtered = notes ? [...notes] : [];
 
     if (filterBatch !== 'All') {
-      filtered = filtered.filter(n => n.batch === filterBatch || n.batch === 'All');
+      filtered = filtered.filter(n => n.batch === filterBatch.toLowerCase() || n.batch === 'all');
+    }
+
+    if (filterClassYear !== 'All') {
+      filtered = filtered.filter(n => n.classYear === filterClassYear || !n.classYear);
+    }
+
+    if (filterDivision !== 'All') {
+      filtered = filtered.filter(n => n.division === filterDivision || !n.division);
     }
 
     if (searchTerm) {
       filtered = filtered.filter(n =>
-        n.title.toLowerCase().includes(searchTerm.toLowerCase())
+        n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        n.description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -99,84 +120,89 @@ const NotesUpload = () => {
     }
   };
 
-const handleUpload = async (e) => {
-  e.preventDefault();
+  const handleUpload = async (e) => {
+    e.preventDefault();
 
-  if (!canManageNotes) {
-    toast.error(getPermissionDeniedMessage('manageNotes'));
-    return;
-  }
-
-  if (!formData.file) {
-    toast.error('Please select a file');
-    return;
-  }
-
-  if (!formData.title.trim()) {
-    toast.error('Please enter a title');
-    return;
-  }
-
-  setUploading(true);
-
-  try {
-    toast.loading('Uploading to Cloudinary...', { id: 'upload' });
-
-    // Upload file to Cloudinary with custom filename based on title
-    const cloudinaryResult = await uploadToCloudinary(
-      formData.file, 
-      'codingnexus/notes',
-      formData.title, // Pass title as custom filename
-      'notes' // Upload type for notes preset
-    );
-    
-    toast.success('File uploaded successfully!', { id: 'upload' });
-    toast.loading('Saving to database...', { id: 'save' });
-
-    // Save metadata via adminService
-    const noteData = {
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      batch: formData.batch,
-      fileUrl: cloudinaryResult.url,
-      publicId: cloudinaryResult.publicId,
-      fileName: formData.file.name,
-      displayName: cloudinaryResult.displayName,
-      fileSize: cloudinaryResult.bytes,
-      fileFormat: cloudinaryResult.format,
-      resourceType: cloudinaryResult.resourceType
-    };
-
-    const response = await adminService.uploadNote(noteData);
-    
-    if (response.success) {
-      toast.success('Note saved successfully!', { id: 'save' });
-      
-      // Reset form
-      setFormData({ 
-        title: '', 
-        description: '', 
-        batch: 'All', 
-        file: null 
-      });
-      
-      const fileInput = document.getElementById('file-input');
-      if (fileInput) fileInput.value = '';
-      
-      // Refresh notes list
-      fetchNotes();
-    } else {
-      toast.error(response.error || 'Failed to save note', { id: 'save' });
+    if (!canManageNotes) {
+      toast.error(getPermissionDeniedMessage('manageNotes'));
+      return;
     }
-    
-  } catch (error) {
-    console.error('Error uploading:', error);
-    toast.error(error.message || 'Upload failed', { id: 'upload' });
-    toast.dismiss('save');
-  } finally {
-    setUploading(false);
-  }
-};
+
+    if (!formData.file) {
+      toast.error('Please select a file');
+      return;
+    }
+
+    if (!formData.title.trim()) {
+      toast.error('Please enter a title');
+      return;
+    }
+
+    if (!formData.classYear) {
+      toast.error('Please select a class year');
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      toast.loading('Uploading to Cloudinary...', { id: 'upload' });
+
+      const cloudinaryResult = await uploadToCloudinary(
+        formData.file, 
+        'codingnexus/notes',
+        formData.title,
+        'notes'
+      );
+      
+      toast.success('File uploaded successfully!', { id: 'upload' });
+      toast.loading('Saving to database...', { id: 'save' });
+
+      const noteData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        batch: formData.batch || 'all',
+        classYear: formData.classYear,
+        division: formData.division || null,
+        fileUrl: cloudinaryResult.url,
+        publicId: cloudinaryResult.publicId,
+        fileName: formData.file.name,
+        displayName: cloudinaryResult.displayName,
+        fileSize: cloudinaryResult.bytes,
+        fileFormat: cloudinaryResult.format,
+        resourceType: cloudinaryResult.resourceType
+      };
+
+      const response = await adminService.uploadNote(noteData);
+      
+      if (response.success) {
+        toast.success('Note saved successfully!', { id: 'save' });
+        
+        setFormData({ 
+          title: '', 
+          description: '', 
+          batch: '', 
+          classYear: '',
+          division: '',
+          file: null 
+        });
+        
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) fileInput.value = '';
+        
+        fetchNotes();
+      } else {
+        toast.error(response.error || 'Failed to save note', { id: 'save' });
+      }
+      
+    } catch (error) {
+      console.error('Error uploading:', error);
+      toast.error(error.message || 'Upload failed', { id: 'upload' });
+      toast.dismiss('save');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleDelete = async (note) => {
     if (!canManageNotes) {
@@ -191,12 +217,10 @@ const handleUpload = async (e) => {
     try {
       toast.loading('Deleting...', { id: 'delete' });
 
-      // Delete from Cloudinary (if configured)
       if (note.publicId) {
         await deleteFromCloudinary(note.publicId, note.resourceType);
       }
 
-      // Delete from database via adminService
       const response = await adminService.deleteNote(note.id);
       
       if (response.success) {
@@ -213,29 +237,24 @@ const handleUpload = async (e) => {
   };
 
   const handleDownload = async (note) => {
-  console.log('📥 Download button clicked');
-  console.log('File URL:', note.fileUrl);
-  
-  const downloadFileName = getDownloadFileName(note.title, note.fileFormat);
-  
-  try {
-    toast.loading('Preparing download...', { id: 'download' });
+    const downloadFileName = getDownloadFileName(note.title, note.fileFormat);
     
-    // For Cloudinary files (PDFs uploaded as images)
-    if (note.fileUrl.includes('cloudinary.com')) {
-      const downloadUrl = getDownloadUrl(note.fileUrl);
-      console.log('Download URL:', downloadUrl);
-      await downloadRawFile(downloadUrl, downloadFileName);
-    } else {
-      await downloadRawFile(note.fileUrl, downloadFileName);
+    try {
+      toast.loading('Preparing download...', { id: 'download' });
+      
+      if (note.fileUrl.includes('cloudinary.com')) {
+        const downloadUrl = getDownloadUrl(note.fileUrl);
+        await downloadRawFile(downloadUrl, downloadFileName);
+      } else {
+        await downloadRawFile(note.fileUrl, downloadFileName);
+      }
+      
+      toast.success('Download complete!', { id: 'download' });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Download failed. Please try again.', { id: 'download' });
     }
-    
-    toast.success('Download complete!', { id: 'download' });
-  } catch (error) {
-    console.error('Download error:', error);
-    toast.error('Download failed. Please try again.', { id: 'download' });
-  }
-};
+  };
 
   const handlePreview = (note) => {
     const previewUrl = getPreviewUrl(note.fileUrl);
@@ -266,6 +285,23 @@ const handleUpload = async (e) => {
     );
   };
 
+  // Group notes by classYear for organized display
+  const groupOrder = ['FE', 'SE', 'TE', 'BE', 'Common'];
+
+  // Paginate: flatten filteredNotes, paginate, then re-group
+  const totalPages = Math.ceil(filteredNotes.length / PAGE_SIZE);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedNotes = filteredNotes.slice(startIndex, startIndex + PAGE_SIZE);
+
+  const groupedNotes = {};
+  paginatedNotes.forEach(note => {
+    const key = note.classYear || 'Common';
+    if (!groupedNotes[key]) groupedNotes[key] = [];
+    groupedNotes[key].push(note);
+  });
+
+  const sortedGroups = groupOrder.filter(g => groupedNotes[g]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -285,7 +321,6 @@ const handleUpload = async (e) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Access Denied Screen */}
         {!canManageNotes ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center max-w-md">
@@ -311,7 +346,12 @@ const handleUpload = async (e) => {
           {/* Upload Form */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-6">Upload New Notes</h2>
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Upload className="w-5 h-5 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">Upload New Notes</h2>
+              </div>
               <form onSubmit={handleUpload} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -322,7 +362,7 @@ const handleUpload = async (e) => {
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                    placeholder="e.g., Python Basics Notes"
+                    placeholder="e.g., Data Structures - Unit 1"
                     required
                   />
                 </div>
@@ -334,39 +374,80 @@ const handleUpload = async (e) => {
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows="3"
+                    rows="2"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                     placeholder="Brief description..."
                   ></textarea>
                 </div>
 
+                {/* Class Year - Required */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Target Batch *
+                    <GraduationCap className="w-4 h-4 inline mr-1" />
+                    Class Year *
+                  </label>
+                  <select
+                    value={formData.classYear}
+                    onChange={(e) => setFormData({ ...formData, classYear: e.target.value, division: '' })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                    required
+                  >
+                    <option value="">Select Class Year</option>
+                    {CLASS_YEARS.map(cy => (
+                      <option key={cy} value={cy}>{cy} - {cy === 'FE' ? 'First Year' : cy === 'SE' ? 'Second Year' : cy === 'TE' ? 'Third Year' : 'Final Year'}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Division - Optional */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Users className="w-4 h-4 inline mr-1" />
+                    Division (optional)
+                  </label>
+                  <select
+                    value={formData.division}
+                    onChange={(e) => setFormData({ ...formData, division: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                    disabled={!formData.classYear}
+                  >
+                    <option value="">All Divisions</option>
+                    {DIVISIONS.map(d => (
+                      <option key={d} value={d}>Division {d}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Leave empty for notes common to all divisions</p>
+                </div>
+
+                {/* Batch (Training Level) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <BookOpen className="w-4 h-4 inline mr-1" />
+                    Training Batch
                   </label>
                   <select
                     value={formData.batch}
                     onChange={(e) => setFormData({ ...formData, batch: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                   >
-                    <option value="All">All Batches</option>
-                    <option value="Basic">Basic Batch</option>
-                    <option value="Advanced">Advanced Batch</option>
+                    <option value="">All Batches</option>
+                    <option value="basic">Basic Batch</option>
+                    <option value="advanced">Advanced Batch</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    File (PDF, DOC, PPT, XLS, TXT, CSV , PNG ,JPG ) *
+                    File (PDF, DOC, PPT, XLS, TXT, CSV, PNG, JPG) *
                   </label>
                   <input
-                   id="file-input"
+                    id="file-input"
                     type="file"
                     onChange={handleFileChange}
                     accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                      required
-                          />
+                    required
+                  />
                   {formData.file && (
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-sm font-medium text-blue-800">
@@ -389,11 +470,6 @@ const handleUpload = async (e) => {
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Uploading...
                     </>
-                  ) : !canManageNotes ? (
-                    <>
-                      <ShieldAlert className="w-5 h-5" />
-                      No Permission
-                    </>
                   ) : (
                     <>
                       <Upload className="w-5 h-5" />
@@ -408,8 +484,9 @@ const handleUpload = async (e) => {
                   📝 Upload Guidelines
                 </h3>
                 <ul className="text-xs text-blue-700 space-y-1.5">
+                  <li>• Select Class Year, Division, and Batch</li>
                   <li>• Max file size: 25MB</li>
-                  <li>• Supported: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, CSV</li>
+                  <li>• Supported: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, CSV, Images</li>
                   <li>• Files stored securely in Cloudinary</li>
                   <li>• Fast CDN delivery worldwide</li>
                 </ul>
@@ -421,23 +498,51 @@ const handleUpload = async (e) => {
           <div className="lg:col-span-2">
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 mb-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                   <input
                     type="text"
-                    placeholder="Search by title..."
+                    placeholder="Search by title or description..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                   />
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
                 <div className="flex items-center gap-2">
-                  <Filter className="w-5 h-5 text-gray-400" />
+                  <GraduationCap className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={filterClassYear}
+                    onChange={(e) => setFilterClassYear(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 text-sm"
+                  >
+                    <option value="All">All Years</option>
+                    {CLASS_YEARS.map(cy => (
+                      <option key={cy} value={cy}>{cy}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={filterDivision}
+                    onChange={(e) => setFilterDivision(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 text-sm"
+                  >
+                    <option value="All">All Divisions</option>
+                    {DIVISIONS.map(d => (
+                      <option key={d} value={d}>Div {d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-gray-400" />
                   <select
                     value={filterBatch}
                     onChange={(e) => setFilterBatch(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 text-sm"
                   >
                     <option value="All">All Batches</option>
                     <option value="Basic">Basic</option>
@@ -447,88 +552,194 @@ const handleUpload = async (e) => {
               </div>
             </div>
 
-            {/* Notes Grid */}
+            {/* Stats Bar */}
+            {!loading && filteredNotes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-800">{filteredNotes.length} notes</span>
+                  {sortedGroups.map(group => (
+                    <span key={group} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                      {group === 'Common' ? 'All Years' : group}: {groupedNotes[group].length}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes Grid - Grouped by Class Year */}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                 <p className="text-gray-600">Loading notes...</p>
               </div>
             ) : filteredNotes.length > 0 ? (
-              <div className="space-y-4">
-                {filteredNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition hover:border-indigo-200"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0">
-                        {getFileIcon(note.fileName)}
+              <>
+              <div className="space-y-8">
+                {sortedGroups.map(group => (
+                  <div key={group}>
+                    {/* Group Header */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`p-2 rounded-lg ${
+                        group === 'FE' ? 'bg-green-100 text-green-700' :
+                        group === 'SE' ? 'bg-blue-100 text-blue-700' :
+                        group === 'TE' ? 'bg-purple-100 text-purple-700' :
+                        group === 'BE' ? 'bg-orange-100 text-orange-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        <GraduationCap className="w-5 h-5" />
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                              {note.title}
-                            </h3>
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                note.batch === 'All' 
-                                  ? 'bg-gray-100 text-gray-700'
-                                  : note.batch === 'Basic'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-purple-100 text-purple-700'
-                              }`}>
-                                {note.batch}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {note.fileFormat?.toUpperCase()} • {formatFileSize(note.fileSize)}
-                              </span>
+                      <h3 className="text-lg font-bold text-gray-800">
+                        {group === 'Common' ? 'Common Notes (All Years)' : `${group} Notes`}
+                      </h3>
+                      <span className="text-sm text-gray-500">({groupedNotes[group].length})</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {groupedNotes[group].map((note) => (
+                        <div
+                          key={note.id}
+                          className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition hover:border-indigo-200"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0">
+                              {getFileIcon(note.fileName)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <h4 className="text-base font-semibold text-gray-800">
+                                    {note.title}
+                                  </h4>
+                                </div>
+                              </div>
+                              
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                {/* Class Year Badge */}
+                                {note.classYear && (
+                                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                    note.classYear === 'FE' ? 'bg-green-100 text-green-700' :
+                                    note.classYear === 'SE' ? 'bg-blue-100 text-blue-700' :
+                                    note.classYear === 'TE' ? 'bg-purple-100 text-purple-700' :
+                                    'bg-orange-100 text-orange-700'
+                                  }`}>
+                                    {note.classYear}
+                                  </span>
+                                )}
+                                {/* Division Badge */}
+                                {note.division && (
+                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
+                                    Div {note.division}
+                                  </span>
+                                )}
+                                {/* Batch Badge */}
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                  !note.batch || note.batch === 'all'
+                                    ? 'bg-gray-100 text-gray-600'
+                                    : note.batch === 'basic'
+                                    ? 'bg-sky-100 text-sky-700'
+                                    : 'bg-violet-100 text-violet-700'
+                                }`}>
+                                  {!note.batch || note.batch === 'all' ? 'All Batches' : note.batch.charAt(0).toUpperCase() + note.batch.slice(1)}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {note.fileFormat?.toUpperCase()} • {formatFileSize(note.fileSize)}
+                                </span>
+                              </div>
+                              
+                              {note.description && (
+                                <p className="text-sm text-gray-600 mb-3">{note.description}</p>
+                              )}
+                              
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 mb-3">
+                                <span>📎 {note.fileName}</span>
+                                <span>👤 {note.uploadedByName || note.uploadedBy || 'Unknown'}</span>
+                                <span>📅 {note.createdAt && !isNaN(note.createdAt.getTime()) ? note.createdAt.toLocaleDateString() : 'Unknown'}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  onClick={() => handleDownload(note)}
+                                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition text-sm font-medium shadow-sm"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </button>
+                                
+                                <button
+                                  onClick={() => handlePreview(note)}
+                                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition text-sm font-medium border border-blue-200"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Preview
+                                </button>
+                                
+                                {canManageNotes && (
+                                  <button
+                                    onClick={() => handleDelete(note)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-medium border border-red-200"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                        
-                        {note.description && (
-                          <p className="text-sm text-gray-600 mb-4">{note.description}</p>
-                        )}
-                        
-                        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 mb-4">
-                          <span>📎 {note.fileName}</span>
-                          <span>👤 {note.uploadedByName || note.uploadedBy || 'Unknown'}</span>
-                          <span>📅 {note.createdAt?.toLocaleDateString()}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={() => handleDownload(note)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition text-sm font-medium shadow-sm"
-                          >
-                            <Download className="w-4 h-4" />
-                            Download
-                          </button>
-                          
-                          <button
-                            onClick={() => handlePreview(note)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition text-sm font-medium border border-blue-200"
-                          >
-                            <Eye className="w-4 h-4" />
-                            Preview
-                          </button>
-                          
-                          {canManageNotes && (
-                            <button
-                              onClick={() => handleDelete(note)}
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-medium border border-red-200"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
+                  <p className="text-sm text-gray-500">
+                    Showing {startIndex + 1}-{Math.min(startIndex + PAGE_SIZE, filteredNotes.length)} of {filteredNotes.length} notes
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-8 h-8 rounded-lg text-sm font-medium ${
+                            currentPage === pageNum
+                              ? 'bg-indigo-600 text-white'
+                              : 'border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-gray-200">
                 <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
@@ -536,8 +747,8 @@ const handleUpload = async (e) => {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">No Notes Found</h3>
                 <p className="text-gray-600 max-w-md mx-auto mb-6">
-                  {searchTerm 
-                    ? 'No notes match your search criteria.'
+                  {searchTerm || filterClassYear !== 'All' || filterDivision !== 'All'
+                    ? 'No notes match your filter criteria.'
                     : 'Upload your first note to get started!'}
                 </p>
               </div>

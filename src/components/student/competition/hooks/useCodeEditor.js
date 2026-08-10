@@ -47,6 +47,7 @@ export default function useCodeEditor(
   const [asyncStatus, setAsyncStatus] = useState('idle');
   const [asyncResult, setAsyncResult] = useState(null);
   const [pollCount, setPollCount] = useState(0);
+  const [customInput, setCustomInput] = useState('');
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -386,6 +387,9 @@ export default function useCodeEditor(
     lastRunTime,
     asyncStatus,
     asyncResult,
-    pollCount
+    pollCount,
+    customInput,
+    setCustomInput,
+    handleRunWithCustomInput: handleRunCode
   };
 }

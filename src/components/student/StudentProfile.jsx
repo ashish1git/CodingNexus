@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn, Lock, AlertCircle, Layers } from 'lucide-react';
+import { ArrowLeft, Camera, User, Mail, Phone, Hash, Award, Calendar, X, Check, Loader, ZoomIn, Lock, AlertCircle, Layers, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useGuest } from '../../context/GuestContext';
 import { studentService } from '../../services/studentService';
@@ -47,14 +47,17 @@ const StudentProfile = () => {
   }, [userDetails?.studentProfile?.profilePhotoUrl, userDetails?.profilePhotoUrl]);
 
   const handleDivisionUpdate = async () => {
-    if (!divisionInput) return;
+    if (!classYearInput) {
+      toast.error('Please select your class year');
+      return;
+    }
     setSavingDivision(true);
     try {
-      await studentService.updateProfile({ division: divisionInput });
+      await studentService.updateProfile({ classYear: classYearInput, division: divisionInput || '' });
       await refreshUser();
-      toast.success('Division updated successfully!');
+      toast.success('Profile updated successfully!');
     } catch (err) {
-      toast.error('Failed to update division');
+      toast.error('Failed to update profile');
     } finally {
       setSavingDivision(false);
     }
@@ -267,15 +270,17 @@ const StudentProfile = () => {
   const formattedName = formatDisplayName(userDetails?.studentProfile?.name || userDetails?.name);
   const userFirstName = isGuest ? guestUser?.username : (formattedName.split(' ')[0] || 'User');
   const studentProfile = userDetails?.studentProfile || {};
+  const currentClassYear = studentProfile?.classYear || userDetails?.classYear || '';
   const currentDivision = studentProfile?.division || userDetails?.division || '';
   const joinedDate = new Date(userDetails?.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
+  const [classYearInput, setClassYearInput] = useState(currentClassYear);
   const [divisionInput, setDivisionInput] = useState(currentDivision);
 
-  // Keep divisionInput in sync when userDetails changes (e.g. after refresh)
   useEffect(() => {
+    setClassYearInput(currentClassYear);
     setDivisionInput(currentDivision);
-  }, [currentDivision]);
+  }, [currentClassYear, currentDivision]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -357,49 +362,43 @@ const StudentProfile = () => {
               </div>
             </div>
 
-            {/* Division Selector Alert - shown prominently when not set */}
+            {/* Class Year & Division Selector */}
             {isGuest ? null : (
-              <div className={`px-4 sm:px-8 mb-4 ${!currentDivision ? 'block' : 'hidden'}`}>
+              <div className={`px-4 sm:px-8 mb-4 ${!currentClassYear || !currentDivision ? 'block' : 'hidden'}`}>
                 <div className="p-4 bg-amber-900/40 border border-amber-600/50 rounded-lg">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-amber-300 mb-2">Please select your division to complete your profile</p>
+                      <p className="text-sm font-medium text-amber-300 mb-2">Please select your class year and division to complete your profile</p>
                       <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          value={classYearInput}
+                          onChange={(e) => setClassYearInput(e.target.value)}
+                          className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="">Year</option>
+                          <option value="FE">FE - First Year</option>
+                          <option value="SE">SE - Second Year</option>
+                          <option value="TE">TE - Third Year</option>
+                          <option value="BE">BE - Final Year</option>
+                        </select>
                         <select
                           value={divisionInput}
                           onChange={(e) => setDivisionInput(e.target.value)}
                           className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-indigo-500"
                         >
-                          <option value="">-- Select Division --</option>
-                          <optgroup label="FE (First Year)">
-                            <option value="FE-A">FE-A</option>
-                            <option value="FE-B">FE-B</option>
-                            <option value="FE-C">FE-C</option>
-                          </optgroup>
-                          <optgroup label="SE (Second Year)">
-                            <option value="SE-A">SE-A</option>
-                            <option value="SE-B">SE-B</option>
-                            <option value="SE-C">SE-C</option>
-                          </optgroup>
-                          <optgroup label="TE (Third Year)">
-                            <option value="TE-A">TE-A</option>
-                            <option value="TE-B">TE-B</option>
-                            <option value="TE-C">TE-C</option>
-                          </optgroup>
-                          <optgroup label="BE (Final Year)">
-                            <option value="BE-A">BE-A</option>
-                            <option value="BE-B">BE-B</option>
-                            <option value="BE-C">BE-C</option>
-                          </optgroup>
+                          <option value="">Division</option>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
+                          <option value="C">C</option>
                         </select>
                         <button
                           onClick={handleDivisionUpdate}
-                          disabled={!divisionInput || savingDivision}
+                          disabled={!classYearInput || savingDivision}
                           className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
                         >
                           {savingDivision ? <Loader className="w-3 h-3 animate-spin" /> : null}
-                          Save Division
+                          Save
                         </button>
                       </div>
                     </div>
@@ -408,13 +407,19 @@ const StudentProfile = () => {
               </div>
             )}
 
-            {isGuest ? null : currentDivision ? (
+            {isGuest ? null : currentClassYear ? (
               <div className="px-4 sm:px-8 mb-4">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <Layers className="w-4 h-4 text-indigo-400" />
-                  <span>Division: <span className="text-white font-medium">{currentDivision}</span></span>
+                <div className="flex flex-wrap items-center gap-3 text-slate-400 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4 text-indigo-400" />
+                    <span>Year: <span className="text-white font-medium">{currentClassYear}</span></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-indigo-400" />
+                    <span>Division: <span className="text-white font-medium">{currentDivision || '—'}</span></span>
+                  </div>
                   <button
-                    onClick={() => setDivisionInput('')}
+                    onClick={() => { setClassYearInput(''); setDivisionInput(''); }}
                     className="text-xs text-indigo-400 hover:text-indigo-300 ml-2"
                   >
                     Change

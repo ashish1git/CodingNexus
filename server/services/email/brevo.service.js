@@ -7,133 +7,165 @@
  * Environment Variables Required:
  * - BREVO_API_KEY: Primary Brevo API key (official account)
  * - BREVO_API_KEY_SECONDARY: Fallback Brevo API key (backup account)
- * - EMAIL_FROM: Primary sender email address
- * - EMAIL_FROM_SECONDARY: Fallback sender email address
+ * - EMAIL_FROM: Primary sender email address (MUST be verified in Brevo)
+ * - EMAIL_FROM_SECONDARY: Fallback sender email address (MUST be verified in Brevo)
  * - EMAIL_FROM_NAME: Sender display name
+ * 
+ * IMPORTANT: Both EMAIL_FROM and EMAIL_FROM_SECONDARY must be verified sender
+ * identities in their respective Brevo accounts. Without verification, Brevo
+ * returns a 200 OK with a messageId but silently drops the email.
  */
 
 import * as brevo from '@getbrevo/brevo';
 
-// Validate required environment variables
-const validateConfig = () => {
-  const hasPrimary = process.env.BREVO_API_KEY && process.env.EMAIL_FROM && process.env.EMAIL_FROM_NAME;
-  const hasFallback = process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY;
-  
-  if (!hasPrimary && !hasFallback) {
-    console.warn('⚠️  Missing Brevo configuration: no API keys configured');
-    return false;
-  }
-  return true;
-};
+const log = (msg, ...args) => console.log(msg, ...args);
+const warn = (msg, ...args) => console.warn(msg, ...args);
+const error = (msg, ...args) => console.error(msg, ...args);
 
-// API client cache: primary + fallback
-let apiPrimary = null;
-let apiFallback = null;
-
-const initClient = (apiKey) => {
+const initClient = (apiKey, label) => {
+  if (!apiKey) return null;
   try {
     const api = new brevo.TransactionalEmailsApi();
     api.authentications['apiKey'].apiKey = apiKey;
+    log(`✅ Brevo client "${label}" initialized`);
     return api;
-  } catch (error) {
-    console.error('❌ Failed to initialize Brevo client:', error.message);
+  } catch (err) {
+    error(`❌ Failed to init Brevo client "${label}":`, err.message);
     return null;
   }
 };
 
-const initializeBrevo = () => {
-  if (!apiPrimary && process.env.BREVO_API_KEY) {
-    apiPrimary = initClient(process.env.BREVO_API_KEY);
-    if (apiPrimary) console.log('✅ Brevo primary (official) initialized');
-  }
-  if (!apiFallback && process.env.BREVO_API_KEY_SECONDARY) {
-    apiFallback = initClient(process.env.BREVO_API_KEY_SECONDARY);
-    if (apiFallback) console.log('✅ Brevo fallback (backup) initialized');
-  }
-  return apiPrimary || apiFallback;
+/**
+ * Try sending with one Brevo account.
+ * Returns { success, messageId } on success, throws on failure.
+ */
+const trySend = async (apiKey, senderEmail, options) => {
+  const { to, subject, html, text, cc, bcc, attachments } = options;
+
+  const clientLabel = apiKey === process.env.BREVO_API_KEY ? 'primary' : 'fallback';
+  const api = initClient(apiKey, clientLabel);
+  if (!api) throw new Error(`Brevo client "${clientLabel}" init failed`);
+
+  const sendSmtpEmail = new brevo.SendSmtpEmail();
+  sendSmtpEmail.sender = { email: senderEmail, name: process.env.EMAIL_FROM_NAME || 'Coding Nexus' };
+  sendSmtpEmail.to = [{ email: to }];
+  sendSmtpEmail.subject = subject;
+  if (html) sendSmtpEmail.htmlContent = html;
+  if (text) sendSmtpEmail.textContent = text;
+  if (cc?.length) sendSmtpEmail.cc = cc.map(e => ({ email: e }));
+  if (bcc?.length) sendSmtpEmail.bcc = bcc.map(e => ({ email: e }));
+  if (attachments?.length) sendSmtpEmail.attachment = attachments;
+
+  log(`  🔌 Calling Brevo API (${clientLabel}, sender=${senderEmail})...`);
+  const result = await api.sendTransacEmail(sendSmtpEmail);
+  const messageId = result?.body?.messageId || result?.response?.body?.messageId || result?.messageId || 'unknown';
+
+  log(`  📬 Brevo accepted (${clientLabel}): messageId=${messageId}` +
+    `  ⚠️  Verify sender "${senderEmail}" is approved in Brevo dashboard, or email may be silently dropped.`);
+
+  return { success: true, messageId };
 };
 
 /**
- * Send email using Brevo with automatic fallback to secondary account
- * 
- * @param {Object} options - Email options
+ * Send email using Brevo with automatic fallback to secondary account.
+ *
+ * IMPORTANT: Brevo returns 200 OK + messageId even for unverified senders.
+ * The email will NOT actually be delivered unless the sender email is verified
+ * in the Brevo dashboard (Senders & IP → Senders → Verify).
+ *
+ * @param {Object} options
  * @param {string} options.to - Recipient email address
  * @param {string} options.subject - Email subject
- * @param {string} options.html - HTML email body (optional)
- * @param {string} options.text - Plain text email body (optional)
+ * @param {string} options.html - HTML body (optional)
+ * @param {string} options.text - Plain text body (optional)
  * @param {Array} options.cc - CC recipients (optional)
  * @param {Array} options.bcc - BCC recipients (optional)
  * @param {Array} options.attachments - Attachments (optional)
- * 
- * @returns {Promise<Object>} - { success: boolean, messageId?: string, error?: string, usedFallback?: boolean }
+ * @param {boolean} options.forceFallback - If true, also send via fallback even when primary succeeds.
+ *   Use this when you suspect the primary sender may be unverified and you need delivery guarantees.
+ *
+ * @returns {Promise<Object>} - { success, messageId?, error?, usedFallback?, triedPrimary?, triedFallback? }
  */
 export const sendEmail = async (options) => {
-  const { to, subject, html, text, cc, bcc, attachments } = options;
+  const { to, subject, html, text, cc, bcc, attachments, forceFallback } = options;
 
   if (!to || !subject) {
-    return { success: false, error: 'Missing required parameters: to and subject are required' };
+    return { success: false, error: 'Missing to or subject', triedPrimary: false, triedFallback: false };
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(to)) {
-    return { success: false, error: `Invalid email address: ${to}` };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return { success: false, error: `Invalid email: ${to}`, triedPrimary: false, triedFallback: false };
   }
 
-  const trySend = async (apiKey, senderEmail) => {
-    const api = initClient(apiKey);
-    if (!api) return { success: false, error: 'Brevo client init failed' };
-
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.sender = { email: senderEmail, name: process.env.EMAIL_FROM_NAME || 'Coding Nexus' };
-    sendSmtpEmail.to = [{ email: to }];
-    sendSmtpEmail.subject = subject;
-    if (html) sendSmtpEmail.htmlContent = html;
-    if (text) sendSmtpEmail.textContent = text;
-    if (cc?.length) sendSmtpEmail.cc = cc.map(e => ({ email: e }));
-    if (bcc?.length) sendSmtpEmail.bcc = bcc.map(e => ({ email: e }));
-    if (attachments?.length) sendSmtpEmail.attachment = attachments;
-
-    const result = await api.sendTransacEmail(sendSmtpEmail);
-    const messageId = result.body?.messageId || result.messageId || 'unknown';
-    return { success: true, messageId };
-  };
-
-  // Try primary first
+  // ── Primary ──
   if (process.env.BREVO_API_KEY && process.env.EMAIL_FROM) {
     try {
-      console.log(`📤 Sending via primary (${process.env.EMAIL_FROM}) to ${to}`);
-      const result = await trySend(process.env.BREVO_API_KEY, process.env.EMAIL_FROM);
-      if (result.success) {
-        console.log(`📧 Sent successfully via primary, Message ID: ${result.messageId}`);
-        return { ...result, usedFallback: false };
+      log(`📤 PRIMARY → ${to} (from: ${process.env.EMAIL_FROM})`);
+      const result = await trySend(process.env.BREVO_API_KEY, process.env.EMAIL_FROM, options);
+      log(`✅ PRIMARY accepted: messageId=${result.messageId}`);
+
+      // If forceFallback is set, also fire the fallback for delivery confidence.
+      // This handles Brevo's silent-drop behavior for unverified senders.
+      if (forceFallback && process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY) {
+        try {
+          log(`📤 FALLBACK (force) → ${to} (from: ${process.env.EMAIL_FROM_SECONDARY})`);
+          const fbResult = await trySend(process.env.BREVO_API_KEY_SECONDARY, process.env.EMAIL_FROM_SECONDARY, options);
+          log(`✅ FALLBACK (force) accepted: messageId=${fbResult.messageId}`);
+          return { success: true, messageId: fbResult.messageId, usedFallback: true, triedPrimary: true, triedFallback: true };
+        } catch (fbErr) {
+          warn(`⚠️  Force-fallback failed: ${fbErr.message}`);
+          // Primary succeeded, so return that success even though fallback failed
+        }
       }
+
+      return { success: true, messageId: result.messageId, usedFallback: false, triedPrimary: true };
     } catch (err) {
-      const isQuotaError = err.status === 429 || err.response?.status === 429 || 
-        (err.message && err.message.includes('429'));
-      if (isQuotaError) {
-        console.warn(`⚠️  Primary Brevo quota exhausted (429), trying fallback...`);
+      const statusCode = err.statusCode || err.response?.statusCode || err.status;
+      const body = err.body ? JSON.stringify(err.body).substring(0, 300) : '';
+      warn(`⚠️  PRIMARY failed: status=${statusCode}, msg="${err.message}", body=${body}`);
+
+      if (statusCode === 401 || statusCode === 403) {
+        warn('   → Auth error. Check BREVO_API_KEY validity.');
+      } else if (statusCode === 429) {
+        warn('   → Daily quota exhausted on primary. Falling back...');
+      } else if (statusCode === 400) {
+        warn('   → Bad request. Check sender email is VERIFIED in Brevo dashboard.');
       } else {
-        console.warn(`⚠️  Primary Brevo failed: ${err.message}. Trying fallback...`);
+        warn(`   → Unexpected error. Falling back to secondary...`);
       }
     }
+  } else {
+    warn('⚠️  PRIMARY not configured (missing BREVO_API_KEY or EMAIL_FROM)');
   }
 
-  // Try fallback
+  // ── Fallback ──
   if (process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY) {
     try {
-      console.log(`📤 Sending via fallback (${process.env.EMAIL_FROM_SECONDARY}) to ${to}`);
-      const result = await trySend(process.env.BREVO_API_KEY_SECONDARY, process.env.EMAIL_FROM_SECONDARY);
-      if (result.success) {
-        console.log(`📧 Sent successfully via fallback, Message ID: ${result.messageId}`);
-        return { ...result, usedFallback: true };
-      }
+      log(`📤 FALLBACK → ${to} (from: ${process.env.EMAIL_FROM_SECONDARY})`);
+      const result = await trySend(process.env.BREVO_API_KEY_SECONDARY, process.env.EMAIL_FROM_SECONDARY, options);
+      log(`✅ FALLBACK accepted: messageId=${result.messageId}`);
+      return { success: true, messageId: result.messageId, usedFallback: true, triedPrimary: true, triedFallback: true };
     } catch (err) {
-      console.error(`❌ Fallback Brevo also failed:`, err.message);
-      return { success: false, error: `Both primary and fallback failed: ${err.message}` };
+      const statusCode = err.statusCode || err.response?.statusCode || err.status;
+      const body = err.body ? JSON.stringify(err.body).substring(0, 300) : '';
+      error(`❌ FALLBACK also failed: status=${statusCode}, msg="${err.message}", body=${body}`);
+      return {
+        success: false,
+        error: `Primary and fallback both failed. Last error: ${err.message}`,
+        triedPrimary: true,
+        triedFallback: true
+      };
     }
+  } else {
+    warn('⚠️  FALLBACK not configured (missing BREVO_API_KEY_SECONDARY or EMAIL_FROM_SECONDARY)');
   }
 
-  return { success: false, error: 'No Brevo account available' };
+  return {
+    success: false,
+    error: 'No Brevo account available. Configure BREVO_API_KEY + EMAIL_FROM, or BREVO_API_KEY_SECONDARY + EMAIL_FROM_SECONDARY.',
+    triedPrimary: !!process.env.BREVO_API_KEY,
+    triedFallback: !!process.env.BREVO_API_KEY_SECONDARY
+  };
 };
 
 /**
@@ -364,26 +396,26 @@ ${portalName} Team
  * @returns {Object} - { isConfigured: boolean, message: string }
  */
 export const verifyConfiguration = () => {
-  if (!validateConfig()) {
+  const hasPrimary = !!(process.env.BREVO_API_KEY && process.env.EMAIL_FROM);
+  const hasFallback = !!(process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY);
+
+  if (!hasPrimary && !hasFallback) {
     return {
       isConfigured: false,
       message: 'Brevo configuration is incomplete. Check environment variables.',
-      apiKey: process.env.BREVO_API_KEY,
-      sender: process.env.EMAIL_FROM,
-      senderName: process.env.EMAIL_FROM_NAME,
-      hasSecondary: !!(process.env.BREVO_API_KEY_SECONDARY && process.env.EMAIL_FROM_SECONDARY)
+      primaryKey: !!process.env.BREVO_API_KEY,
+      primarySender: process.env.EMAIL_FROM || 'not set',
+      senderName: process.env.EMAIL_FROM_NAME || 'not set',
+      hasSecondary: hasFallback
     };
   }
 
-  const primary = process.env.BREVO_API_KEY ? initClient(process.env.BREVO_API_KEY) : null;
-  const fallback = process.env.BREVO_API_KEY_SECONDARY ? initClient(process.env.BREVO_API_KEY_SECONDARY) : null;
-  
   return {
     isConfigured: true,
     message: 'Brevo email service is properly configured',
-    primary: primary ? `${process.env.EMAIL_FROM_NAME} <${process.env.EMAIL_FROM}>` : 'not configured',
-    fallback: fallback ? `Backup: ${process.env.EMAIL_FROM_SECONDARY}` : 'not configured',
-    fallbackAvailable: !!fallback
+    primary: hasPrimary ? `${process.env.EMAIL_FROM_NAME || 'Coding Nexus'} <${process.env.EMAIL_FROM}>` : 'not configured',
+    fallback: hasFallback ? `Backup: ${process.env.EMAIL_FROM_SECONDARY}` : 'not configured',
+    fallbackAvailable: hasFallback
   };
 };
 

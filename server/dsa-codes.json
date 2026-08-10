@@ -13,6 +13,13 @@
       "maxUses": 1,
       "used": 1,
       "created": "2026-07-19T15:59:10.691Z"
+    },
+    {
+      "code": "CNX-DSA-96D0B4",
+      "label": "SE-A",
+      "maxUses": 10,
+      "used": 1,
+      "created": "2026-07-30T16:00:58.386Z"
     }
   ]
 }

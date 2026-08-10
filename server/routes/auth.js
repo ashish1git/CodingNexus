@@ -29,7 +29,7 @@ const generateToken = (userId, role) => {
 // Student Signup
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, name, moodleId, batch, phone: rawPhone, mobile } = req.body;
+    const { email, password, name, moodleId, batch, classYear, division, phone: rawPhone, mobile } = req.body;
     const phone = rawPhone || mobile;  // accept both field names
 
     // Check if user exists
@@ -64,6 +64,8 @@ router.post('/signup', async (req, res) => {
           create: {
             name,
             batch,
+            classYear: classYear || null,
+            division: division || null,
             phone
           }
         }
@@ -157,6 +159,8 @@ router.post('/login', async (req, res) => {
         studentProfile: { ...user.studentProfile, name: formatDisplayName(user.studentProfile?.name) },
         // Add commonly accessed fields at root level
         batch: user.studentProfile?.batch,
+        classYear: user.studentProfile?.classYear,
+        division: user.studentProfile?.division,
         name: formatDisplayName(user.studentProfile?.name),
         phone: user.studentProfile?.phone,
         rollNo: user.studentProfile?.rollNo,
@@ -318,6 +322,7 @@ router.get('/me', authenticate, async (req, res) => {
       // Add profile data directly at root level for easy access
       ...(user.studentProfile && {
         batch: user.studentProfile.batch,
+        classYear: user.studentProfile.classYear,
         division: user.studentProfile.division,
         name: formatDisplayName(user.studentProfile.name),
         phone: user.studentProfile.phone,

@@ -16,6 +16,8 @@ const Signup = () => {
     rollNo: '',
     moodleId: '',
     mobile: '',
+    classYear: '',
+    division: '',
     batch: 'Basic',
     password: '',
     confirmPassword: ''
@@ -38,6 +40,11 @@ const Signup = () => {
   const validateForm = () => {
     if (!formData.name || !formData.rollNo || !formData.moodleId || !formData.mobile) {
       toast.error('Please fill in all fields');
+      return false;
+    }
+
+    if (!formData.classYear) {
+      toast.error('Please select your class year');
       return false;
     }
 
@@ -75,7 +82,9 @@ const Signup = () => {
         rollNo: formData.rollNo,
         moodleId: formData.moodleId,
         mobile: formData.mobile,
-        batch: formData.batch
+        batch: formData.batch,
+        classYear: formData.classYear,
+        division: formData.division || ''
       };
 
       await signup(email, formData.password, userData);
@@ -191,10 +200,50 @@ const Signup = () => {
             </div>
           </div>
 
+          {/* Class Year & Division */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label htmlFor="classYear" className="block text-sm font-medium text-gray-700 mb-2">
+                Class Year *
+              </label>
+              <select
+                id="classYear"
+                name="classYear"
+                value={formData.classYear}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-500 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-gray-900"
+                required
+              >
+                <option value="">Select Year</option>
+                <option value="FE">FE - First Year</option>
+                <option value="SE">SE - Second Year</option>
+                <option value="TE">TE - Third Year</option>
+                <option value="BE">BE - Final Year</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="division" className="block text-sm font-medium text-gray-700 mb-2">
+                Division
+              </label>
+              <select
+                id="division"
+                name="division"
+                value={formData.division}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-500 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-gray-900"
+              >
+                <option value="">All Divisions</option>
+                <option value="A">Division A</option>
+                <option value="B">Division B</option>
+                <option value="C">Division C</option>
+              </select>
+            </div>
+          </div>
+
           {/* Batch Selection */}
           <div>
             <label htmlFor="batch" className="block text-sm font-medium text-gray-700 mb-2">
-              Select Batch
+              Training Batch
             </label>
             <select
               id="batch"

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, Loader2, CheckCircle, XCircle, ExternalLink, MessageSquare, Search, Eye
+  FileText, Loader2, CheckCircle, XCircle, ExternalLink, MessageSquare, Search, Eye, Download
 } from 'lucide-react';
 import dsaService from '../../../services/dsaService';
+import { getDownloadUrl, downloadRawFile, getPreviewUrl, getDownloadFileName } from '../../../services/cloudinaryUpload';
 
 const DsaNoteReview = ({ onAction }) => {
   const [notes, setNotes] = useState([]);
@@ -42,7 +43,28 @@ const DsaNoteReview = ({ onAction }) => {
     setRemarks(note.remarks || '');
   };
 
-  const previewFile = (url) => window.open(url, '_blank');
+  const previewFile = (url) => {
+    const previewUrl = getPreviewUrl(url);
+    window.open(previewUrl, '_blank');
+  };
+
+  const downloadFile = async (note) => {
+    try {
+      const downloadUrl = getDownloadUrl(note.fileUrl);
+      const fileName = getDownloadFileName(note.title || 'note', note.fileType || 'pdf');
+      if (downloadUrl && downloadUrl !== note.fileUrl) {
+        // Image resource type (PDF uploaded as image) - use direct download URL with fl_attachment
+        await downloadRawFile(downloadUrl, fileName);
+      } else {
+        // Raw file - use direct URL with fetch-based download
+        await downloadRawFile(note.fileUrl, fileName);
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      // Fallback: open in new tab
+      window.open(note.fileUrl, '_blank');
+    }
+  };
 
   if (loading) {
     return (
@@ -126,6 +148,13 @@ const DsaNoteReview = ({ onAction }) => {
                   >
                     <Eye className="w-4 h-4" />
                   </button>
+                  <button
+                    onClick={() => downloadFile(note)}
+                    className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                    title="Download file"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
                   {note.status === 'pending' && (
                     <button
                       onClick={() => openReview(note)}
@@ -157,9 +186,15 @@ const DsaNoteReview = ({ onAction }) => {
               )}
               <button
                 onClick={() => previewFile(reviewModal.fileUrl)}
-                className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mt-2 font-medium"
+                className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mt-1 font-medium"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> Preview file
+              </button>
+              <button
+                onClick={() => downloadFile(reviewModal)}
+                className="flex items-center gap-1 text-sm text-green-600 hover:text-green-800 mt-1 font-medium"
+              >
+                <Download className="w-3.5 h-3.5" /> Download file
               </button>
             </div>
 

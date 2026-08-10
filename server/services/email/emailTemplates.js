@@ -609,6 +609,38 @@ export const ticketReplyNotification = (studentName, subject, replyMessage) => {
   return baseTemplate(content);
 };
 
+/**
+ * Admin-Initiated Password Reset Email
+ */
+export const passwordResetByAdmin = (userName, newPassword, moodleId) => {
+  const content = `
+    <p class="greeting">Hello ${userName},</p>
+
+    <p>Your Coding Nexus account password has been reset by an administrator.</p>
+
+    <div class="success-box" style="text-align: center;">
+      <p style="font-size: 14px; margin-bottom: 10px;">Your New Login Credentials</p>
+      <p style="font-size: 16px; margin: 8px 0;"><strong>Moodle ID:</strong> ${moodleId}</p>
+      <p style="font-size: 24px; font-weight: 700; letter-spacing: 2px; color: ${PRIMARY_COLOR}; margin: 15px 0; font-family: 'Courier New', monospace;">${newPassword}</p>
+      <p style="font-size: 12px; color: #065f46;">Please change your password after logging in</p>
+    </div>
+
+    <div class="section" style="text-align:center;">
+      <p>Login at: <strong>codingnexus.apsit.edu.in</strong></p>
+    </div>
+
+    <div class="warning-box">
+      <strong>⚠️ Important</strong>
+      <p>For security, please log in and change your password immediately from your profile settings.</p>
+    </div>
+
+    <div class="section">
+      <p style="margin-top: 30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
 export default {
   teamApplicationSubmission,
   teamApplicationStatus,
@@ -616,6 +648,7 @@ export default {
   certificateDelivery,
   generalNotification,
   passwordResetOTP,
+  passwordResetByAdmin,
   subadminWelcome,
   ticketReplyNotification,
   plainTextFallback

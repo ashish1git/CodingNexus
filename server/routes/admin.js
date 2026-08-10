@@ -5,7 +5,7 @@ import prisma from '../config/db.js';
 import { authenticate, authorizeRole, checkPermission } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
 import { sendEmail } from '../services/email/brevo.service.js';
-import { subadminWelcome, ticketReplyNotification } from '../services/email/emailTemplates.js';
+import { subadminWelcome, ticketReplyNotification, passwordResetByAdmin } from '../services/email/emailTemplates.js';
 
 const router = express.Router();
 
@@ -60,7 +60,7 @@ router.get('/users/:userId', async (req, res) => {
 // Create student (admin only) - auto-activated
 router.post('/students', async (req, res) => {
   try {
-    const { email, password, name, moodleId, batch, phone, rollNo, division } = req.body;
+    const { email, password, name, moodleId, batch, classYear, division, phone, rollNo } = req.body;
 
     // Check if user exists
     const existingUser = await prisma.user.findFirst({
@@ -98,8 +98,9 @@ router.post('/students', async (req, res) => {
             name,
             rollNo,
             batch: normalizedBatch,
-            phone,
-            division
+            classYear: classYear || null,
+            division: division || null,
+            phone
           }
         }
       },
@@ -150,6 +151,7 @@ router.get('/students', async (req, res) => {
           name: formatDisplayName(student.name),
           rollNo: student.rollNo,
           batch: student.batch,
+          classYear: student.classYear,
           phone: student.phone,
           division: student.division,
           profilePhotoUrl: student.profilePhotoUrl,
@@ -166,7 +168,7 @@ router.get('/students', async (req, res) => {
 router.put('/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, batch, phone, profilePhotoUrl, isActive, division } = req.body;
+    const { name, batch, classYear, division, phone, profilePhotoUrl, isActive } = req.body;
 
     console.log('🔧 UPDATE REQUEST for student:', id);
     console.log('📦 Request body:', { name, batch, phone, profilePhotoUrl, isActive, division });
@@ -185,6 +187,7 @@ router.put('/students/:id', async (req, res) => {
     if (batch !== undefined) updateData.batch = batch.toLowerCase();
     if (phone !== undefined) updateData.phone = phone;
     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = profilePhotoUrl;
+    if (classYear !== undefined) updateData.classYear = classYear;
     if (division !== undefined) updateData.division = division;
     
     console.log('🎯 Update data for Prisma:', updateData);
@@ -211,6 +214,7 @@ router.put('/students/:id', async (req, res) => {
           name: formatDisplayName(currentUser.studentProfile?.name),
           rollNo: currentUser.studentProfile?.rollNo,
           batch: currentUser.studentProfile?.batch,
+          classYear: currentUser.studentProfile?.classYear,
           phone: currentUser.studentProfile?.phone,
           division: currentUser.studentProfile?.division,
           profilePhotoUrl: currentUser.studentProfile?.profilePhotoUrl
@@ -226,6 +230,7 @@ router.put('/students/:id', async (req, res) => {
         userId: id,
         name: name || 'Student',
         batch: batch ? batch.toLowerCase() : 'basic',
+        classYear: classYear || null,
         phone,
         division,
         profilePhotoUrl
@@ -256,6 +261,7 @@ router.put('/students/:id', async (req, res) => {
         name: updatedUser.studentProfile?.name,
         rollNo: updatedUser.studentProfile?.rollNo,
         batch: updatedUser.studentProfile?.batch,
+        classYear: updatedUser.studentProfile?.classYear,
         phone: updatedUser.studentProfile?.phone,
         division: updatedUser.studentProfile?.division,
         profilePhotoUrl: updatedUser.studentProfile?.profilePhotoUrl
@@ -277,6 +283,65 @@ router.delete('/students/:id', async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ADMIN PASSWORD RESET (no rate limit) ============
+router.post('/students/reset-password', authenticate, authorizeRole('admin', 'subadmin', 'superadmin'), async (req, res) => {
+  try {
+    const { studentId } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ success: false, error: 'Student ID is required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: studentId },
+      include: { studentProfile: true }
+    });
+
+    if (!user || user.role !== 'student') {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    // Generate new random 8-char password
+    const newPassword = crypto.randomBytes(6).toString('hex'); // 12 chars
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: studentId },
+      data: { password: hashedPassword }
+    });
+
+    // Send email asynchronously — responds immediately
+    res.json({
+      success: true,
+      message: 'Password reset successfully',
+      newPassword,
+      studentName: user.studentProfile?.name || user.email
+    });
+
+    // Send email in background
+    const studentName = user.studentProfile?.name || 'Student';
+    const targetEmail = user.email?.includes('@') ? user.email : `${user.moodleId || ''}@apsit.edu.in`;
+
+    sendEmail({
+      to: targetEmail,
+      subject: 'Password Reset - Coding Nexus',
+      html: passwordResetByAdmin(studentName, newPassword, user.moodleId || 'N/A'),
+      text: `Hello ${studentName},\n\nYour password has been reset by an admin.\n\nNew Password: ${newPassword}\nLogin at: codingnexus.apsit.edu.in\n\nPlease change your password after logging in.\n\n- Coding Nexus Team`
+    }).then(result => {
+      if (result.success) {
+        console.log(`📧 Password reset email sent to ${targetEmail} via ${result.usedFallback ? 'fallback' : 'primary'}`);
+      } else {
+        console.error(`❌ Failed to send reset email to ${targetEmail}:`, result.error);
+      }
+    }).catch(err => console.error('❌ Email error:', err));
+
+  } catch (error) {
+    console.error('Admin password reset error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -308,7 +373,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 // Upload note
 router.post('/notes', async (req, res) => {
   try {
-    const { title, description, fileUrl, batch, subject } = req.body;
+    const { title, description, fileUrl, batch, classYear, division, subject } = req.body;
 
     // Extract file format from URL or default to pdf
     let fileFormat = 'pdf';
@@ -328,6 +393,8 @@ router.post('/notes', async (req, res) => {
         description,
         fileUrl,
         batch: normalizedBatch,
+        classYear: classYear || null,
+        division: division || null,
         subject,
         uploadedBy: req.user.id
       }
@@ -364,26 +431,27 @@ router.get('/notes', async (req, res) => {
         }
       }
       
-      // Get admin details
-      let uploadedByName = 'Unknown';
+      // Get uploader name
+      let uploadedByName = 'Admin';
       try {
         const user = await prisma.user.findUnique({
           where: { id: note.uploadedBy },
           select: {
             email: true,
-            adminProfile: {
-              select: { name: true }
-            }
+            adminProfile: { select: { name: true } },
+            studentProfile: { select: { name: true } }
           }
         });
         
         if (user?.adminProfile?.name) {
           uploadedByName = user.adminProfile.name;
+        } else if (user?.studentProfile?.name) {
+          uploadedByName = user.studentProfile.name;
         } else if (user?.email) {
           uploadedByName = user.email.split('@')[0];
         }
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error fetching uploader:', error);
       }
       
       return {
@@ -2555,19 +2623,28 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
       });
     }
 
-    // Import email service
+    // Respond immediately, process sending in background
+    res.json({
+      success: true,
+      message: `Bulk email queued for ${recipients.length} recipients`,
+      stats: {
+        total: recipients.length,
+        sent: 0,
+        failed: 0,
+        pending: true
+      }
+    });
+
+    // Process sending asynchronously after response
     const { sendEmail } = await import('../services/email/brevo.service.js');
     
-    // Send emails
     let successCount = 0;
     let failureCount = 0;
-    const errors = [];
 
-    for (const recipient of recipients) {
-      const { name, email } = recipient;
+    for (let i = 0; i < recipients.length; i++) {
+      const { name, email } = recipients[i];
 
       try {
-        // Generate HTML content if not provided
         let html = htmlContent;
         if (!html) {
           html = `
@@ -2642,36 +2719,25 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
           to: email,
           subject: subject,
           html: html,
-          text: `Hello ${name},\n\n${message}\n\nBest regards,\nCoding Nexus Team`
+          text: `Hello ${name},\n\n${message}\n\nBest regards,\nCoding Nexus Team`,
+          forceFallback: true  // Primary sender may be unverified — always fire fallback for guaranteed delivery
         });
 
         if (result.success) {
           successCount++;
         } else {
           failureCount++;
-          errors.push({ email, error: result.error });
         }
 
-        // Small delay to avoid rate limiting
+        // Rate limit: 10 emails/second max (100ms between each)
         await new Promise(resolve => setTimeout(resolve, 100));
 
       } catch (error) {
         failureCount++;
-        errors.push({ email, error: error.message });
       }
     }
 
-    res.json({
-      success: true,
-      message: 'Bulk email operation completed',
-      stats: {
-        total: recipients.length,
-        sent: successCount,
-        failed: failureCount,
-        successRate: ((successCount / recipients.length) * 100).toFixed(1) + '%'
-      },
-      errors: errors.length > 0 ? errors : undefined
-    });
+    console.log(`📧 Bulk email complete: ${successCount} sent, ${failureCount} failed out of ${recipients.length}`);
 
   } catch (error) {
     console.error('Error sending bulk email:', error);

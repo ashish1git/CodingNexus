@@ -7,6 +7,12 @@ import GuestBanner from './components/shared/GuestBanner';
 import GuestLogin from './components/auth/GuestLogin';
 import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from 'react-hot-toast';
+import { loader } from '@monaco-editor/react';
+
+// Pin Monaco CDN to 0.52.2 — 0.55+ has incompatible AMD loader format.
+loader.config({
+  paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' }
+});
 
 // Import actual components
 import LandingPage from './components/layout/LandingPage';
