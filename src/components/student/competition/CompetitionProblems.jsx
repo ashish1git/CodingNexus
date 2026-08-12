@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Clock, Trophy, CheckCircle, AlertCircle, Award, Maximize, Minimize
@@ -7,8 +7,9 @@ import competitionService from '../../../services/competitionService';
 import toast from 'react-hot-toast';
 import Loading from '../../shared/Loading';
 import { SubmissionStatusUI } from '../AsyncSubmissionHandler';
-import { getDifficultyColor } from './utils/starterCode';
+import { getDifficultyColor, seededShuffle } from './utils/starterCode';
 import { formatToIST } from './utils/timeUtils';
+import { useAuth } from '../../../context/AuthContext';
 import { getStorageKey, clearViolationStorage } from './utils/violationUtils';
 
 import useCompetitionFetch from './hooks/useCompetitionFetch';
@@ -27,6 +28,7 @@ const LEFT_DEFAULT = 420;
 const STORAGE_KEY = 'comp_split_width';
 
 const CompetitionProblems = () => {
+  const { currentUser } = useAuth();
   const { competitionId } = useParams();
   const navigate = useNavigate();
 
@@ -126,6 +128,14 @@ const CompetitionProblems = () => {
   } = useCompetitionProtection(competition, {
     submittedRef, serverTimeOffsetRef, onKick: handleKick
   });
+
+  // ── Per-student deterministic problem shuffle ─────────────────────────
+  // Seed = userId + competitionId  →  same student always sees same order,
+  // different students see different orderings. Stable across page reloads.
+  const shuffledProblems = useMemo(() => {
+    const seed = (currentUser?.id || currentUser?.uid || 'anon') + String(competitionId);
+    return seededShuffle(competition?.problems ?? [], seed);
+  }, [competition?.problems, currentUser?.id, currentUser?.uid, competitionId]);
 
   // ── Layout state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('description');
@@ -410,7 +420,7 @@ const CompetitionProblems = () => {
       <div className="flex overflow-hidden" style={{ height: editorFullscreen ? 'calc(100vh - 48px)' : 'calc(100vh - 105px)' }}>
         {/* Problem list sidebar (fixed width) */}
         <ProblemList
-          problems={competition.problems}
+          problems={shuffledProblems}
           selectedProblem={selectedProblem}
           problemSolutions={problemSolutions}
           onSwitchProblem={switchProblem}

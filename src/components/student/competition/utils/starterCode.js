@@ -89,3 +89,47 @@ export function getDifficultyColor(difficulty) {
     default: return 'bg-gray-500/10 text-gray-400';
   }
 }
+
+/**
+ * Hash a string to a 32-bit unsigned integer (simple djb2 variant).
+ * Used as a deterministic PRNG seed.
+ */
+function hashString(str) {
+  let h = 2166136261; // FNV offset basis
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (Math.imul(h, 16777619) >>> 0); // FNV-1a 32-bit
+  }
+  return h;
+}
+
+/**
+ * Deterministic Fisher-Yates shuffle seeded by a string.
+ * Returns a NEW shuffled array — original is not mutated.
+ *
+ * @param {Array}  arr   - Items to shuffle
+ * @param {string} seed  - String seed (e.g. userId + competitionId)
+ * @returns {Array}      - Shuffled copy
+ */
+export function seededShuffle(arr, seed) {
+  if (!arr || arr.length <= 1) return arr ? [...arr] : [];
+
+  const copy = [...arr];
+  let state = hashString(String(seed));
+
+  // Mulberry32 — fast, good-enough 32-bit PRNG
+  const rand = () => {
+    state |= 0;
+    state = (state + 0x6D2B79F5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+
+  return copy;
+}
