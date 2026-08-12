@@ -4,7 +4,7 @@
       "code": "CNX-DSA-AD295A",
       "label": "core team",
       "maxUses": 8,
-      "used": 7,
+      "used": 8,
       "created": "2026-07-19T15:50:10.525Z"
     },
     {
@@ -18,8 +18,15 @@
       "code": "CNX-DSA-96D0B4",
       "label": "SE-A",
       "maxUses": 10,
-      "used": 1,
+      "used": 3,
       "created": "2026-07-30T16:00:58.386Z"
+    },
+    {
+      "code": "CNX-DSA-2FD978",
+      "label": "Temporary-test",
+      "maxUses": 80,
+      "used": 49,
+      "created": "2026-08-12T14:21:04.797Z"
     }
   ]
 }

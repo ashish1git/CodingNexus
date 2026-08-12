@@ -106,7 +106,7 @@ export default function CodeEditorPanel({
             className="px-4 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed font-medium shadow-md shadow-blue-600/20"
           >
             <Send className="w-3 h-3" />
-            Submit
+            Save Solution
           </button>
         </div>
       </div>

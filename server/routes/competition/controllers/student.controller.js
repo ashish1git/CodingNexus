@@ -68,6 +68,10 @@ export async function getCompetitionById(req, res, next) {
   }
 }
 
+export async function getServerTime(req, res) {
+  res.json({ serverTime: new Date().toISOString() });
+}
+
 export async function getTimerSync(req, res, next) {
   try {
     const { id } = req.params;

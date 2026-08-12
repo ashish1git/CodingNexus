@@ -10,6 +10,9 @@ const router = express.Router();
 // Get all competitions (with filters)
 router.get('/', authenticate, studentController.getCompetitions);
 
+// Get server time for countdown sync (must be before /:id)
+router.get('/server-time', studentController.getServerTime);
+
 // Get my submission details for a competition
 router.get('/:id/my-submission', authenticate, studentController.getMySubmission);
 

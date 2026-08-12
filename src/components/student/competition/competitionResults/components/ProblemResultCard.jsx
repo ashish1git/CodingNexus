@@ -3,10 +3,11 @@ import Card from '../../../../shared/Card';
 import { getStatusColor, getStatusIcon, getDifficultyStyle, formatIST } from '../utils/resultsUtils';
 
 const ProblemResultCard = ({ problem, index }) => {
+  const maxScore = problem.maxScore || problem.points || 10;
   const displayStatus = problem.isEvaluated ? 'accepted' : problem.status;
   const displayScore = problem.isEvaluated && problem.manualMarks !== null
-    ? `${problem.manualMarks}/10`
-    : `${problem.score}/10`;
+    ? `${problem.manualMarks}/${maxScore}`
+    : `${problem.score}/${maxScore}`;
 
   return (
     <Card key={problem.problemId} className="p-6">
@@ -70,7 +71,7 @@ const ProblemResultCard = ({ problem, index }) => {
           <div className="space-y-2">
             <div>
               <p className="text-xs text-blue-700 font-medium">Marks Given:</p>
-              <p className="text-2xl font-bold text-blue-900">{problem.manualMarks}/10</p>
+              <p className="text-2xl font-bold text-blue-900">{problem.manualMarks}/{maxScore}</p>
             </div>
             {problem.evaluatorComments ? (
               <div>

@@ -50,7 +50,7 @@ const CompetitionResults = () => {
               />
             ) : (
               <>
-                <SubmissionStatusCard mySubmission={mySubmission} />
+                <SubmissionStatusCard mySubmission={mySubmission} competition={competition} />
 
                 <div className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-900">Problem-wise Results</h2>
@@ -78,7 +78,7 @@ const CompetitionResults = () => {
               <div className="text-center py-8">
                 <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">Leaderboard will be displayed soon</h3>
-                <p className="text-gray-500">The leaderboard will be available once the admin enables it. Stay tuned!</p>
+                <p className="text-gray-500">The leaderboard will be available once the System verifies all the Scores. Stay tuned!</p>
               </div>
             </Card>
           )

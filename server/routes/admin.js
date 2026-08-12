@@ -9,6 +9,9 @@ import { subadminWelcome, ticketReplyNotification, passwordResetByAdmin } from '
 
 const router = express.Router();
 
+// In-memory store for bulk email jobs (process-local; resets on server restart)
+const bulkEmailJobs = new Map();
+
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
   if (!name || !name.trim()) return '';
@@ -2623,10 +2626,25 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
       });
     }
 
-    // Respond immediately, process sending in background
+    // Create a job and respond immediately; sending happens in the background.
+    // This avoids nginx proxy timeout (60s) blocking on long sends, and lets
+    // the frontend poll /email/send-bulk/status for real progress.
+    const jobId = crypto.randomUUID();
+    const job = {
+      id: jobId,
+      status: 'processing', // processing | completed | failed
+      total: recipients.length,
+      sent: 0,
+      failed: 0,
+      startedAt: Date.now(),
+      completedAt: null
+    };
+    bulkEmailJobs.set(jobId, job);
+
     res.json({
       success: true,
       message: `Bulk email queued for ${recipients.length} recipients`,
+      jobId,
       stats: {
         total: recipients.length,
         sent: 0,
@@ -2636,18 +2654,16 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
     });
 
     // Process sending asynchronously after response
-    const { sendEmail } = await import('../services/email/brevo.service.js');
-    
-    let successCount = 0;
-    let failureCount = 0;
+    try {
+      const { sendEmail } = await import('../services/email/brevo.service.js');
 
-    for (let i = 0; i < recipients.length; i++) {
-      const { name, email } = recipients[i];
+      for (let i = 0; i < recipients.length; i++) {
+        const { name, email } = recipients[i];
 
-      try {
-        let html = htmlContent;
-        if (!html) {
-          html = `
+        try {
+          let html = htmlContent;
+          if (!html) {
+            html = `
             <!DOCTYPE html>
             <html>
             <head>
@@ -2713,32 +2729,37 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
             </body>
             </html>
           `;
+          }
+
+          const result = await sendEmail({
+            to: email,
+            subject: subject,
+            html: html,
+            text: `Hello ${name},\n\n${message}\n\nBest regards,\nCoding Nexus Team`
+          });
+
+          if (result.success) {
+            job.sent++;
+          } else {
+            job.failed++;
+          }
+
+          // Rate limit: 10 emails/second max (100ms between each)
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (error) {
+          job.failed++;
         }
-
-        const result = await sendEmail({
-          to: email,
-          subject: subject,
-          html: html,
-          text: `Hello ${name},\n\n${message}\n\nBest regards,\nCoding Nexus Team`,
-          forceFallback: true  // Primary sender may be unverified — always fire fallback for guaranteed delivery
-        });
-
-        if (result.success) {
-          successCount++;
-        } else {
-          failureCount++;
-        }
-
-        // Rate limit: 10 emails/second max (100ms between each)
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-      } catch (error) {
-        failureCount++;
       }
+
+      job.status = 'completed';
+      job.completedAt = Date.now();
+      console.log(`📧 Bulk email complete: ${job.sent} sent, ${job.failed} failed out of ${job.total}`);
+    } catch (error) {
+      job.status = 'failed';
+      job.completedAt = Date.now();
+      console.error('Error sending bulk email:', error);
     }
-
-    console.log(`📧 Bulk email complete: ${successCount} sent, ${failureCount} failed out of ${recipients.length}`);
-
   } catch (error) {
     console.error('Error sending bulk email:', error);
     res.status(500).json({ 
@@ -2746,6 +2767,30 @@ router.post('/email/send-bulk', authenticate, authorizeRole('admin', 'subadmin',
       error: 'Failed to send bulk email: ' + error.message 
     });
   }
+});
+
+// Get status of a bulk email job (polled by the frontend for real-time progress)
+router.get('/email/send-bulk/status/:jobId', async (req, res) => {
+  const job = bulkEmailJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      success: false,
+      error: 'Job not found'
+    });
+  }
+
+  res.json({
+    success: true,
+    job: {
+      id: job.id,
+      status: job.status,
+      total: job.total,
+      sent: job.sent,
+      failed: job.failed,
+      pending: job.status === 'processing',
+      successRate: job.total > 0 ? Math.round((job.sent / job.total) * 100) + '%' : '0%'
+    }
+  });
 });
 
 // Get list of events for filtering

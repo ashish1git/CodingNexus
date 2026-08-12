@@ -289,7 +289,7 @@ const SubmissionEvaluator = () => {
     }
 
     const marksNum = parseFloat(marks);
-    const maxAllowed = current.problem?.points || current.maxScore || 100;
+    const maxAllowed = current.problem?.points || current.maxScore || 10;
     if (isNaN(marksNum) || marksNum < 0 || marksNum > maxAllowed) {
       toast.error(`Marks must be between 0 and ${maxAllowed}`);
       return;
@@ -422,6 +422,7 @@ const SubmissionEvaluator = () => {
 
   const currentSubmission = filteredSubmissions[currentIndex];
   const currentProblem = problems.find(p => p.id === (selectedProblemId || currentSubmission?.problemId));
+  const evalMaxScore = currentSubmission?.problem?.points || currentSubmission?.maxScore || currentProblem?.points || 10;
   
   // Count evaluations: both saved in session and already evaluated in DB (avoid double counting)
   const evaluatedCount = Object.keys(evaluations).filter(key => 
@@ -1080,7 +1081,7 @@ const SubmissionEvaluator = () => {
                   {currentSubmission.isEvaluated && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-800">
-                        <strong>Previous marks:</strong> {currentSubmission.manualMarks}/10
+                        <strong>Previous marks:</strong> {currentSubmission.manualMarks}/{evalMaxScore}
                         {currentSubmission.evaluatedBy && evaluatorNames[currentSubmission.evaluatedBy] && (
                           <span className="ml-2">
                             by <strong>{evaluatorNames[currentSubmission.evaluatedBy]}</strong>
@@ -1097,17 +1098,17 @@ const SubmissionEvaluator = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Marks (out of 10)
+                        Marks (out of {evalMaxScore})
                       </label>
                       <input
                         type="number"
                         min="0"
-                        max="10"
+                        max={evalMaxScore}
                         step="0.5"
                         value={marks}
                         onChange={(e) => setMarks(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-400"
-                        placeholder="Enter marks (0-10)"
+                        placeholder={`Enter marks (0-${evalMaxScore})`}
                       />
                     </div>
                     <div>

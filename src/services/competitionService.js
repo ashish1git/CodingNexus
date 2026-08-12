@@ -19,6 +19,11 @@ const competitionService = {
   },
 
   // Sync server time for client clock calibration
+  getServerTime: async () => {
+    return await apiClient.get('/competitions/server-time');
+  },
+
+  // Sync server time for client clock calibration
   getTimerSync: async (competitionId) => {
     return await apiClient.get(`/competitions/${competitionId}/timer`);
   },

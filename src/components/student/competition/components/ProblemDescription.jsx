@@ -15,7 +15,6 @@ export default function ProblemDescription({ selectedProblem, activeTab, onTabCh
           {/* Problem Header */}
           <div className="mb-4 flex items-start justify-between gap-2">
             <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-2 min-w-0 break-words">
-              <span className="text-blue-400 text-sm shrink-0">{selectedProblem.id}.</span>
               <span className="truncate">{selectedProblem.title}</span>
             </h2>
             <button

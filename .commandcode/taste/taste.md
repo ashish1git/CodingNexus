@@ -1,4 +1,5 @@
 # code-style
+- When displaying limits, thresholds, or maximum values in UI components (e.g., "Score: X / Y"), derive the limit from the actual data model (e.g., `problem.points`) rather than hardcoding numeric constants like `/10` or `/100`. Hardcoded limits drift out of sync across components and produce inconsistent displays when the underlying data changes. Confidence: 0.80
 - Scope name formatting changes to the minimal required surface area (e.g., just the profile page) — avoid broad refactors across all server routes unless explicitly requested. Confidence: 0.75
 - When replacing a broken/dead config with the actual working fix (e.g., replacing a dead `define` in vite.config with a `loader.config()` call), remove the dead config rather than leaving it in place alongside the fix — orphaned config creates confusion about which mechanism is actually in effect and invites the same mistake later. Confidence: 0.75
 
@@ -54,20 +55,17 @@ See [debugging/taste.md](debugging/taste.md)
 - When adding new columns to an existing table (via Prisma schema or raw SQL), proactively backfill/migrate existing rows with inferred values — don't leave them NULL and assume only future records will be populated. Existing records with NULL in filterable columns silently drop out of all queries that filter on those columns, breaking the feature for all pre-existing data. The user expects the feature to work for old data too, not just new uploads. Confidence: 0.80
 
 # api
-- For long-running API endpoints (bulk email, batch processing), respond immediately with a "queued/pending" acknowledgment and process work asynchronously after the response — do not block the HTTP response on completing all work. Synchronous processing in a loop easily exceeds nginx's proxy timeout (60s) causing 504 Gateway Timeout errors. The client receives instant feedback and the actual work proceeds in the background. Confidence: 0.75
-- When enriching data from one API response with fields from another source, verify that the field names match between the two data shapes (e.g., `id` vs `submissionId`) — mismatches cause `undefined` values that propagate silently in production. Confidence: 0.70
-- Never expose raw UUIDs/foreign keys to end users; always resolve them to human-readable display names. When a lookup can fail (deleted user, missing record), provide a sensible role-appropriate default (e.g., `'Admin'`) — never let `'Unknown'` or a raw UUID fall through to the UI. When the foreign key could point to multiple user roles (admin, student), query all possible profile types in the lookup rather than assuming a single role. Confidence: 0.75
-- For feature gating: prefer self-service access code systems (admin generates codes via script, students enter codes to unlock) over manual DB-flag toggling — the user finds direct DB access too tedious for granting student access. Confidence: 0.70
-- When building access code systems: implement BOTH grant and revoke paths — revoking/deleting a code should also revoke access for students who already used it, not just prevent new unlocks. The user expects full lifecycle control over access. Confidence: 0.65
-
+See [api/taste.md](api/taste.md)
 # admin-ui
 - When displaying student information in admin views (tickets, management, etc.), show all available student profile fields (name, division, batch, rollNo, phone) — don't truncate to just name+rollNo. Users expect the full student context visible at a glance. Confidence: 0.70
+- When implementing hide/visibility toggles for student-facing content, admin views must bypass the visibility filter — admins need to see and manage all items regardless of visibility state. Applying a student-facing filter globally without role-awareness causes hidden items to silently disappear from admin views, breaking admin workflows. Confidence: 0.70
 
 # debugging
 - When a user reports a feature still not working after a frontend fix was deployed, verify the actual API response data shape (e.g., log it or check the endpoint) before modifying the frontend — don't assume the nested path (e.g., `user.studentProfile`) matches the real response structure. The fix will silently fail if the data path is wrong. Confidence: 0.75
 - When there are two similar-sounding systems (e.g., subadmin support tickets vs. student support tickets), confirm which system the user is referring to before making changes — editing the wrong component wastes time and the user sees no fix. Confidence: 0.65
 
 # scoring
+- When displaying a "Score: X / Y" total in competition results, the denominator (Y) must come from the full competition's problem set (all problems × their points), NOT from only the problems the student attempted. A student solving 2 of 8 problems correctly should see "200/800", not "200/200" — using the attempted subset as denominator is misleading because it implies a perfect score. Confidence: 0.75
 - For competition leaderboards: rank by score desc, then submission time asc (who finished first), then execution time asc — submission speed is the primary tiebreaker, not code execution speed. Students who submitted earlier with the same score should rank higher. Confidence: 0.70
 
 # architecture

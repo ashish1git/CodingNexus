@@ -226,22 +226,46 @@ const BulkEmailManager = () => {
       });
 
       if (data.success) {
-        setSendResult(data.stats);
-        toast.success(`Email sent successfully to ${data.stats.sent}/${data.stats.total} recipients`);
-        
-        // Reset form after successful send
-        if (data.stats.failed === 0) {
-          setSubject('');
-          setMessage('');
-          setHtmlContent('');
-          setRecipients([]);
-          setSelectedRecipients([]);
-        }
+        // Server queues the send and returns a jobId; poll for real progress
+        const jobId = data.jobId;
+        const poll = async () => {
+          try {
+            const status = await apiClient.get(`/admin/email/send-bulk/status/${jobId}`);
+            if (status.success) {
+              setSendResult({
+                total: status.job.total,
+                sent: status.job.sent,
+                failed: status.job.failed,
+                pending: status.job.pending,
+                successRate: status.job.successRate
+              });
+              if (status.job.pending) {
+                setTimeout(poll, 1500);
+              } else {
+                setSending(false);
+                if (status.job.failed === 0) {
+                  toast.success(`Email sent successfully to ${status.job.sent}/${status.job.total} recipients`);
+                  setSubject('');
+                  setMessage('');
+                  setHtmlContent('');
+                  setRecipients([]);
+                  setSelectedRecipients([]);
+                } else {
+                  toast.success(`Email sent: ${status.job.sent}/${status.job.total} sent, ${status.job.failed} failed`);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error polling email status:', err);
+            setSending(false);
+            toast.error('Failed to fetch send progress: ' + err.message);
+          }
+        };
+        poll();
       }
     } catch (error) {
       console.error('Error sending email:', error);
       toast.error('Failed to send email: ' + error.message);
-    } finally {
       setSending(false);
     }
   };
@@ -824,8 +848,17 @@ const BulkEmailManager = () => {
             {sendResult && (
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <h3 className="text-lg font-bold text-gray-800">Send Results</h3>
+                  {sendResult.pending ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin text-purple-600" />
+                      <h3 className="text-lg font-bold text-gray-800">Sending In Progress...</h3>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <h3 className="text-lg font-bold text-gray-800">Send Results</h3>
+                    </>
+                  )}
                 </div>
 
                 <div className="grid sm:grid-cols-4 gap-4">
@@ -846,6 +879,20 @@ const BulkEmailManager = () => {
                     <p className="text-2xl font-bold text-purple-700">{sendResult.successRate}</p>
                   </div>
                 </div>
+
+                {sendResult.pending && (
+                  <div className="mt-4">
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="h-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500"
+                        style={{ width: `${sendResult.total > 0 ? Math.round((sendResult.sent / sendResult.total) * 100) : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      {sendResult.sent}/{sendResult.total} sent — this page updates automatically
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

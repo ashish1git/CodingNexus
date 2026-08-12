@@ -340,6 +340,7 @@ model TeamApplication {
     prizePool       String?
     maxParticipants Int?
     isActive        Boolean                   @default(true)
+    isVisible       Boolean                   @default(true)
     showLeaderboard Boolean                   @default(true)
     createdBy       String
     createdAt       DateTime                  @default(now())

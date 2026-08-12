@@ -102,7 +102,7 @@ export async function markSubmissionIncomplete({ submissionId }) {
 }
 
 export async function createCompetition({ competitionData, userId }) {
-  const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, problems } = competitionData;
+  const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, showLeaderboard, isVisible, problems } = competitionData;
 
   const competitionId = randomUUID();
 
@@ -119,6 +119,8 @@ export async function createCompetition({ competitionData, userId }) {
       type,
       prizePool,
       maxParticipants,
+      showLeaderboard: showLeaderboard !== undefined ? showLeaderboard : true,
+      isVisible: isVisible !== undefined ? isVisible : true,
       createdBy: userId,
       updatedAt: new Date(),
       problems: {
@@ -153,7 +155,7 @@ export async function createCompetition({ competitionData, userId }) {
 }
 
 export async function updateCompetition({ competitionId, competitionData }) {
-  const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, isActive, showLeaderboard, problems } = competitionData;
+  const { title, description, category, difficulty, startTime, endTime, duration, type, prizePool, maxParticipants, isActive, showLeaderboard, isVisible, problems } = competitionData;
 
   await prisma.competition.update({
     where: { id: competitionId },
@@ -170,6 +172,7 @@ export async function updateCompetition({ competitionId, competitionData }) {
       maxParticipants,
       isActive,
       showLeaderboard: showLeaderboard !== undefined ? showLeaderboard : undefined,
+      isVisible: isVisible !== undefined ? isVisible : undefined,
       updatedAt: new Date()
     }
   });
@@ -321,8 +324,18 @@ export async function evaluateSubmission({ competitionId, problemId, submissionI
   }
 
   const marksNum = parseFloat(marks);
-  if (isNaN(marksNum) || marksNum < 0 || marksNum > 1000) {
-    const error = new Error('Marks must be between 0 and 1000');
+
+  // Get the problem's points to use as max
+  const problemSubmission = await prisma.problemSubmission.findUnique({
+    where: { id: submissionId },
+    select: {
+      problem: { select: { points: true } }
+    }
+  });
+  const maxAllowed = problemSubmission?.problem?.points || 100;
+
+  if (isNaN(marksNum) || marksNum < 0 || marksNum > maxAllowed) {
+    const error = new Error(`Marks must be between 0 and ${maxAllowed}`);
     error.statusCode = 400;
     throw error;
   }

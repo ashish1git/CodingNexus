@@ -122,6 +122,7 @@ const Competitions = () => {
   };
 
   const filteredCompetitions = (competitions || [])
+    .filter(comp => comp.isVisible !== false) // only show visible competitions
     .filter(comp => 
       searchTerm === '' || 
       comp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

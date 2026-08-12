@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Plus, Edit, Trash2, Eye, 
   Calendar, Clock, Users, Target, Award, Search,
-  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X, Undo2
+  Filter, Download, Upload, BarChart3, Medal, FileText, ShieldAlert, Code, FileJson, Loader, X, Undo2, EyeOff
 } from 'lucide-react';
 import LeaderboardTable from '../student/competition/competitionResults/components/LeaderboardTable';
 import { useAuth } from '../../context/AuthContext';
@@ -28,7 +28,8 @@ const CompetitionManager = () => {
     prize: '',
     category: '',
     type: 'rated',
-    showLeaderboard: true
+    showLeaderboard: true,
+    isVisible: true
   });
   const [problems, setProblems] = useState([]);
   const [currentProblem, setCurrentProblem] = useState({
@@ -341,6 +342,17 @@ public:
     }
   };
 
+  const handleToggleVisibility = async (comp) => {
+    try {
+      await competitionService.updateCompetition(comp.id, { isVisible: !comp.isVisible });
+      toast.success(comp.isVisible ? 'Competition hidden from students' : 'Competition visible to students');
+      fetchCompetitions();
+    } catch (error) {
+      console.error('Error toggling visibility:', error);
+      toast.error('Failed to toggle visibility');
+    }
+  };
+
   const handleViewCompetition = async (id) => {
     try {
       const data = await competitionService.getCompetition(id);
@@ -408,7 +420,8 @@ public:
         prize: data.prizePool || data.prize || '',
         category: data.category,
         type: data.type || 'rated',
-        showLeaderboard: data.showLeaderboard !== false
+        showLeaderboard: data.showLeaderboard !== false,
+        isVisible: data.isVisible !== false
       });
       setProblems(data.problems || []);
       setShowEditModal(true);
@@ -1149,7 +1162,14 @@ public:
                           <BarChart3 className="w-4 h-4" />
                         </Link>
                         )}
-                        {canViewSubmissions && (
+                        {canViewSubmissions && (<>
+                        <button
+                          onClick={() => handleToggleVisibility(competition)}
+                          className={competition.isVisible !== false ? "text-green-600 hover:text-green-900" : "text-gray-400 hover:text-gray-600"}
+                          title={competition.isVisible !== false ? "Hide from students" : "Show to students"}
+                        >
+                          <EyeOff className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleViewSubmissions(competition.id)}
                           className="text-purple-600 hover:text-purple-900"
@@ -1157,7 +1177,7 @@ public:
                         >
                           <FileText className="w-4 h-4" />
                         </button>
-                        )}
+                        </>)}
                         <button
                           onClick={() => handleViewLeaderboard(competition.id)}
                           className="text-yellow-600 hover:text-yellow-900"
@@ -1338,6 +1358,18 @@ public:
                     />
                     <label htmlFor="showLeaderboard" className="text-sm text-gray-700">
                       Show leaderboard during/after competition
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <input
+                      type="checkbox"
+                      id="isVisible"
+                      checked={formData.isVisible}
+                      onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded"
+                    />
+                    <label htmlFor="isVisible" className="text-sm text-gray-700">
+                      Visible to students (uncheck to hide)
                     </label>
                   </div>
                   <div>
@@ -2312,6 +2344,19 @@ public:
                   />
                   <label htmlFor="editShowLeaderboard" className="text-sm text-gray-700">
                     Show leaderboard during/after competition
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editIsVisible"
+                    checked={formData.isVisible !== false}
+                    onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                  <label htmlFor="editIsVisible" className="text-sm text-gray-700">
+                    Visible to students (uncheck to hide)
                   </label>
                 </div>
               </div>
