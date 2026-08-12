@@ -134,7 +134,7 @@ export default function CodeEditorPanel({
             scrollBeyondLastLine: false,
             lineNumbers: 'on',
             renderWhitespace: 'selection',
-            automaticLayout: false,
+            automaticLayout: true,
             wordWrap: 'on',
             tabSize: 4,
             folding: true,
