@@ -341,7 +341,13 @@ export default function useCodeEditor(
           setTestResults({
             passed: data.passed,
             total: data.total,
-            cases: data.testResults || [],
+            cases: (data.testResults || []).map((t, idx) => ({
+              ...t,
+              id: t.testCase || idx + 1,
+              actual: t.actualOutput || t.actual || 'No output',
+              expected: t.expectedOutput || t.expected || 'N/A',
+              error: t.compile_output || t.stderr || t.error || (t.passed ? null : t.status || 'Failed')
+            })),
             accepted: data.passed === data.total,
             efficiencyMultiplier: data.efficiencyMultiplier ?? 1.0,
             optimizationFeedback: data.optimizationFeedback ?? null

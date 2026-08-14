@@ -91,14 +91,16 @@ export default function TestResults({ testResults, showTestCases, onToggle }) {
                         <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                         Input:
                       </div>
-                      <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">{testCase.input}</pre>
+                      <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">{testCase.input || 'N/A'}</pre>
                     </div>
                     <div>
                       <div className="text-gray-400 mb-1.5 font-semibold flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
                         Expected:
                       </div>
-                      <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">{testCase.expected}</pre>
+                      <pre className="text-gray-200 bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto border border-[#3e3e3e]">
+                        {testCase.expected ?? testCase.expectedOutput ?? 'N/A'}
+                      </pre>
                     </div>
                     <div>
                       <div className={`mb-1.5 font-semibold flex items-center gap-2 ${testCase.passed ? 'text-green-400' : 'text-red-400'}`}>
@@ -110,17 +112,17 @@ export default function TestResults({ testResults, showTestCases, onToggle }) {
                           ? 'text-green-400 bg-green-500/5 border-green-500/20'
                           : 'text-red-400 bg-red-500/5 border-red-500/20'
                       }`}>
-                        {testCase.actual}
+                        {testCase.actual ?? testCase.actualOutput ?? 'No output'}
                       </pre>
                     </div>
-                    {testCase.error && (
+                    {(testCase.error || testCase.compile_output || testCase.stderr) && (
                       <div>
                         <div className="text-red-400 mb-1.5 font-semibold flex items-center gap-2">
                           <AlertCircle className="w-3 h-3" />
                           Error:
                         </div>
-                        <pre className="text-red-400 bg-red-500/5 p-3 rounded-lg overflow-x-auto text-xs border border-red-500/20">
-                          {testCase.error}
+                        <pre className="text-red-400 bg-red-500/5 p-3 rounded-lg overflow-x-auto text-xs border border-red-500/20 whitespace-pre-wrap">
+                          {testCase.error || testCase.compile_output || testCase.stderr}
                         </pre>
                       </div>
                     )}

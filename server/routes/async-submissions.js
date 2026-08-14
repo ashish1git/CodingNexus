@@ -12,9 +12,12 @@ const JUDGE0_URL = process.env.JUDGE0_URL || 'http://64.227.149.20:2358';
 const LANGUAGE_MAP = {
   'c': 50,
   'cpp': 54,
+  'c++': 54,
   'java': 62,
   'python': 71,
-  'javascript': 63
+  'py': 71,
+  'javascript': 63,
+  'js': 63
 };
 
 /**
@@ -87,62 +90,67 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
           execCode = wrapCodeForExecution(code, language, problem, testCase);
         }
 
-        // Submit to Judge0 with wait=true for immediate result
+        const decodeB64 = str => str ? Buffer.from(str, 'base64').toString('utf-8') : '';
+        const encodeB64 = str => str != null ? Buffer.from(String(str), 'utf-8').toString('base64') : null;
+
+        // Submit to Judge0 with wait=true and base64_encoded=true for safe UTF-8 handling
         const judge0Response = await axios.post(
-          `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+          `${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`,
           {
-            source_code: execCode,
+            source_code: encodeB64(execCode),
             language_id: langId,
-            stdin: (!problem.parameters) ? (testCase.input || '') : '',
-            expected_output: testCase.expectedOutput || null,
+            stdin: (!problem.parameters) ? encodeB64(testCase.input || '') : null,
+            expected_output: encodeB64(testCase.expectedOutput || testCase.output || null),
             cpu_time_limit: 5,
             memory_limit: 128000
           },
           { timeout: 15000 }
         );
 
-        const result = judge0Response.data;
-        
-        // Judge0 status codes:
-        // 1 = In Queue, 2 = Processing, 3 = Accepted, 4 = Wrong Answer
-        // 5 = Time Limit, 6 = Compilation Error, 7-12 = Runtime Errors
-        const statusId = result.status?.id;
+        const data = judge0Response.data;
+        const statusId = data.status?.id;
+        const stdout = decodeB64(data.stdout).trim();
+        const stderr = decodeB64(data.stderr).trim();
+        const compile_output = decodeB64(data.compile_output).trim();
+        const message = decodeB64(data.message).trim();
         
         // Check for compilation error (only need to report once)
         if (statusId === 6) {
-          compilationError = result.compile_output || 'Compilation failed';
+          compilationError = compile_output || stderr || message || 'Compilation failed';
           results.push({
             testCase: i + 1,
             passed: false,
             status: 'Compilation Error',
             error: compilationError,
+            actualOutput: 'No output',
+            expectedOutput: (testCase.output || testCase.expectedOutput || '')?.substring(0, 100) || 'N/A',
             input: testCase.input?.substring(0, 100) || 'N/A'
           });
           break; // Stop on compilation error
         }
 
         // Compare actual output with expected output AND check status
-        const stdout = (result.stdout || '').trim();
         const expected = (testCase.output || testCase.expectedOutput || '').trim();
         const passed = stdout === expected && statusId === 3;
+        const errStr = compile_output || stderr || (statusId !== 3 ? (message || data.status?.description || 'Execution failed') : null);
         
         console.log(`Test ${i + 1}: Expected="${expected}", Actual="${stdout}", Status=${statusId}, Passed=${passed}`);
         
         if (passed) passedCount++;
 
-        totalTime += parseFloat(result.time || 0) * 1000;
-        maxMemory = Math.max(maxMemory, result.memory || 0);
+        totalTime += parseFloat(data.time || 0) * 1000;
+        maxMemory = Math.max(maxMemory, data.memory || 0);
 
         results.push({
           testCase: i + 1,
           passed,
-          status: result.status?.description || 'Unknown',
+          status: data.status?.description || 'Unknown',
           input: testCase.input?.substring(0, 100) || 'N/A',
           expectedOutput: (testCase.output || testCase.expectedOutput || '')?.substring(0, 100) || 'N/A',
-          actualOutput: (result.stdout || '').trim().substring(0, 100) || 'No output',
-          error: result.stderr || result.compile_output || null,
-          time: result.time ? `${(parseFloat(result.time) * 1000).toFixed(0)}ms` : 'N/A',
-          memory: result.memory ? `${(result.memory / 1024).toFixed(1)}MB` : 'N/A'
+          actualOutput: stdout || (errStr ? '' : 'No output'),
+          error: errStr,
+          time: data.time ? `${(parseFloat(data.time) * 1000).toFixed(0)}ms` : 'N/A',
+          memory: data.memory ? `${(data.memory / 1024).toFixed(1)}MB` : 'N/A'
         });
 
       } catch (error) {

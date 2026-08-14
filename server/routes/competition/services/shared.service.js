@@ -9,9 +9,12 @@ const JUDGE0_URL = process.env.JUDGE0_URL || 'http://202.179.85.68:2358';
 const LANGUAGE_MAP = {
   'c': 50,        // C (GCC 9.2.0)
   'cpp': 54,      // C++ (GCC 9.2.0)
+  'c++': 54,      // C++ (GCC 9.2.0)
   'java': 62,     // Java (OpenJDK 13.0.1)
   'python': 71,   // Python (3.8.1)
-  'javascript': 63 // JavaScript (Node.js 12.14.0)
+  'py': 71,       // Python (3.8.1)
+  'javascript': 63, // JavaScript (Node.js 12.14.0)
+  'js': 63        // JavaScript (Node.js 12.14.0)
 };
 
 /**
@@ -73,9 +76,12 @@ export async function executeJudge0Submissions(submissionId, problemSubmissions,
               );
             }
 
-            // Submit to Judge0 with wait=true for synchronous result
+            const decodeB64 = str => str ? Buffer.from(str, 'base64').toString('utf-8') : '';
+            const encodeB64 = str => str != null ? Buffer.from(String(str), 'utf-8').toString('base64') : null;
+
+            // Submit to Judge0 with wait=true and base64_encoded=true for safe UTF-8 handling
             const judge0Payload = {
-              source_code: executableCode,
+              source_code: encodeB64(executableCode),
               language_id: languageId,
               // Add time and memory limits based on problem constraints
               cpu_time_limit: problem.timeLimit ? problem.timeLimit / 1000 : 3, // Convert ms to seconds
@@ -84,17 +90,20 @@ export async function executeJudge0Submissions(submissionId, problemSubmissions,
             
             // Add stdin if problem doesn't use parameters (stdin-based)
             if (!problem.parameters) {
-              judge0Payload.stdin = testCase.input || '';
+              judge0Payload.stdin = encodeB64(testCase.input || '');
+            }
+            if (testCase.output || testCase.expectedOutput) {
+              judge0Payload.expected_output = encodeB64(testCase.output || testCase.expectedOutput);
             }
             
             console.log(`[Judge0 Request] TestCase ${i + 1}:`, JSON.stringify({
               language_id: judge0Payload.language_id,
               has_stdin: !!judge0Payload.stdin,
-              source_code_len: judge0Payload.source_code.length
+              source_code_len: executableCode.length
             }, null, 2));
 
             const judge0Response = await axios.post(
-              `${JUDGE0_URL}/submissions?base64_encoded=false&wait=true`,
+              `${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`,
               judge0Payload,
               {
                 headers: { 'Content-Type': 'application/json' },
@@ -104,38 +113,43 @@ export async function executeJudge0Submissions(submissionId, problemSubmissions,
             
             console.log(`[Judge0 Response Received] TestCase ${i + 1}`);
 
-            const result = judge0Response.data;
+            const data = judge0Response.data;
+            const stdout = decodeB64(data.stdout).trim();
+            const stderr = decodeB64(data.stderr).trim();
+            const compile_output = decodeB64(data.compile_output).trim();
+            const message = decodeB64(data.message).trim();
             
             console.log(`[Judge0 Response] TestCase ${i + 1}:`, JSON.stringify({
-              status_id: result.status?.id,
-              status_desc: result.status?.description,
-              stdout: (result.stdout || '').substring(0, 100),
-              stderr: (result.stderr || '').substring(0, 100),
-              compile_output: (result.compile_output || '').substring(0, 100),
-              time: result.time,
-              memory: result.memory
+              status_id: data.status?.id,
+              status_desc: data.status?.description,
+              stdout: stdout.substring(0, 100),
+              stderr: stderr.substring(0, 100),
+              compile_output: compile_output.substring(0, 100),
+              time: data.time,
+              memory: data.memory
             }, null, 2));
             
-            const stdout = (result.stdout || '').trim();
-            const expected = (testCase.output || '').trim();
-            const passed = stdout === expected && result.status?.id === 3; // 3 = Accepted
+            const expected = (testCase.output || testCase.expectedOutput || '').trim();
+            const passed = stdout === expected && data.status?.id === 3; // 3 = Accepted
+            const errStr = compile_output || stderr || (data.status?.id !== 3 ? (message || data.status?.description || 'Execution failed') : null);
 
             if (passed) totalPassed++;
-            totalTime += parseFloat(result.time || 0) * 1000; // Convert to ms
-            totalMemory = Math.max(totalMemory, result.memory || 0);
+            totalTime += parseFloat(data.time || 0) * 1000; // Convert to ms
+            totalMemory = Math.max(totalMemory, data.memory || 0);
 
             testResults.push({
               testCase: i + 1,
               input: testCase.input,
               expectedOutput: expected,
-              actualOutput: stdout,
+              actualOutput: stdout || (errStr ? '' : 'No output'),
               passed,
               hidden: testCase.hidden || false,
-              time: result.time,
-              memory: result.memory,
-              status: result.status?.description || 'Unknown',
-              stderr: result.stderr || (result.compile_output ? 'Compilation Error' : ''),
-              compile_output: result.compile_output
+              time: data.time,
+              memory: data.memory,
+              status: data.status?.description || 'Unknown',
+              stderr: stderr || compile_output || '',
+              compile_output: compile_output || null,
+              error: errStr
             });
 
           } catch (testError) {

@@ -22,7 +22,9 @@ function wrapCodeForExecution(userCode, language, problem, testCase) {
   // Otherwise wrap as function-only submission
   const wrappers = {
     python: wrapPython,
+    py: wrapPython,
     cpp: wrapCpp,
+    'c++': wrapCpp,
     java: wrapJava,
     c: wrapCpp // C treated similar to C++ for basic problems
   };
@@ -43,10 +45,10 @@ function isCompleteProgram(userCode, language) {
     return userCode.includes('public static void main') || 
            userCode.includes('public class Main');
   }
-  if (language === 'cpp' || language === 'c') {
-    return userCode.includes('int main(') || userCode.includes('int main (');
+  if (language === 'cpp' || language === 'c' || language === 'c++') {
+    return /(int|void)\s+main\s*\(/i.test(userCode);
   }
-  if (language === 'python') {
+  if (language === 'python' || language === 'py') {
     return userCode.includes('if __name__') && userCode.includes('__main__');
   }
   return false;
