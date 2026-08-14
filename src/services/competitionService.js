@@ -83,6 +83,11 @@ const competitionService = {
     });
   },
 
+  // Student acknowledges an evaluator review (clears "new review" notification)
+  acknowledgeReview: async (competitionId, problemId) => {
+    return await apiClient.post(`/competitions/${competitionId}/problems/${problemId}/acknowledge-review`);
+  },
+
   // Clear all draft codes after final submission
   clearDrafts: async (competitionId) => {
     return await apiClient.delete(`/competitions/${competitionId}/drafts`);

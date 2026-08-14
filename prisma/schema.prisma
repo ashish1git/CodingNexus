@@ -438,6 +438,7 @@ model TeamApplication {
     evaluatedBy             String?
     evaluatedAt             DateTime?
     isEvaluated             Boolean                @default(false)
+    reviewAcknowledged      Boolean                @default(false)
     efficiencyMultiplier    Float                  @default(1.0)
     optimizationFeedback    String?
     competitionSubmission   CompetitionSubmission  @relation(fields: [competitionSubmissionId], references: [id], onDelete: Cascade)

@@ -40,7 +40,19 @@ export async function getCompetitions({ userId, status, difficulty }) {
       },
       submissions: {
         where: { userId },
-        select: { id: true, status: true }
+        select: {
+          id: true,
+          status: true,
+          problemSubmissions: {
+            select: {
+              problemId: true,
+              status: true,
+              score: true,
+              manualMarks: true,
+              isEvaluated: true
+            }
+          }
+        }
       },
       _count: {
         select: { registrations: true }
@@ -53,6 +65,17 @@ export async function getCompetitions({ userId, status, difficulty }) {
   const competitionsWithStatus = competitions.map(comp => {
     const isRegistered = comp.registrations.some(reg => reg.userId === userId);
     const hasSubmitted = comp.submissions.some(s => s.status !== 'incomplete');
+
+    // Count solved problems across the user's submissions for this competition
+    const problemsSolved = new Set();
+    comp.submissions.forEach(sub => {
+      (sub.problemSubmissions || []).forEach(ps => {
+        if (ps.status === 'accepted' || ps.score > 0 || (ps.isEvaluated && (ps.manualMarks || 0) > 0)) {
+          problemsSolved.add(ps.problemId);
+        }
+      });
+    });
+
     const participantCount = comp._count.registrations;
     
     let compStatus = 'past';
@@ -67,6 +90,7 @@ export async function getCompetitions({ userId, status, difficulty }) {
       status: compStatus,
       isRegistered,
       hasSubmitted,
+      problemsSolved: problemsSolved.size,
       participantCount,
       problemCount: comp.problems.length,
       registrations: undefined, // Remove from response
@@ -217,6 +241,7 @@ export async function getMySubmission({ competitionId, userId }) {
 
   return {
     submissionId: submission.id,
+    userId: submission.userId,
     status: submission.status,
     totalScore: submission.totalScore,
     totalTime: submission.totalTime,
@@ -238,7 +263,8 @@ export async function getMySubmission({ competitionId, userId }) {
       judgedAt: ps.judgedAt,
       manualMarks: ps.manualMarks,
       evaluatorComments: ps.evaluatorComments,
-      isEvaluated: ps.isEvaluated
+      isEvaluated: ps.isEvaluated,
+      reviewAcknowledged: ps.reviewAcknowledged
     }))
   };
 }
@@ -532,6 +558,41 @@ export async function submitSolutions({ competitionId, userId, solutions, violat
     submissionId: competitionSubmissionId,
     problemCount: validSubmissions.length
   };
+}
+
+export async function acknowledgeReview({ competitionId, userId, problemId }) {
+  // Verify the student actually submitted for this competition
+  const submission = await prisma.competitionSubmission.findUnique({
+    where: {
+      competitionId_userId: { competitionId, userId }
+    },
+    select: { id: true }
+  });
+
+  if (!submission) {
+    const error = new Error('No submission found for this competition');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Only mark acknowledged if an evaluator review actually exists
+  const result = await prisma.problemSubmission.updateMany({
+    where: {
+      competitionSubmissionId: submission.id,
+      problemId,
+      isEvaluated: true,
+      evaluatorComments: { not: null }
+    },
+    data: { reviewAcknowledged: true }
+  });
+
+  if (result.count === 0) {
+    const error = new Error('No evaluator review found for this problem');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return { success: true };
 }
 
 export async function saveDraftCode({ competitionId, userId, problemId, code, language }) {

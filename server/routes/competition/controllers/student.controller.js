@@ -146,6 +146,24 @@ export async function saveDraftCode(req, res, next) {
   }
 }
 
+export async function acknowledgeReview(req, res, next) {
+  try {
+    const { id: competitionId, problemId } = req.params;
+    const result = await studentService.acknowledgeReview({
+      competitionId,
+      userId: req.user.id,
+      problemId
+    });
+    res.json(result);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error('Error acknowledging review:', error);
+    res.status(500).json({ error: 'Failed to acknowledge review' });
+  }
+}
+
 export async function clearDrafts(req, res, next) {
   try {
     const { id: competitionId } = req.params;

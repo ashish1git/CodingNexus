@@ -52,6 +52,9 @@ router.post('/:id/submit', authenticate, studentController.submitSolutions);
 // Save draft code (Auto-Save)
 router.put('/:id/save-code', authenticate, studentController.saveDraftCode);
 
+// Student acknowledges an evaluator review (clears "new review" notification)
+router.post('/:id/problems/:problemId/acknowledge-review', authenticate, studentController.acknowledgeReview);
+
 // Clear draft codes
 router.delete('/:id/drafts', authenticate, studentController.clearDrafts);
 

@@ -1,3 +1,12 @@
+// Smoothly scroll to an element by id (used to bring the student's
+// leaderboard row / reviewed problem into view)
+export const scrollToId = (id, options = {}) => {
+  const el = document.getElementById(id);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center', ...options });
+  return true;
+};
+
 export const getStatusColor = (status) => {
   const colors = {
     'accepted': 'text-green-600 bg-green-50',
@@ -50,7 +59,9 @@ export const getDifficultyStyle = (difficulty) => {
 export const formatIST = (dateStr) => {
   if (!dateStr) return '\u2014';
   try {
-    // Use toLocaleString with explicit timezone to get parts, which handles DST correctly
+    // Use toLocaleString with explicit timezone — this already produces e.g.
+    // "13 Aug 26, 10:01:50 am" in en-IN, so we just normalize it without
+    // re-appending the time (which caused "10:01:50 am, 10:01:50 am").
     const parts = new Date(dateStr).toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
       hour12: true,
@@ -61,16 +72,15 @@ export const formatIST = (dateStr) => {
       minute: '2-digit',
       second: '2-digit'
     });
-    // toLocaleString produces e.g. "17 Jul 26, 4:28:42 pm"
     // Ensure seconds are present by appending :00 if missing
     const timeMatch = parts.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)/i);
     if (timeMatch) {
+      if (timeMatch[3]) return parts;
       const hh = timeMatch[1].padStart(2, '0');
       const mm = timeMatch[2];
-      const ss = timeMatch[3] || '00';
       const ampm = timeMatch[4].toLowerCase();
       const rest = parts.replace(/\d{1,2}:\d{2}(?::\d{2})?\s*am\/pm/i, '').trim();
-      return `${rest}, ${hh}:${mm}:${ss} ${ampm}`;
+      return `${rest}, ${hh}:${mm}:00 ${ampm}`;
     }
     return parts;
   } catch { return String(dateStr); }

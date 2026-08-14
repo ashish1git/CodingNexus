@@ -388,6 +388,7 @@ export async function evaluateSubmission({ competitionId, problemId, submissionI
         evaluatedBy: evaluatorId,
         evaluatedAt: new Date(),
         isEvaluated: true,
+        reviewAcknowledged: false, // New/changed review → student must acknowledge again
         score: Math.round(marksNum)
       }
     });

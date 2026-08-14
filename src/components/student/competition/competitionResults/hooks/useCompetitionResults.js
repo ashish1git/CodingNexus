@@ -47,7 +47,7 @@ export const useCompetitionResults = () => {
   }, [loadResults]);
 
   return {
-    loading, competition, mySubmission, leaderboard,
+    loading, competition, mySubmission, setMySubmission, leaderboard,
     activeTab, setActiveTab, refreshing, handleRefresh,
     navigate, id
   };

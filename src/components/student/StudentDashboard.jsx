@@ -718,6 +718,14 @@ const StudentDashboard = () => {
   const profilePhoto = userDetails?.studentProfile?.profilePhotoUrl || userDetails?.photoURL;
   const profileInitial = (userDetails?.studentProfile?.name || userDetails?.name || 'S').charAt(0).toUpperCase();
 
+  // Time-aware greeting + today's date (pure display, no data logic)
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const todayStr = new Date().toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
   return (
     <div className="sdb-root">
       {/* ── Navbar ── */}
@@ -809,10 +817,10 @@ const StudentDashboard = () => {
           {/* Welcome Banner */}
           <div className="sdb-welcome">
             <div className="sdb-welcome-title">
-              Hey, {firstName}! 👋 Welcome back
+              {greeting}, {firstName}! 👋
             </div>
             <div className="sdb-welcome-sub">
-              Here's what's happening with your learning today.
+              {todayStr} — here's what's happening with your learning today.
             </div>
           </div>
 
@@ -946,11 +954,31 @@ const StudentDashboard = () => {
           </div>
 
           {/* Quick Actions */}
+          <div style={{ marginBottom: '14px', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#4c4f7a', padding: '8px 14px 4px' }}>
+            Quick Actions
+          </div>
           <div className="sdb-quick-grid">
+            <QuickActionCard icon={<Trophy size={22} color="#fbbf24" />} iconClass="sdb-quick-amber" label="Competitions" link="/student/competitions" />
+            <QuickActionCard icon={<Sparkles size={22} color="#a78bfa" />} iconClass="sdb-quick-purple" label="Practice" link="/student/practice" />
+            <QuickActionCard icon={<Layers size={22} color="#60a5fa" />} iconClass="sdb-quick-blue" label="DSA Sheet" link="/student/dsa-sheet" />
+            <QuickActionCard icon={<Brain size={22} color="#34d399" />} iconClass="sdb-quick-emerald" label="Aptitude" link="/student/aptitude" />
             <QuickActionCard icon={<FileText size={22} color="#60a5fa" />} iconClass="sdb-quick-blue" label="View Notes" link="/student/notes" />
             <QuickActionCard icon={<Code size={22} color="#34d399" />} iconClass="sdb-quick-emerald" label="Code Editor" link="/student/code-editor" />
             <QuickActionCard icon={<Calendar size={22} color="#a78bfa" />} iconClass="sdb-quick-purple" label="Attendance" link="/student/attendance" />
             <QuickActionCard icon={<HelpCircle size={22} color="#fbbf24" />} iconClass="sdb-quick-amber" label="Support" link="/student/support" />
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            marginTop: '36px', padding: '18px 20px', textAlign: 'center',
+            background: 'rgba(15,10,40,0.5)', border: '1px solid rgba(139,92,246,0.15)',
+            borderRadius: '14px', color: '#64748b', fontSize: '0.78rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '4px' }}>
+              <Code size={14} color="#7c3aed" />
+              <span style={{ fontWeight: 700, color: '#a78bfa' }}>Coding Nexus</span>
+            </div>
+            <p style={{ margin: 0 }}>Learn. Compete. Grow. — © {new Date().getFullYear()} Coding Nexus</p>
           </div>
 
         </main>
