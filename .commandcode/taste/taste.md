@@ -44,6 +44,7 @@ See [debugging/taste.md](debugging/taste.md)
 # email
 - Use `codingnexus.apsit.edu.in` as the admin portal URL in email links (not `codingnexus.live`). Confidence: 0.65
 - All email sending must use dual-API-key fallback (Brevo primary + fallback key) for reliability. When the primary API can silently accept but not deliver (Brevo returns 200 + messageId even for unverified senders), error-based fallback is insufficient — the system needs a force-dual mode that fires through a verified/trusted fallback channel regardless of the primary response. Never send email through a single API key path if a fallback is available. Confidence: 0.90
+- Email content containing user/admin-generated text (e.g., support ticket replies) must preserve the original whitespace and line breaks — render it like a `<pre>` tag (e.g., `white-space: pre-wrap` with readable line-height) rather than a plain `<p>` tag, because HTML collapses newlines and multiple spaces. The user wants any type of support reply to appear in the email exactly as typed, as a proper readable response. Confidence: 0.80
 
 # admin-operations
 - Admin-side operations (password resets, email sends, data modifications) should NOT be subject to the same rate limits as student-facing endpoints. Rate limits protect against abuse from untrusted users; admins are trusted actors and their workflows (like resetting a student's password) must never be blocked by rate limiting. Confidence: 0.75

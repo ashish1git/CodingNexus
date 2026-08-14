@@ -10,6 +10,18 @@ const SUCCESS_COLOR = '#10b981';
 const WARNING_COLOR = '#f59e0b';
 
 /**
+ * Escape HTML special characters to prevent injection/broken markup
+ * when inserting user-provided text into email templates.
+ */
+const escapeHtml = (str = '') =>
+  String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+/**
  * Base email wrapper with header and footer
  */
 const baseTemplate = (content, logoUrl = LOGO_URL) => `
@@ -595,7 +607,7 @@ export const ticketReplyNotification = (studentName, subject, replyMessage) => {
 
     <div class="info-box">
       <strong>Admin Response:</strong>
-      <p style="margin-top:8px;">${replyMessage}</p>
+      <div style="margin-top:8px; white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6;">${escapeHtml(replyMessage)}</div>
     </div>
 
     <div class="section" style="text-align:center;">
