@@ -528,6 +528,60 @@ export const adminService = {
     }
   },
 
+  // ============ NEXI AI FAQ MANAGEMENT ============
+
+  async getNexiFaqs() {
+    try {
+      const response = await apiClient.get('/admin/nexi/faqs');
+      return response;
+    } catch (error) {
+      console.error('Get Nexi FAQs error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async createNexiFaq(data) {
+    try {
+      const response = await apiClient.post('/admin/nexi/faqs', data);
+      if (response.success) {
+        toast.success('FAQ created successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Create Nexi FAQ error:', error);
+      toast.error(error.message || 'Failed to create FAQ');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async updateNexiFaq(faqId, data) {
+    try {
+      const response = await apiClient.put(`/admin/nexi/faqs/${faqId}`, data);
+      if (response.success) {
+        toast.success('FAQ updated successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Update Nexi FAQ error:', error);
+      toast.error(error.message || 'Failed to update FAQ');
+      return { success: false, error: error.message };
+    }
+  },
+
+  async deleteNexiFaq(faqId) {
+    try {
+      const response = await apiClient.delete(`/admin/nexi/faqs/${faqId}`);
+      if (response.success) {
+        toast.success('FAQ deleted successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Delete Nexi FAQ error:', error);
+      toast.error(error.message || 'Failed to delete FAQ');
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ ADMIN SUPPORT TICKETS ============
 
   async getAdminSupportTickets() {

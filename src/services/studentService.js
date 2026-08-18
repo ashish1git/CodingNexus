@@ -186,6 +186,103 @@ export const studentService = {
     }
   },
 
+  // ============ NEXI AI SUPPORT ASSISTANT ============
+
+  async nexiChat(message, code = null, history = []) {
+    try {
+      const response = await apiClient.post('/student/nexi/chat', { message, code, history });
+      return response;
+    } catch (error) {
+      console.error('Nexi chat error:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
+  },
+
+  // Streaming chat: reads the NDJSON stream from /nexi/chat. Each line is a
+  // JSON object — { success:true, streaming:true, delta } during generation,
+  // then a final { success:true, streaming:false, data } with the full parsed
+  // result. onDelta is called per line; returns the final data object.
+  // Errors mid-stream (incl. rate limits) arrive as a JSON error line.
+  async nexiChatStream(message, code = null, history = [], onDelta) {
+    const token = apiClient.getToken();
+    const res = await fetch(`${apiClient.baseURL}/student/nexi/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ message, code, history })
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('Nexi stream unavailable');
+    }
+
+    if (!res.body) {
+      // Streaming not supported by this client — fall back to the JSON call.
+      return this.nexiChat(message, code, history);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (!line) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.success === false) {
+            const e = new Error(chunk.error || 'Nexi stream error');
+            e.code = chunk.code;
+            e.retryAfterMs = chunk.retryAfterMs;
+            throw e;
+          }
+          if (chunk.streaming) {
+            onDelta?.(chunk.delta || '');
+          } else if (chunk.data) {
+            result = chunk.data;
+          }
+        } catch (err) {
+          if (err.code || err.message === 'Nexi stream error') throw err;
+          // Ignore malformed partial lines.
+        }
+      }
+    }
+
+    if (!result) throw new Error('Nexi returned an empty response');
+    return result;
+  },
+
+  async nexiEscalate(query, code = null) {
+    try {
+      const response = await apiClient.post('/student/nexi/escalate', { query, code });
+      return response;
+    } catch (error) {
+      console.error('Nexi escalate error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async nexiCreateTicket(subject, message, priority = 'normal') {
+    try {
+      const response = await apiClient.post('/student/nexi/create-ticket', { subject, message, priority });
+      return response;
+    } catch (error) {
+      console.error('Nexi create-ticket error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // ============ PROFILE ============
   
   async updateProfile(profileData) {

@@ -622,6 +622,150 @@ export const ticketReplyNotification = (studentName, subject, replyMessage) => {
 };
 
 /**
+ * New Support Ticket Notification (sent to admins when a student raises a ticket)
+ */
+export const newTicketNotification = ({ studentName, moodleId, email, classYear, division, batch, subject, message, priority, createdAt }) => {
+  const content = `
+    <p class="greeting">New Support Ticket Raised 🎫</p>
+
+    <p>A student has raised a new support ticket. Please review the details below.</p>
+
+    <div class="section">
+      <div class="section-title">Student Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Name:</td>
+          <td class="value"><strong>${escapeHtml(studentName || 'Unknown')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Moodle ID:</td>
+          <td class="value">${escapeHtml(moodleId || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td class="value">${escapeHtml(email || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Division:</td>
+          <td class="value">${escapeHtml(division || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Year:</td>
+          <td class="value">${escapeHtml(classYear || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Batch:</td>
+          <td class="value">${escapeHtml(batch || '—')}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Ticket Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Subject:</td>
+          <td class="value"><strong>${escapeHtml(subject || '—')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Priority:</td>
+          <td class="value"><strong>${escapeHtml(priority || 'normal')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Raised On:</td>
+          <td class="value">${new Date(createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Description</div>
+      <div class="info-box" style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(message || '—')}</div>
+    </div>
+
+    <div class="section">
+      <p>You can view and respond to this ticket from the admin dashboard.</p>
+      <p style="margin-top: 30px;">Best regards,<br><strong>Coding Nexus Team</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
+/**
+ * Nexi AI Ticket Notification (sent to admins when a student creates a ticket via Nexi chatbot)
+ */
+export const nexiTicketNotification = ({ studentName, moodleId, email, classYear, division, batch, subject, message, priority, createdAt }) => {
+  const content = `
+    <p class="greeting">New Ticket via Nexi AI Chat 🤖💜</p>
+
+    <p><strong>${escapeHtml(studentName || 'A student')}</strong> created a support ticket through the <strong>Nexi AI chat assistant</strong>. Please review the details below.</p>
+
+    <div class="info-box" style="background: #f3e8ff; border-left: 4px solid #a855f7;">
+      <strong>🤖 Source:</strong> Nexi AI Chat Support
+    </div>
+
+    <div class="section">
+      <div class="section-title">Student Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Name:</td>
+          <td class="value"><strong>${escapeHtml(studentName || 'Unknown')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Moodle ID:</td>
+          <td class="value">${escapeHtml(moodleId || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td class="value">${escapeHtml(email || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Division:</td>
+          <td class="value">${escapeHtml(division || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Year:</td>
+          <td class="value">${escapeHtml(classYear || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Batch:</td>
+          <td class="value">${escapeHtml(batch || '—')}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Ticket Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Subject:</td>
+          <td class="value"><strong>${escapeHtml(subject || '—')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Priority:</td>
+          <td class="value"><strong>${escapeHtml(priority || 'normal')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Raised On:</td>
+          <td class="value">${new Date(createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Description</div>
+      <div class="info-box" style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(message || '—')}</div>
+    </div>
+
+    <div class="section">
+      <p>You can view and respond to this ticket from the admin dashboard.</p>
+      <p style="margin-top: 30px;">Best regards,<br><strong>Nexi · Coding Nexus AI Assistant</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
+/**
  * Admin-Initiated Password Reset Email
  */
 export const passwordResetByAdmin = (userName, newPassword, moodleId) => {
@@ -653,6 +797,65 @@ export const passwordResetByAdmin = (userName, newPassword, moodleId) => {
   return baseTemplate(content);
 };
 
+/**
+ * Nexi AI Escalation Notification (sent to admins when the chatbot escalates)
+ */
+export const aiEscalationNotification = ({ studentName, moodleId, email, classYear, division, batch, query, code }) => {
+  const content = `
+    <p class="greeting">Nexi needs a human 🤖💜</p>
+
+    <p><strong>${escapeHtml(studentName || 'A student')}</strong> was chatting with Nexi and needs human help. Please follow up with them.</p>
+
+    <div class="section">
+      <div class="section-title">Student Details</div>
+      <table class="details-table">
+        <tr>
+          <td class="label">Name:</td>
+          <td class="value"><strong>${escapeHtml(studentName || 'Unknown')}</strong></td>
+        </tr>
+        <tr>
+          <td class="label">Moodle ID:</td>
+          <td class="value">${escapeHtml(moodleId || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td class="value">${escapeHtml(email || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Division:</td>
+          <td class="value">${escapeHtml(division || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Year:</td>
+          <td class="value">${escapeHtml(classYear || '—')}</td>
+        </tr>
+        <tr>
+          <td class="label">Batch:</td>
+          <td class="value">${escapeHtml(batch || '—')}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Student's Question</div>
+      <div class="info-box" style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(query || '—')}</div>
+    </div>
+
+    ${code ? `
+    <div class="section">
+      <div class="section-title">Code Snippet</div>
+      <div class="info-box" style="white-space: pre-wrap; line-height: 1.6; font-family: 'Courier New', monospace; font-size: 13px;">${escapeHtml(code)}</div>
+    </div>
+    ` : ''}
+
+    <div class="section">
+      <p>You can reach the student through the support ticket system or the email above.</p>
+      <p style="margin-top: 30px;">Best regards,<br><strong>Nexi · Coding Nexus AI Assistant</strong></p>
+    </div>
+  `;
+  return baseTemplate(content);
+};
+
 export default {
   teamApplicationSubmission,
   teamApplicationStatus,
@@ -663,5 +866,8 @@ export default {
   passwordResetByAdmin,
   subadminWelcome,
   ticketReplyNotification,
+  newTicketNotification,
+  nexiTicketNotification,
+  aiEscalationNotification,
   plainTextFallback
 };

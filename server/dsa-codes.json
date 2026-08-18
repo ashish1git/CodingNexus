@@ -18,14 +18,14 @@
       "code": "CNX-DSA-96D0B4",
       "label": "SE-A",
       "maxUses": 10,
-      "used": 3,
+      "used": 4,
       "created": "2026-07-30T16:00:58.386Z"
     },
     {
       "code": "CNX-DSA-2FD978",
       "label": "Temporary-test",
       "maxUses": 80,
-      "used": 71,
+      "used": 72,
       "created": "2026-08-12T14:21:04.797Z"
     }
   ]

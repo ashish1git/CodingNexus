@@ -8,6 +8,7 @@ import Loading from '../shared/Loading';
 import apiClient from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission } from '../../utils/permissions';
+import EvaluatorProblemDetails from './EvaluatorProblemDetails';
 
 const SubmissionEvaluator = () => {
   const { competitionId } = useParams();
@@ -40,7 +41,7 @@ const SubmissionEvaluator = () => {
   }, [competitionId]);
 
   useEffect(() => {
-    // Filter submissions based on search term
+    // Filter submissions based on search term (matches student OR problem info)
     if (searchTerm.trim() === '') {
       setFilteredSubmissions(submissions);
     } else {
@@ -50,7 +51,11 @@ const SubmissionEvaluator = () => {
         const rollNo = sub.user?.studentProfile?.rollNo?.toLowerCase() || '';
         const email = sub.user?.email?.toLowerCase() || '';
         const moodleId = sub.user?.moodleId?.toLowerCase() || '';
-        return name.includes(term) || rollNo.includes(term) || email.includes(term) || moodleId.includes(term);
+        const problemTitle = sub.problem?.title?.toLowerCase() || sub.problemTitle?.toLowerCase() || '';
+        const problemId = sub.problemId?.toLowerCase() || '';
+        const status = sub.status?.toLowerCase() || '';
+        return name.includes(term) || rollNo.includes(term) || email.includes(term) || moodleId.includes(term)
+          || problemTitle.includes(term) || problemId.includes(term) || status.includes(term);
       });
       setFilteredSubmissions(filtered);
       setCurrentIndex(0); // Reset to first filtered result
@@ -742,7 +747,7 @@ const SubmissionEvaluator = () => {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by name, roll number, email, or Moodle ID..."
+                    placeholder="Search by name, roll no, email, Moodle ID, problem title, or status..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-500 bg-white"
                   />
                 </div>
@@ -919,7 +924,7 @@ const SubmissionEvaluator = () => {
                         <div>
                           <div className="text-xs text-gray-500 mb-1">Manual Marks</div>
                           <div className="text-2xl font-bold text-indigo-600">
-                            {currentSubmission.manualMarks} / 10
+                            {currentSubmission.manualMarks} / {evalMaxScore}
                           </div>
                         </div>
                         <div>
@@ -1004,14 +1009,14 @@ const SubmissionEvaluator = () => {
                                   <div>
                                     <div className="text-xs text-gray-500 mb-1">Marks Given</div>
                                     <div className="text-2xl font-bold text-indigo-600">
-                                      {hist.marks} / 100
+                                      {hist.marks} / {evalMaxScore}
                                     </div>
                                   </div>
                                   {hist.previousMarks !== null && hist.previousMarks !== undefined && (
                                     <div>
                                       <div className="text-xs text-gray-500 mb-1">Previous Marks</div>
                                       <div className="text-2xl font-bold text-gray-400">
-                                        {hist.previousMarks} / 100
+                                        {hist.previousMarks} / {evalMaxScore}
                                       </div>
                                     </div>
                                   )}
@@ -1041,6 +1046,9 @@ const SubmissionEvaluator = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Problem Details + Test Cases (collapsible) */}
+                <EvaluatorProblemDetails problem={currentProblem} submission={currentSubmission} />
 
                 {/* Code Display */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">

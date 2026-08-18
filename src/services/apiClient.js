@@ -102,7 +102,11 @@ class ApiClient {
             localStorage.removeItem('user');
           }
         }
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        const httpError = new Error(data.error || `HTTP error! status: ${response.status}`);
+        // Preserve the server's error code so callers can special-case
+        // things like AI rate limits (AI_RATE_LIMIT) without parsing text.
+        if (data && data.code) httpError.code = data.code;
+        throw httpError;
       }
 
       return data;

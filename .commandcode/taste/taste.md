@@ -18,7 +18,7 @@ See [communication/taste.md](communication/taste.md)
 - Avoid adding complex real-time infrastructure (WebSocket, Socket.IO) for activity monitoring; prefer simple approaches like piggybacking activity logs on the existing submission flow. Confidence: 0.85
 
 # code-style
-- When adding new features, prefer minimal, non-breaking changes that don't require restructuring existing code or adding new infrastructure dependencies. Confidence: 0.80
+- When adding new features, prefer minimal, non-breaking changes that don't require restructuring existing code or adding new infrastructure dependencies. The user repeatedly stresses that new features must "not harm other features" — every addition must leave existing functionality untouched. The user explicitly restates this as "keep all existing ... logic unchanged", "do not modify unrelated files", and "make the minimum required changes" — changes should be confined to the files that must change. Confidence: 0.90
 
 # architecture
 - For role-based authorization systems: explicitly define roles (e.g., DSA_TRAINER, DSA_OPERATIONS) as first-class entities rather than inferring roles from permission flags — permissions define capabilities, roles define identity; keep roles mutually exclusive by design. Confidence: 0.65
@@ -40,12 +40,10 @@ See [debugging/taste.md](debugging/taste.md)
 
 # architecture
 - When adding similar functionality for a different user role (e.g., subadmin tickets), extend the existing model (e.g., SupportTicket) with a type/discriminator field rather than creating a parallel model — reuse over duplication. Confidence: 0.70
+- When an AI/assistant feature performs an action the student can already do manually (e.g., raising a support ticket via the chatbot), route it through the exact same backend flow as the manual action — same DB model/record, same validation, same admin notification emails. The user explicitly wants chatbot-created tickets to happen "like students create manually... same way", so the AI path must be indistinguishable from the manual one from the student's and admin's perspective. Confidence: 0.80
 
 # email
-- Use `codingnexus.apsit.edu.in` as the admin portal URL in email links (not `codingnexus.live`). Confidence: 0.65
-- All email sending must use dual-API-key fallback (Brevo primary + fallback key) for reliability. When the primary API can silently accept but not deliver (Brevo returns 200 + messageId even for unverified senders), error-based fallback is insufficient — the system needs a force-dual mode that fires through a verified/trusted fallback channel regardless of the primary response. Never send email through a single API key path if a fallback is available. Confidence: 0.90
-- Email content containing user/admin-generated text (e.g., support ticket replies) must preserve the original whitespace and line breaks — render it like a `<pre>` tag (e.g., `white-space: pre-wrap` with readable line-height) rather than a plain `<p>` tag, because HTML collapses newlines and multiple spaces. The user wants any type of support reply to appear in the email exactly as typed, as a proper readable response. Confidence: 0.80
-
+See [email/taste.md](email/taste.md)
 # admin-operations
 - Admin-side operations (password resets, email sends, data modifications) should NOT be subject to the same rate limits as student-facing endpoints. Rate limits protect against abuse from untrusted users; admins are trusted actors and their workflows (like resetting a student's password) must never be blocked by rate limiting. Confidence: 0.75
 
@@ -60,6 +58,8 @@ See [api/taste.md](api/taste.md)
 # admin-ui
 - When displaying student information in admin views (tickets, management, etc.), show all available student profile fields (name, division, batch, rollNo, phone) — don't truncate to just name+rollNo. Users expect the full student context visible at a glance. Confidence: 0.70
 - When implementing hide/visibility toggles for student-facing content, admin views must bypass the visibility filter — admins need to see and manage all items regardless of visibility state. Applying a student-facing filter globally without role-awareness causes hidden items to silently disappear from admin views, breaking admin workflows. Confidence: 0.70
+- Admin evaluation views (e.g., the submission evaluator) should consolidate EVERYTHING needed for the task into a single screen — student identity, full problem statement/examples/constraints, per-test-case pass/fail results, code, and marks — so the evaluator never has to hunt across views or endpoints. The user asked for the admin evaluation process to be "very easy" with "everything he wants at a single place" and full problem details visible while grading. Dense content may sit behind a collapsible panel, but it must all be reachable from the one screen. Confidence: 0.70
+- Search/filter in admin list views (e.g., the submission evaluator) must match across BOTH student identity fields (name, roll no, email, Moodle ID) AND problem/question fields (title, ID) plus submission status — not just student names. The user explicitly flagged that search should "work properly" by student AND by question. Confidence: 0.70
 
 # debugging
 - When a user reports a feature still not working after a frontend fix was deployed, verify the actual API response data shape (e.g., log it or check the endpoint) before modifying the frontend — don't assume the nested path (e.g., `user.studentProfile`) matches the real response structure. The fix will silently fail if the data path is wrong. Confidence: 0.75

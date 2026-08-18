@@ -273,6 +273,23 @@ model SupportTicket {
   @@index([createdAt])
 }
 
+// AI support assistant ("Nexi") curated FAQs — admins manage these.
+// Keyword-matched first; only unmatched queries go to the LLM.
+model AiFaq {
+  id         String   @id @default(uuid())
+  question   String
+  answer     String
+  keywords   String   @default("[]") // JSON array of lowercase keywords for matching
+  category   String?  // e.g. "competition", "ticket", "general"
+  isActive   Boolean  @default(true)
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([category])
+}
+
 model TeamApplication {
   id                    String   @id @default(uuid())
   // Basic Information (REQUIRED in validation)

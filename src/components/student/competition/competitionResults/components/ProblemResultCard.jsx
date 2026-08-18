@@ -2,6 +2,7 @@ import React from 'react';
 import Card from '../../../../shared/Card';
 import { getStatusColor, getStatusIcon, getDifficultyStyle, formatIST } from '../utils/resultsUtils';
 import { BellRing, CheckCircle2, Code2 } from 'lucide-react';
+import ProblemDetails from './ProblemDetails';
 
 // Render evaluator remarks preserving whitespace/newlines/emojis, with **bold** and *italic* support
 const renderRemarks = (text) => {
@@ -124,10 +125,12 @@ const ProblemResultCard = ({ problem, index, onAcknowledge, acknowledging }) => 
                 <p className="text-xs text-blue-600 italic">No remarks provided</p>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-blue-600 italic">Awaiting evaluator review...</p>
-          )}
-        </div>
+        ) : (
+          <p className="text-xs text-blue-600 italic">Awaiting evaluator review...</p>
+        )}
+      </div>
+
+      <ProblemDetails problem={problem} />
       </Card>
     </div>
   );

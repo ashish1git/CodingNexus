@@ -27,7 +27,10 @@ export async function getCompetitionSubmissions({ competitionId }) {
               id: true,
               title: true,
               difficulty: true,
-              points: true
+              points: true,
+              description: true,
+              examples: true,
+              constraints: true
             }
           }
         },
@@ -74,7 +77,14 @@ export async function getCompetitionSubmissions({ competitionId }) {
       evaluatorComments: ps.evaluatorComments,
       evaluatedBy: ps.evaluatedBy,
       evaluatedAt: ps.evaluatedAt,
-      isEvaluated: ps.isEvaluated
+      isEvaluated: ps.isEvaluated,
+      problem: {
+        title: ps.problem.title,
+        points: ps.problem.points,
+        description: ps.problem.description,
+        examples: ps.problem.examples,
+        constraints: ps.problem.constraints
+      }
     }))
   }));
 
@@ -203,7 +213,7 @@ export async function updateCompetition({ competitionId, competitionData }) {
         title: p.title,
         description: p.description,
         difficulty: p.difficulty || 'medium',
-        points: p.points || 100,
+        points: p.points,
         orderIndex: i,
         constraints: p.constraints || [],
         examples: p.examples || [],
@@ -266,7 +276,17 @@ export async function getCompetitionProblems({ competitionId }) {
       description: true,
       difficulty: true,
       points: true,
-      orderIndex: true
+      orderIndex: true,
+      examples: true,
+      constraints: true,
+      testCases: true,
+      timeLimit: true,
+      memoryLimit: true,
+      expectedComplexity: true,
+      expectedSpace: true,
+      functionName: true,
+      parameters: true,
+      returnType: true
     }
   });
 
@@ -298,7 +318,11 @@ export async function getProblemSubmissions({ competitionId, problemId }) {
       problem: {
         select: {
           title: true,
-          points: true
+          points: true,
+          description: true,
+          examples: true,
+          constraints: true,
+          testCases: true
         }
       }
     },
@@ -329,10 +353,11 @@ export async function evaluateSubmission({ competitionId, problemId, submissionI
   const problemSubmission = await prisma.problemSubmission.findUnique({
     where: { id: submissionId },
     select: {
+      maxScore: true,
       problem: { select: { points: true } }
     }
   });
-  const maxAllowed = problemSubmission?.problem?.points || 100;
+  const maxAllowed = problemSubmission?.problem?.points || problemSubmission?.maxScore || 10;
 
   if (isNaN(marksNum) || marksNum < 0 || marksNum > maxAllowed) {
     const error = new Error(`Marks must be between 0 and ${maxAllowed}`);

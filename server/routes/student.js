@@ -2,6 +2,10 @@ import express from 'express';
 import prisma from '../config/db.js';
 import { authenticate, authorizeRole } from '../middleware/auth.js';
 import upload, { uploadToCloudinary } from '../middleware/upload.js';
+import { sendBulkEmail } from '../services/email/brevo.service.js';
+import { newTicketNotification } from '../services/email/emailTemplates.js';
+import { handleNexiChat, escalateToAdmin, buildStudentContext, createSupportTicket } from '../services/aiSupport/nexi.service.js';
+import { runGuarded } from '../services/aiSupport/nexiGuard.service.js';
 
 // Format Indian-style name ("LastName FirstName MiddleName") to display format ("FirstName LastName")
 const formatDisplayName = (name) => {
@@ -816,14 +820,51 @@ router.post('/tickets', async (req, res) => {
   try {
     const { subject, message, priority } = req.body;
 
+    if (!subject || !subject.trim() || !message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Subject and message are required' });
+    }
+
     const ticket = await prisma.supportTicket.create({
       data: {
         userId: req.user.id,
         subject,
         message,
         priority: priority || 'normal'
-      }
+      },
+      include: { user: { include: { studentProfile: true } } }
     });
+
+    // Notify admins about the new support ticket
+    try {
+      const studentProfile = ticket.user?.studentProfile;
+      const adminNotifyEmails = [
+        '23106031@apsit.edu.in',
+        'samiansariwork@gmail.com',
+        'instagram2024acc@gmail.com'
+      ];
+
+      const notifyHtml = newTicketNotification({
+        studentName: studentProfile?.name || ticket.user?.email?.split('@')[0] || 'Student',
+        moodleId: ticket.user?.moodleId,
+        email: ticket.user?.email,
+        classYear: studentProfile?.classYear,
+        division: studentProfile?.division,
+        batch: studentProfile?.batch,
+        subject: ticket.subject,
+        message: ticket.message,
+        priority: ticket.priority,
+        createdAt: ticket.createdAt
+      });
+
+      await sendBulkEmail({
+        to: adminNotifyEmails,
+        subject: `New Support Ticket: ${ticket.subject}`,
+        html: notifyHtml,
+        text: `New support ticket raised by ${studentProfile?.name || ticket.user?.email || 'a student'}.\n\nSubject: ${ticket.subject}\nMoodle ID: ${ticket.user?.moodleId || 'N/A'}\nDivision: ${studentProfile?.division || 'N/A'}\nYear: ${studentProfile?.classYear || 'N/A'}\n\nMessage:\n${ticket.message}`
+      });
+    } catch (emailErr) {
+      console.error('Failed to send new ticket notification email:', emailErr);
+    }
 
     res.json({ success: true, data: ticket });
   } catch (error) {
@@ -930,6 +971,166 @@ router.post('/tickets/:id/reply', async (req, res) => {
       data: { ...updated, responses }
     });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ NEXI AI SUPPORT ASSISTANT ============
+
+// Chat with Nexi (24/7 AI assistant)
+router.post('/nexi/chat', async (req, res) => {
+  const { message, code, history } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ success: false, error: 'Message is required' });
+  }
+
+  // Max input/history sizes — keep prompts sane and protect the context window.
+  const trimmedMessage = message.trim().slice(0, 2000);
+  const trimmedCode = code && typeof code === 'string' ? code.trim().slice(0, 12000) : null;
+
+  // Short-term memory: last ~12 turns max, each trimmed to 500 chars
+  const trimmedHistory = Array.isArray(history)
+    ? history
+        .filter(t => t && (t.text || '').trim())
+        .slice(-12)
+        .map(t => ({
+          role: t.role === 'student' ? 'student' : 'nexi',
+          text: String(t.text).trim().slice(0, 500)
+        }))
+    : [];
+
+  // Client disconnected — the local model is still generating (or queued),
+  // so stop waiting and release the guard slot immediately.
+  let aborted = false;
+  req.on('close', () => {
+    if (!res.writableEnded) aborted = true;
+  });
+
+  // Streaming: forward raw text deltas as the model generates them. The
+  // complete JSON is still parsed server-side exactly like before — the
+  // frontend treats deltas as progressive text and the final payload as truth.
+  res.setHeader('Content-Type', 'application/json');
+  res.flushHeaders?.();
+
+  let firstTokenSent = false;
+  const onToken = (delta) => {
+    if (aborted) return;
+    try {
+      if (!firstTokenSent) {
+        firstTokenSent = true;
+      }
+      // Newline-delimited JSON (NDJSON) — one JSON object per line so the
+      // client can parse progressive deltas independently.
+      res.write(JSON.stringify({ success: true, streaming: true, delta }) + '\n');
+    } catch (err) {
+      // Client went away mid-stream — the guard releases on settle below.
+    }
+  };
+
+  try {
+    const { result, release } = await runGuarded({
+      userId: req.user.id,
+      fn: () => handleNexiChat({
+        userId: req.user.id,
+        message: trimmedMessage,
+        code: trimmedCode,
+        history: trimmedHistory,
+        onToken
+      })
+    });
+
+    try {
+      if (aborted || res.writableEnded) {
+        // Client is gone; nothing useful to send.
+      } else {
+        res.write(JSON.stringify({ success: true, streaming: false, data: result }) + '\n');
+      }
+    } finally {
+      release();
+    }
+    res.end();
+  } catch (error) {
+    console.error('Nexi chat error:', error);
+    const status = error.status || (error.code === 'AI_NOT_CONFIGURED' ? 503 : 500);
+    if (!aborted && !res.writableEnded) {
+      try {
+        res.write(JSON.stringify({
+          success: false,
+          error: error.message,
+          code: error.code || 'AI_ERROR',
+          retryAfterMs: error.retryAfterMs || undefined
+        }) + '\n');
+      } catch (err) {
+        // Client already gone.
+      }
+    }
+    res.end();
+  }
+});
+
+// Escalate to a human admin (student-confirmed)
+router.post('/nexi/escalate', async (req, res) => {
+  try {
+    const { query, code } = req.body;
+
+    if (!query || !query.trim()) {
+      return res.status(400).json({ success: false, error: 'Query is required' });
+    }
+
+    const context = await buildStudentContext(req.user.id);
+
+    const result = await escalateToAdmin({
+      userId: req.user.id,
+      studentContext: context,
+      query: query.trim().slice(0, 2000),
+      code: code && typeof code === 'string' ? code.trim().slice(0, 12000) : null
+    });
+
+    res.json({
+      success: true,
+      data: {
+        escalated: true,
+        message: 'Your request has been sent to a human admin. They will reach out to you soon 💜',
+        emailed: result.success
+      }
+    });
+  } catch (error) {
+    console.error('Nexi escalate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create a support ticket via Nexi (student confirmed) — same flow as manual
+router.post('/nexi/create-ticket', async (req, res) => {
+  try {
+    const { subject, message, priority } = req.body;
+
+    if (!subject || !subject.trim() || !message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Subject and message are required' });
+    }
+
+    const ticket = await createSupportTicket({
+      userId: req.user.id,
+      subject,
+      message,
+      priority
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: ticket.id,
+        subject: ticket.subject,
+        message: ticket.message,
+        priority: ticket.priority,
+        status: ticket.status,
+        createdAt: ticket.createdAt,
+        confirmation: 'Your support ticket has been created! Admins have been notified 💜'
+      }
+    });
+  } catch (error) {
+    console.error('Nexi create-ticket error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

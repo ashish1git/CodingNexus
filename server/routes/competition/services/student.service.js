@@ -222,7 +222,10 @@ export async function getMySubmission({ competitionId, userId }) {
               id: true,
               title: true,
               difficulty: true,
-              points: true
+              points: true,
+              description: true,
+              examples: true,
+              constraints: true
             }
           }
         },
@@ -249,6 +252,9 @@ export async function getMySubmission({ competitionId, userId }) {
     problems: submission.problemSubmissions.map(ps => ({
       problemId: ps.problemId,
       problemTitle: ps.problem.title,
+      problemDescription: ps.problem.description,
+      problemExamples: ps.problem.examples,
+      problemConstraints: ps.problem.constraints,
       difficulty: ps.problem.difficulty,
       score: ps.score,
       maxScore: ps.maxScore,
@@ -258,6 +264,7 @@ export async function getMySubmission({ competitionId, userId }) {
       memoryUsed: ps.memoryUsed,
       status: ps.status,
       errorMessage: ps.errorMessage,
+      testResults: ps.testResults,
       language: ps.language,
       code: ps.code,
       judgedAt: ps.judgedAt,

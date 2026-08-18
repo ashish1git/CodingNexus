@@ -65,6 +65,7 @@ import QuizEditor from './components/admin/QuizEditor';
 import QuizDetailViewer from './components/admin/QuizDetailViewer';
 import QuizSubmissionsViewer from './components/admin/QuizSubmissionsViewer';
 import TicketManagement from './components/admin/TicketManagement';
+import NexiFaqManagement from './components/admin/NexiFaqManagement';
 import SubAdminManager from './components/admin/SubAdminManager';
 import CompetitionManager from './components/admin/CompetitionManager';
 import SubmissionEvaluator from './components/admin/SubmissionEvaluator';
@@ -453,6 +454,14 @@ function App() {
                 element={
                   <ProtectedRoute adminOnly>
                     <TicketManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/nexi-faqs" 
+                element={
+                  <ProtectedRoute adminOnly>
+                    <NexiFaqManagement />
                   </ProtectedRoute>
                 } 
               />

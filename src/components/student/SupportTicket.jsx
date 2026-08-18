@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, Send, 
 import { studentService } from '../../services/studentService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import NexiChatbot from './NexiChatbot';
 
 const SupportTicket = () => {
   const { currentUser, userDetails } = useAuth();
@@ -594,6 +595,9 @@ const SupportTicket = () => {
           </div>
         </div>
       )}
+
+      {/* Nexi AI Assistant */}
+      <NexiChatbot />
     </div>
   );
 };

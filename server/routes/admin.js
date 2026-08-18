@@ -1944,6 +1944,89 @@ router.put('/tickets/:id', async (req, res) => {
   }
 });
 
+// ============ NEXI AI FAQ MANAGEMENT ============
+
+// Get all AI FAQs (for management; admin-only, shows inactive too)
+router.get('/nexi/faqs', async (req, res) => {
+  try {
+    const faqs = await prisma.aiFaq.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: faqs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create an AI FAQ
+router.post('/nexi/faqs', async (req, res) => {
+  try {
+    const { question, answer, keywords, category, isActive } = req.body;
+
+    if (!question || !question.trim() || !answer || !answer.trim()) {
+      return res.status(400).json({ success: false, error: 'Question and answer are required' });
+    }
+
+    const faq = await prisma.aiFaq.create({
+      data: {
+        question: question.trim(),
+        answer: answer.trim(),
+        keywords: JSON.stringify(Array.isArray(keywords) ? keywords : []),
+        category: category || 'general',
+        isActive: isActive !== false,
+        createdBy: req.user.id
+      }
+    });
+
+    res.json({ success: true, data: faq });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update an AI FAQ
+router.put('/nexi/faqs/:id', async (req, res) => {
+  try {
+    const { question, answer, keywords, category, isActive } = req.body;
+
+    const existing = await prisma.aiFaq.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'FAQ not found' });
+    }
+
+    const data = {};
+    if (question !== undefined) data.question = question.trim();
+    if (answer !== undefined) data.answer = answer.trim();
+    if (keywords !== undefined) data.keywords = JSON.stringify(Array.isArray(keywords) ? keywords : []);
+    if (category !== undefined) data.category = category;
+    if (isActive !== undefined) data.isActive = isActive;
+
+    const faq = await prisma.aiFaq.update({
+      where: { id: req.params.id },
+      data
+    });
+
+    res.json({ success: true, data: faq });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete an AI FAQ
+router.delete('/nexi/faqs/:id', async (req, res) => {
+  try {
+    const existing = await prisma.aiFaq.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'FAQ not found' });
+    }
+
+    await prisma.aiFaq.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ SUB-ADMIN MANAGEMENT ============
 
 // Get all sub-admins
