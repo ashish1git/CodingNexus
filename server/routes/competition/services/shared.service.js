@@ -1,6 +1,6 @@
 import axios from 'axios';
 import prisma from '../../../config/db.js';
-import { wrapCodeForExecution } from '../../../utils/codeWrapper.js';
+import { wrapCodeForExecution, adjustErrorLineNumbers } from '../../../utils/codeWrapper.js';
 
 // Judge0 Configuration
 const JUDGE0_URL = process.env.JUDGE0_URL || 'http://202.179.85.68:2358';
@@ -131,7 +131,8 @@ export async function executeJudge0Submissions(submissionId, problemSubmissions,
             
             const expected = (testCase.output || testCase.expectedOutput || '').trim();
             const passed = stdout === expected && data.status?.id === 3; // 3 = Accepted
-            const errStr = compile_output || stderr || (data.status?.id !== 3 ? (message || data.status?.description || 'Execution failed') : null);
+            const rawErr = compile_output || stderr || (data.status?.id !== 3 ? (message || data.status?.description || 'Execution failed') : null);
+            const errStr = adjustErrorLineNumbers(rawErr, submission.language);
 
             if (passed) totalPassed++;
             totalTime += parseFloat(data.time || 0) * 1000; // Convert to ms

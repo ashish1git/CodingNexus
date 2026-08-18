@@ -330,6 +330,7 @@ function wrapCpp(userCode, problem, testCase) {
 #include <climits>
 using namespace std;
 
+#line 1 "Solution.cpp"
 ${userCode}
 
 // Helper function to print vectors
@@ -500,5 +501,32 @@ function generatePythonOutputCode(returnType) {
   }
   return 'print(result)';
 }
+/**
+ * Adjust line numbers in compiler error outputs to match user editor line numbers
+ */
+function adjustErrorLineNumbers(errorStr, language) {
+  if (!errorStr) return errorStr;
+  const lang = (language || '').toLowerCase();
 
-export { wrapCodeForExecution };
+  if (lang === 'java') {
+    // wrapJava prepends 3 lines of imports
+    return errorStr.replace(/Main\.java:(\d+):/g, (match, lineNum) => {
+      const line = parseInt(lineNum, 10);
+      const adjusted = line - 3;
+      return `Solution.java:${adjusted > 0 ? adjusted : line}:`;
+    });
+  }
+
+  if (lang === 'python' || lang === 'py') {
+    // wrapPython prepends 3 lines of imports
+    return errorStr.replace(/line (\d+)/g, (match, lineNum) => {
+      const line = parseInt(lineNum, 10);
+      const adjusted = line - 3;
+      return `line ${adjusted > 0 ? adjusted : line}`;
+    });
+  }
+
+  return errorStr;
+}
+
+export { wrapCodeForExecution, adjustErrorLineNumbers };

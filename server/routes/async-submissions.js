@@ -3,7 +3,7 @@ import axios from 'axios';
 import { randomUUID } from 'crypto';
 import prisma from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
-import { wrapCodeForExecution } from '../utils/codeWrapper.js';
+import { wrapCodeForExecution, adjustErrorLineNumbers } from '../utils/codeWrapper.js';
 
 const router = express.Router();
 
@@ -116,7 +116,7 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
         
         // Check for compilation error (only need to report once)
         if (statusId === 6) {
-          compilationError = compile_output || stderr || message || 'Compilation failed';
+          compilationError = adjustErrorLineNumbers(compile_output || stderr || message || 'Compilation failed', language);
           results.push({
             testCase: i + 1,
             passed: false,
@@ -132,7 +132,8 @@ router.post('/:problemId/run', authenticate, async (req, res) => {
         // Compare actual output with expected output AND check status
         const expected = (testCase.output || testCase.expectedOutput || '').trim();
         const passed = stdout === expected && statusId === 3;
-        const errStr = compile_output || stderr || (statusId !== 3 ? (message || data.status?.description || 'Execution failed') : null);
+        const rawErr = compile_output || stderr || (statusId !== 3 ? (message || data.status?.description || 'Execution failed') : null);
+        const errStr = adjustErrorLineNumbers(rawErr, language);
         
         console.log(`Test ${i + 1}: Expected="${expected}", Actual="${stdout}", Status=${statusId}, Passed=${passed}`);
         
