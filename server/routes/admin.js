@@ -527,7 +527,16 @@ router.post('/announcements', async (req, res) => {
         }
 
         if (effectiveDivision) {
-          profileFilter.division = effectiveDivision;
+          // Division can be a combined label like 'TE-A' (classYear-division) or
+          // a bare division like 'A'. Student records store classYear ('TE') and
+          // division ('A') as separate fields, so split combined values.
+          const yearMatch = effectiveDivision.match(/^(FE|SE|TE|BE)-([A-Z])$/i);
+          if (yearMatch) {
+            profileFilter.classYear = yearMatch[1].toUpperCase();
+            profileFilter.division = yearMatch[2].toUpperCase();
+          } else {
+            profileFilter.division = effectiveDivision;
+          }
         }
 
         let students = await prisma.user.findMany({

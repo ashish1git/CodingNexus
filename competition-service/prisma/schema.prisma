@@ -1,0 +1,1153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                       String                    @id @default(uuid())
+  email                    String                    @unique
+  password                 String
+  role                     String
+  moodleId                 String?                   @unique
+  isActive                 Boolean                   @default(false)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  adminProfile             Admin?
+  attendanceRecords        Attendance[]
+  newAttendanceRecords     AttendanceRecord[]
+  competitionRegistrations CompetitionRegistration[]
+  competitionSubmissions   CompetitionSubmission[]
+  problemSubmissions       ProblemSubmission[]
+  quizAttempts             QuizAttempt[]
+  studentProfile           Student?
+  tickets                  SupportTicket[]
+  certificateRequests      CertificateRequest[]
+  aptitudeAttempts              AptitudeAttempt[]
+  practiceSessions              AptitudePracticeSession[]
+  competitionRegistrations2     AptitudeCompetitionRegistration[]
+  competitionAttempts           AptitudeCompetitionAttempt[]
+  passwordResetOTPs              PasswordResetOTP[]
+  announcements               Announcement[]           @relation("AnnouncementCreator")
+  formSubmissions             FormSubmission[]
+
+  @@index([email])
+  @@index([moodleId])
+}
+
+model Student {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  name            String
+  batch           String
+  classYear       String?
+  division        String?
+  phone           String?
+  profilePhotoUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  rollNo          String?
+  dsaAccess       Boolean   @default(false)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dsaProblems     DsaProblem[]
+
+  @@index([batch])
+  @@index([classYear])
+  @@index([division])
+}
+
+model Admin {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  name        String
+  permissions String   @default("all")
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dsaProfile  DsaTrainer? // Optional DSA Trainer profile
+}
+
+model Note {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  fileUrl     String
+  batch       String
+  classYear   String?
+  division    String?
+  subject     String?
+  uploadedBy  String
+  uploadedAt  DateTime @default(now())
+
+  @@index([batch])
+  @@index([classYear])
+  @@index([division])
+  @@index([uploadedAt])
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  batch       String
+  division    String?
+  priority    String   @default("normal")
+  isActive    Boolean  @default(true)
+  notifyEmail Boolean  @default(false)
+  createdBy   String
+  creator     User     @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([batch])
+  @@index([division])
+  @@index([createdAt])
+}
+
+model Quiz {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  batch       String
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int
+  questions   Json
+  isActive    Boolean       @default(true)
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  attempts    QuizAttempt[]
+
+  @@index([batch])
+  @@index([startTime])
+}
+
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  quizId      String
+  userId      String
+  answers     Json
+  score       Float
+  maxScore    Float
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, userId])
+  @@index([userId])
+}
+
+// ====== Form / Survey / Feedback System ======
+
+model Form {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  batch       String        @default("all")
+  division    String?
+  formType    String        @default("survey")   // survey | feedback | quiz_form
+  questions   Json
+  isActive    Boolean       @default(true)
+  notifyEmail Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  submissions FormSubmission[]
+
+  @@index([batch])
+  @@index([formType])
+}
+
+model FormSubmission {
+  id          String    @id @default(uuid())
+  formId      String
+  userId      String
+  answers     Json
+  submittedAt DateTime  @default(now())
+  form        Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, userId])
+  @@index([userId])
+}
+
+// Professional Attendance System with Sessions and Analytics
+model AttendanceSession {
+  id              String              @id @default(uuid())
+  batch           String
+  date            DateTime
+  sessionType     String              @default("regular") // regular, makeup, special
+  startTime       DateTime
+  endTime         DateTime?
+  location        String?
+  latitude        Float?              // Session location for geofencing
+  longitude       Float?              // Session location for geofencing
+  maxDistance     Int                 @default(100) // Max distance in meters for valid attendance
+  qrCode          String?             @unique
+  qrExpiresAt     DateTime?
+  isActive        Boolean             @default(true)
+  totalStudents   Int                 @default(0)
+  presentCount    Int                 @default(0)
+  absentCount     Int                 @default(0)
+  lateCount       Int                 @default(0)
+  attendanceRate  Float               @default(0)
+  createdBy       String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  records         AttendanceRecord[]
+
+  @@index([batch])
+  @@index([date])
+  @@index([isActive])
+  @@index([createdBy])
+}
+
+model AttendanceRecord {
+  id                  String             @id @default(uuid())
+  sessionId           String
+  userId              String
+  status              String             // present, absent, late, excused
+  markedAt            DateTime           @default(now())
+  markedBy            String
+  markedMethod        String             @default("manual") // manual, qr, biometric, auto
+  latitude            Float?
+  longitude           Float?
+  distanceFromSession Int?               // Distance from session location in meters
+  locationVerified    Boolean            @default(false) // Whether location was verified
+  ipAddress           String?
+  deviceInfo          String?
+  deviceFingerprint   String?            // For preventing duplicate devices
+  notes               String?
+  session             AttendanceSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@index([sessionId])
+  @@index([status])
+  @@index([markedAt])
+}
+
+// Legacy attendance model - kept for backward compatibility
+model Attendance {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime
+  status    String
+  batch     String
+  markedBy  String
+  markedAt  DateTime @default(now())
+  startTime String?
+  endTime   String?
+  duration  Int?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([batch])
+}
+
+model SupportTicket {
+  id           String    @id @default(uuid())
+  userId       String
+  subject      String
+  message      String
+  status       String    @default("open")
+  priority     String    @default("normal")
+  type         String    @default("student")
+  response     String?
+  replyEnabled Boolean   @default(false)
+  respondedBy  String?
+  respondedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// AI support assistant ("Nexi") curated FAQs — admins manage these.
+// Keyword-matched first; only unmatched queries go to the LLM.
+model AiFaq {
+  id         String   @id @default(uuid())
+  question   String
+  answer     String
+  keywords   String   @default("[]") // JSON array of lowercase keywords for matching
+  category   String?  // e.g. "competition", "ticket", "general"
+  isActive   Boolean  @default(true)
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model TeamApplication {
+  id                    String   @id @default(uuid())
+  // Basic Information (REQUIRED in validation)
+  fullName              String?
+  branch                String?
+  year                  String?
+  department            String?
+  email                 String?
+  phoneNumber           String?
+  // Profiles (GitHub REQUIRED)
+  githubProfile         String?
+  linkedinProfile       String?
+  portfolioWebsite      String?
+  // Resume
+  resumeLink            String?
+  // Technical Skills (REQUIRED AT LEAST 1 in validation)
+  technicalSkills       String[] // JSON array stored as string
+  technicalProficiency  Int?     // 1-5
+  // Programming & DSA (ALL REQUIRED in validation)
+  preferredLanguage     String?
+  practiceDSA           String?  // Regularly/Sometimes/No
+  dsaPlatforms          String?  // Comma-separated
+  problemSolvingLevel   Int?     // 1-5
+  // Projects
+  hasProjects           Boolean  @default(false)
+  projectLinks          String?  // Comma-separated or JSON
+  proudestProject       String?  // Text description
+  // Motivation & Learning (ALL REQUIRED in validation)
+  whyJoinCodingNexus    String?
+  technicalLearning     String?
+  // Commitment & Availability (ALL REQUIRED in validation)
+  hoursPerWeek          Int?
+  teamworkCommitted     Boolean  @default(false)
+  technicalTaskWilling  Boolean  @default(false)
+  offlineAvailable      Boolean  @default(false)
+  interestedDomain      String?
+  // Additional
+  additionalInfo        String?
+  // Declaration (REQUIRED in validation)
+  declarationAgreed     Boolean  @default(false)
+  
+  // Legacy fields (for backward compatibility)
+  classYear             String?
+  division              String?
+  moodleId              String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([declarationAgreed])
+}
+
+  model Competition {
+    id              String                    @id @default(uuid())
+    title           String
+    description     String
+    category        String                    @default("general")
+    difficulty      String
+    startTime       DateTime
+    endTime         DateTime
+    duration        Int
+    type            String                    @default("individual")
+    prizePool       String?
+    maxParticipants Int?
+    isActive        Boolean                   @default(true)
+    isVisible       Boolean                   @default(true)
+    showLeaderboard Boolean                   @default(true)
+    createdBy       String
+    createdAt       DateTime                  @default(now())
+    updatedAt       DateTime                  @updatedAt
+    registrations   CompetitionRegistration[]
+    submissions     CompetitionSubmission[]
+    problems        Problem[]
+
+    @@index([startTime])
+    @@index([endTime])
+    @@index([isActive])
+  }
+
+  model Problem {
+    id                  String              @id @default(uuid())
+    competitionId       String
+    title               String
+    description         String
+    difficulty          String
+    points              Int
+    orderIndex          Int
+    constraints         Json
+    examples            Json
+    testCases           Json
+    timeLimit           Int                 @default(3000)
+    memoryLimit         Int                 @default(256)
+    expectedComplexity  String?             // ⭐ Expected time complexity (e.g., "O(n)")
+    expectedSpace       String?             // ⭐ Expected space complexity (e.g., "O(1)")
+    createdAt           DateTime            @default(now())
+    updatedAt           DateTime            @updatedAt
+    functionName        String              @default("solution")
+    parameters          Json?
+    returnType          String              @default("int")
+    starterCode         Json?
+    competition         Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+    submissions         ProblemSubmission[]
+
+    @@index([competitionId])
+    @@index([orderIndex])
+  }
+
+  model CompetitionRegistration {
+    id            String      @id @default(uuid())
+    competitionId String
+    userId        String
+    registeredAt  DateTime    @default(now())
+    competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+    user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([competitionId, userId])
+    @@index([competitionId])
+    @@index([userId])
+  }
+
+  model CompetitionSubmission {
+    id                 String              @id @default(uuid())
+    competitionId      String
+    userId             String
+    submittedAt        DateTime            @default(now())
+    totalScore         Int                 @default(0)
+    totalTime          Int                 @default(0)
+    rank               Int?
+    status             String              @default("pending")
+    violationLog       Json?
+    competition        Competition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+    user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+    problemSubmissions ProblemSubmission[]
+
+    @@unique([competitionId, userId])
+    @@index([competitionId])
+    @@index([userId])
+    @@index([totalScore])
+  }
+
+  model ProblemSubmission {
+    id                      String                 @id @default(uuid())
+    competitionSubmissionId String
+    problemId               String
+    userId                  String
+    code                    String
+    language                String
+    score                   Int                    @default(0)
+    maxScore                Int
+    testsPassed             Int                    @default(0)
+    totalTests              Int
+    executionTime           Int                    @default(0)
+    memoryUsed              Int                    @default(0)
+    status                  String                 @default("pending")
+    errorMessage            String?
+    testResults             Json?
+    submittedAt             DateTime               @default(now())
+    judgedAt                DateTime?
+    manualMarks             Float?
+    evaluatorComments       String?
+    evaluatedBy             String?
+    evaluatedAt             DateTime?
+    isEvaluated             Boolean                @default(false)
+    reviewAcknowledged      Boolean                @default(false)
+    efficiencyMultiplier    Float                  @default(1.0)
+    optimizationFeedback    String?
+    competitionSubmission   CompetitionSubmission  @relation(fields: [competitionSubmissionId], references: [id], onDelete: Cascade)
+    problem                 Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+    user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    evaluations             SubmissionEvaluation[]
+
+    @@index([competitionSubmissionId])
+    @@index([problemId])
+    @@index([userId])
+    @@index([status])
+    @@index([isEvaluated])
+    @@index([evaluatedBy])
+  }
+
+  model SubmissionEvaluation {
+    id               String            @id @default(uuid())
+    submissionId     String
+    evaluatorId      String
+    evaluatorName    String
+    evaluatorRole    String
+    marks            Float
+    comments         String?
+    action           String
+    previousMarks    Float?
+    previousComments String?
+    createdAt        DateTime          @default(now())
+    ipAddress        String?
+    submission       ProblemSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+    @@index([submissionId])
+    @@index([evaluatorId])
+    @@index([createdAt])
+    @@index([action])
+  }
+
+// Certificate System
+model Certificate {
+  id            String               @id @default(uuid())
+  eventName     String
+  eventDate     DateTime
+  description   String?
+  batch         String               @default("All")
+  templateType  String               @default("participation") // participation, achievement, completion
+  isActive      Boolean              @default(true)
+  createdBy     String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  requests      CertificateRequest[]
+
+  @@index([batch])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model CertificateRequest {
+  id                String      @id @default(uuid())
+  certificateId     String
+  userId            String
+  nameOnCertificate String
+  status            String      @default("approved") // approved (auto-approved for now)
+  downloadCount     Int         @default(0)
+  requestedAt       DateTime    @default(now())
+  certificate       Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([certificateId, userId])
+  @@index([userId])
+  @@index([certificateId])
+  @@index([status])
+}
+
+// Event Management System - For external participants (non-batch students)
+model Event {
+  id                   String                @id @default(uuid())
+  title                String
+  description          String?
+  eventType            String                @default("workshop") // workshop, hackathon, seminar, competition, webinar
+  eventDate            DateTime
+  eventEndDate         DateTime?
+  venue                String?
+  posterUrl            String?               // Cloudinary URL for event poster
+  maxParticipants      Int                   @default(100)
+  registrationStartTime DateTime?            // When registration opens (optional, immediate if not set)
+  registrationDeadline DateTime
+  status               String                @default("upcoming") // upcoming, ongoing, completed, cancelled
+  isActive             Boolean               @default(true)
+  batch                String?               // Optional: If event is batch-specific
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  registrations        EventRegistration[]
+  certificates         EventCertificate[]
+  accessControls       EventAccessControl[]
+  announcementsEvent   EventAnnouncement[]
+  emailLogs            EventEmailLog[]
+  quizzes              EventQuiz[]
+  mediaFiles           EventMedia[]
+  hackathonRegistrations HackathonRegistration[]
+  certificateTemplateUrl String?                // Cloudinary URL for certificate background template
+  certificateNameX      Int?                    // X position of name on certificate (default center=421)
+  certificateNameY      Int?                    // Y position of name on certificate (default=328)
+  certificateNameColor  String?                 // Font color for name (default #000000)
+
+  @@index([status])
+  @@index([eventDate])
+  @@index([isActive])
+  @@index([createdBy])
+}
+
+model EventParticipant {
+  id                     String              @id @default(uuid())
+  name                   String
+  email                  String              @unique
+  phone                  String
+  moodleId               String?             // Student's Moodle ID
+  year                   String?             // FE, SE, TE, BE
+  branch                 String?             // Computer, IT, EXTC, etc.
+  division               String?             // A, B, C
+  collegeName            String?
+  password               String              // Hashed password
+  isEmailVerified        Boolean             @default(false)
+  emailVerificationToken String?             @unique
+  userType               String              @default("event_guest") // Always event_guest
+  isActive               Boolean             @default(true)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  registrations          EventRegistration[]
+  certificates           EventCertificate[]
+  emailLogs              EventEmailLog[]
+  quizAttempts           EventQuizAttempt[]
+  hackathonRegistrations HackathonRegistration[]
+
+  @@index([email])
+  @@index([userType])
+  @@index([isEmailVerified])
+  @@index([moodleId])
+}
+
+model EventRegistration {
+  id                        String             @id @default(uuid())
+  eventId                   String
+  participantId             String
+  registrationDate          DateTime           @default(now())
+  attendanceMarked          Boolean            @default(false)
+  attendanceTime            DateTime?
+  certificateGenerated      Boolean            @default(false)
+  certificateId             String?
+  registrationStatus        String             @default("confirmed") // confirmed, waitlist, cancelled
+  quizAttended              Boolean            @default(false)
+  certificateApprovedByAdmin Boolean           @default(false)
+  event              Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant        EventParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, participantId])
+  @@index([eventId])
+  @@index([participantId])
+  @@index([registrationStatus])
+}
+
+model EventCertificate {
+  id                String           @id @default(uuid())
+  eventId           String
+  participantId     String
+  registrationId    String?
+  certificateNumber String           @unique
+  certificateName   String?          // The name used on the certificate (locked after first download)
+  certificateUrl    String?          // PDF URL on Cloudinary
+  issueDate         DateTime         @default(now())
+  templateType      String           @default("participation") // participation, winner, runner_up, excellence
+  verified          Boolean          @default(true)
+  event             Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant       EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([eventId])
+  @@index([certificateNumber])
+}
+
+model EventAccessControl {
+  id              String    @id @default(uuid())
+  eventId         String
+  resourceType    String    // quiz, notes, assignments, dashboard, competition
+  resourceId      String?   // ID of specific resource
+  accessAllowed   Boolean   @default(true)
+  accessStartTime DateTime?
+  accessEndTime   DateTime?
+  createdAt       DateTime  @default(now())
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([resourceType])
+}
+
+model EventEmailLog {
+  id            String            @id @default(uuid())
+  eventId       String
+  participantId String
+  emailType     String            // registration_confirmation, event_reminder, event_update, certificate, event_start, event_end
+  sentAt        DateTime          @default(now())
+  emailStatus   String            @default("sent") // sent, failed, pending
+  subject       String
+  message       String
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant   EventParticipant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([participantId])
+  @@index([emailType])
+}
+
+model EventAnnouncement {
+  id               String    @id @default(uuid())
+  eventId          String
+  title            String
+  message          String
+  announcementType String    @default("info") // info, important, update, reminder
+  createdAt        DateTime  @default(now())
+  createdBy        String
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model EventQuiz {
+  id          String              @id @default(uuid())
+  eventId     String
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  duration    Int                 // in minutes
+  questions   Json                // Array of {question, type, options, correctAnswer, codeSnippet?}
+  isActive    Boolean             @default(true)
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attempts    EventQuizAttempt[]
+
+  @@index([eventId])
+  @@index([startTime])
+  @@index([isActive])
+}
+
+model EventQuizAttempt {
+  id            String           @id @default(uuid())
+  quizId        String
+  participantId String
+  answers       Json
+  score         Float
+  maxScore      Float
+  startedAt     DateTime         @default(now())
+  submittedAt   DateTime?
+  quiz          EventQuiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  participant   EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, participantId])
+  @@index([participantId])
+  @@index([quizId])
+}
+
+model EventMedia {
+  id          String   @id @default(uuid())
+  eventId     String
+  title       String
+  description String?
+  fileUrl     String
+  fileType    String   @default("document") // image, pdf, document, video, other
+  fileName    String
+  fileSize    Int?     // in bytes
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([fileType])
+}
+
+// Hackathon Registration System - For hackathon problem statement selections
+model HackathonRegistration {
+  id                     String           @id @default(uuid())
+  eventId                String
+  participantId          String
+  problemStatementNo     Int              // Problem statement number (1, 2, or 3)
+  teamMember1Name        String           // Primary team member (could be the participant themselves)
+  teamMember1Email       String
+  teamMember1Phone       String
+  teamMember2Name        String?          // Optional second team member
+  teamMember2Email       String?
+  teamMember2Phone       String?
+  teamType               String           @default("individual") // individual or team
+  additionalInfo         String?          // Any additional notes
+  registrationDate       DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  event                  Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant            EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, participantId])
+  @@index([eventId])
+  @@index([participantId])
+  @@index([problemStatementNo])
+  @@index([teamType])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Guest User System (NEW — does not modify any existing models)
+// ──────────────────────────────────────────────────────────────────
+
+/// Represents a temporary guest session on the platform.
+/// Guests are identified by a chosen username and receive a
+/// short-lived JWT.  No email/password required.
+model GuestSession {
+  id        String   @id @default(uuid())
+  username  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([username])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Aptitude Practice System
+// ──────────────────────────────────────────────────────────────────
+
+model AptitudeQuestion {
+  id           String               @id @default(uuid())
+  testId       String?
+  question     String
+  options      Json                 // Array of {label: "A"|"B"|"C"|"D", text: string}
+  correctOption String              // "A", "B", "C", or "D"
+  explanation  String?
+  difficulty   String               @default("medium")
+  categoryId   String?
+  topicId      String?
+  tags         String[]             @default([])
+  sourceRef    String?
+  isActive     Boolean              @default(true)
+  orderIndex   Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @default(now())
+  test         AptitudeTest?        @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([categoryId])
+  @@index([topicId])
+  @@index([difficulty])
+  @@index([isActive])
+}
+
+model AptitudeTest {
+  id           String               @id @default(uuid())
+  title        String
+  description  String?
+  category     String               @default("general") // general, quantitative, logical, verbal, technical
+  difficulty   String               @default("medium")  // easy, medium, hard
+  duration     Int                  // in minutes (drives the per-student countdown)
+  startTime    DateTime?            // competition window start (null = no schedule)
+  endTime      DateTime?            // competition window end   (null = no schedule)
+  isActive     Boolean              @default(true)       // manual override disable
+  createdBy    String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  questions    AptitudeQuestion[]
+  attempts     AptitudeAttempt[]
+
+  @@index([category])
+  @@index([difficulty])
+  @@index([isActive])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([createdAt])
+}
+
+model AptitudeAttempt {
+  id          String       @id @default(uuid())
+  testId      String
+  userId      String
+  answers     Json         // { questionId: "A"|"B"|"C"|"D" }
+  score       Int
+  maxScore    Int
+  timeTaken   Int          // in seconds
+  startedAt   DateTime     @default(now())
+  submittedAt DateTime?
+  test        AptitudeTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([userId])
+  @@index([submittedAt])
+}
+
+// ── Practice Session (free, unscored, per-question feedback) ──────────────────
+
+model AptitudePracticeSession {
+  id            String                   @id @default(uuid())
+  userId        String
+  categoryId    String?
+  topicId       String?
+  difficulty    String?
+  mode          String                   @default("static") // static | ai
+  totalAnswered Int                      @default(0)
+  totalCorrect  Int                      @default(0)
+  startedAt     DateTime                 @default(now())
+  endedAt       DateTime?
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers       AptitudePracticeAnswer[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([startedAt])
+}
+
+model AptitudePracticeAnswer {
+  id            String                   @id @default(uuid())
+  sessionId     String
+  questionId    String?                  // null for AI-generated questions
+  aiQuestion    String?                  // JSON snapshot for AI questions (no DB row)
+  correctOption String
+  orderIndex    Int                      @default(0)
+  selected      String?
+  isCorrect     Boolean                  @default(false)
+  timeTaken     Int                      @default(0)
+  answeredAt    DateTime?
+  session       AptitudePracticeSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([questionId])
+  @@index([isCorrect])
+}
+
+// ── Aptitude Competition System ───────────────────────────────────────────────
+
+model AptitudeCompetition {
+  id              String                          @id @default(uuid())
+  title           String
+  description     String?
+  category        String                          @default("general")
+  difficulty      String                          @default("medium")
+  duration        Int                             // minutes — per-student timer
+  startTime       DateTime                        // scheduled window open
+  endTime         DateTime                        // scheduled window close
+  maxParticipants Int?                            // null = unlimited
+  isActive        Boolean                         @default(true)
+  showLeaderboard Boolean                         @default(true)
+  allowLateJoin   Boolean                         @default(false)  // join after startTime?
+  createdBy       String
+  createdAt       DateTime                        @default(now())
+  updatedAt       DateTime                        @updatedAt
+  questions       AptitudeCompetitionQuestion[]
+  registrations   AptitudeCompetitionRegistration[]
+  attempts        AptitudeCompetitionAttempt[]
+
+  @@index([startTime])
+  @@index([endTime])
+  @@index([isActive])
+  @@index([category])
+  @@index([createdAt])
+}
+
+// Join table: competition ↔ questions (ordered, with per-question marks)
+model AptitudeCompetitionQuestion {
+  id            String               @id @default(uuid())
+  competitionId String
+  questionId    String               // FK → AptitudeQuestion
+  orderIndex    Int                  @default(0)
+  marks         Int                  @default(1)
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, questionId])
+  @@index([competitionId])
+  @@index([questionId])
+}
+
+// Student registers (joins) before attempting
+model AptitudeCompetitionRegistration {
+  id            String               @id @default(uuid())
+  competitionId String
+  userId        String
+  registeredAt  DateTime             @default(now())
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@index([competitionId])
+  @@index([userId])
+}
+
+// One attempt per student per competition (enforced unique)
+model AptitudeCompetitionAttempt {
+  id            String               @id @default(uuid())
+  competitionId String
+  userId        String
+  answers       Json                 // { questionId: "A"|"B"|"C"|"D" }
+  score         Int                  @default(0)
+  maxScore      Int                  @default(0)
+  percentage    Float                @default(0)
+  timeTaken     Int                  @default(0)  // seconds
+  rank          Int?                 // computed on submit / leaderboard refresh
+  startedAt     DateTime             @default(now())
+  submittedAt   DateTime?
+  competition   AptitudeCompetition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@index([competitionId])
+  @@index([userId])
+  @@index([competitionId, score])    // leaderboard sort
+  @@index([submittedAt])
+}
+
+/// Admin-configurable list of frontend routes that guests may visit.
+/// Admin toggles routes ON/OFF through the Guest Access Control panel.
+model GuestRouteConfig {
+  id        String   @id @default(uuid())
+  route     String   @unique        // e.g. "/student/competitions"
+  label     String                  // Human-readable label shown in admin UI
+  isEnabled Boolean  @default(true)
+  updatedBy String?                 // Admin user ID who last changed this
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isEnabled])
+}
+
+/// Auto-saved draft code per problem per competition per user.
+/// Ensures students never lose code if their PC crashes mid-competition.
+model DraftCode {
+  id            String   @id @default(uuid())
+  competitionId String
+  userId        String
+  problemId     String
+  code          String
+  language      String   @default("java")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([competitionId, userId, problemId])
+  @@index([competitionId, userId])
+}
+
+/// Stores OTPs for password reset flow.
+/// OTPs expire after 10 minutes and are marked used on successful reset.
+model PasswordResetOTP {
+  id        String   @id @default(uuid())
+  userId    String
+  otp       String
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([otp])
+  @@index([expiresAt])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Role-Based Recruitment System
+// ──────────────────────────────────────────────────────────────────
+
+/// Controls which recruitment roles are open for applications and their deadlines.
+model RecruitmentConfig {
+  id        String    @id @default(uuid())
+  role      String    @unique         // "DSA Trainer" | "Content Team" | "Cinematography Team" | "Design Team" | "Technical Team"
+  isOpen    Boolean   @default(false)
+  expiresAt DateTime?                 // null = no expiry
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([role])
+  @@index([isOpen])
+}
+
+/// Individual application submission for a recruitment role.
+/// Role-specific answers stored as JSON in roleAnswers.
+model RecruitmentSubmission {
+  id          String    @id @default(uuid())
+  role        String                    // Which role the user applied for
+  fullName    String
+  moodleId    String
+  whatsappNo  String
+  email       String
+  branch      String
+  year        String                    // FE / SE / TE / BE
+  roleAnswers Json                      // Role-specific Q&A as JSON object
+  status      String    @default("pending") // pending / shortlisted / rejected
+  reviewedBy  String?                   // Admin ID who reviewed
+  reviewedAt  DateTime?
+  submittedAt DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([role])
+  @@index([email])
+  @@index([submittedAt])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DSA Notes Approval System
+// ──────────────────────────────────────────────────────────────────
+
+/// Links an Admin user to a DSA role (TRAINER or OPERATIONS)
+model DsaTrainer {
+  id         String   @id @default(uuid())
+  adminId    String   @unique // FK to Admin.id
+  role       String   @default("TRAINER") // "TRAINER" or "OPERATIONS"
+  isActive   Boolean  @default(true)
+  assignedBy String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  admin    Admin       @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  lectures DsaLecture[]
+  notes    DsaNote[]
+
+  @@index([adminId])
+  @@index([isActive])
+  @@index([role])
+}
+
+/// Scheduled DSA lecture for which notes must be uploaded
+model DsaLecture {
+  id          String      @id @default(uuid())
+  trainerId   String      // FK to DsaTrainer.id
+  topic       String
+  description String?
+  batch       String?
+  division    String?     // Division name e.g. A, B, C
+  lectureDate DateTime
+  startTime   String?     // HH:mm format
+  endTime     String?     // HH:mm format
+  status        String      @default("scheduled") // scheduled, completed, cancelled
+  notifySent    Boolean     @default(false)
+  notesRequired Boolean     @default(true)
+  reminderSent  String?     // comma-separated list of reminder intervals already sent e.g. "14hr,2hr"
+  createdBy     String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  trainer DsaTrainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  notes   DsaNote[]
+
+  @@index([trainerId])
+  @@index([lectureDate])
+  @@index([batch])
+  @@index([status])
+}
+
+/// DSA Note uploaded by a trainer for review
+model DsaNote {
+  id          String      @id @default(uuid())
+  trainerId   String
+  lectureId   String
+  title       String
+  description String?
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  fileType    String      @default("pdf")
+  status      String      @default("pending") // pending, approved, rejected
+  remarks     String?     // Review remarks from approver
+  reviewedBy  String?     // Admin user ID
+  reviewedAt  DateTime?
+  uploadedBy  String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  trainer DsaTrainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  lecture DsaLecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@index([lectureId])
+  @@index([status])
+  @@index([trainerId, status])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DSA Sheet — Student Problem Progress
+// ──────────────────────────────────────────────────────────────────
+
+model DsaProblem {
+  problemId   String
+  studentId   String    // FK to Student.userId
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  bookmarked  Boolean   @default(false)
+  student     Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+
+  @@id([problemId, studentId])
+  @@index([studentId])
+}

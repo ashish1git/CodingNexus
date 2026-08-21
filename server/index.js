@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import axios from 'axios';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -9,7 +10,7 @@ import logger from './utils/logger.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import studentRoutes from './routes/student.js';
-import competitionRoutes from './routes/competition/index.js';
+// competitionRoutes removed — handled by competition-service on port 3001 (routed via Nginx)
 import contestRoutes from './routes/contest.js';
 import certificateRoutes from './routes/certificate.js';
 import asyncSubmissionRoutes, { checkPendingSubmissions } from './routes/async-submissions.js';
@@ -178,7 +179,31 @@ app.use('/api', (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
-app.use('/api/competitions', competitionRoutes);
+
+// Forward /api/competitions → competition-service (port 3001)
+const COMPETITION_SERVICE_URL = process.env.COMPETITION_SERVICE_URL || 'http://127.0.0.1:3001';
+app.use('/api/competitions', async (req, res) => {
+  try {
+    const targetUrl = `${COMPETITION_SERVICE_URL}${req.originalUrl}`;
+    const headers = { ...req.headers };
+    delete headers.host;
+    delete headers['content-length'];
+
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      headers,
+      data: ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined,
+      validateStatus: () => true
+    });
+
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error('[Proxy -> competition-service] Error:', error.message);
+    res.status(502).json({ error: 'Failed to connect to competition service' });
+  }
+});
+
 app.use('/api/contest', contestRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/submissions', asyncSubmissionRoutes);
